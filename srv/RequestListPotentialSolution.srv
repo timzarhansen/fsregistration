@@ -1,0 +1,5 @@
+sensor_msgs/Image sonar_scan_1
+sensor_msgs/Image sonar_scan_2
+float64 size_of_pixel
+---
+fms2d/PotentialSolution[] list_potential_solutions
