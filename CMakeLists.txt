@@ -19,7 +19,7 @@ find_package(Eigen3)
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
-find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
+#find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
 
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -82,9 +82,26 @@ target_link_libraries(ros2ServiceRegistration soft20::soft20 generalhelpfullib f
 target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS})
 rosidl_target_interfaces(ros2ServiceRegistration
         ${PROJECT_NAME} "rosidl_typesupport_cpp")
-## create a library for registration
 
-## create a ROS2 service for registration
+add_executable(servicecall src/callingServiceExample.cpp )
+ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
+target_link_libraries(servicecall  ${OpenCV_LIBS} generalhelpfullib)
+target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
+rosidl_target_interfaces(servicecall
+        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+
+
+
+
+install(TARGETS
+        ros2ServiceRegistration
+        #        guibluerov2
+        DESTINATION lib/${PROJECT_NAME}
+)
+
+
+
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
