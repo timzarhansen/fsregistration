@@ -42,7 +42,7 @@ public:
     ROSClassRegistrationNode(int sizeImage) : Node("fs2dregistrationnode"),
                                               scanRegistrationObject(sizeImage, sizeImage / 2, sizeImage / 2,
                                                                      sizeImage / 2 - 1) {
-
+        // for now 256 could be 32/64/128/256/512 More gets complicated to compute
         this->dimensionOfImages = sizeImage;
         this->serviceOnePotentialSolution = this->create_service<fs2d::srv::RequestOnePotentialSolution>(
                 "fs2d/registration/one_solution",
@@ -70,6 +70,7 @@ private:
 
     bool sendSingleSolutionCallback(const std::shared_ptr<fs2d::srv::RequestOnePotentialSolution::Request> req,
                                     std::shared_ptr<fs2d::srv::RequestOnePotentialSolution::Response> res) {
+        std::cout << "getting registration for image:" << std::endl;
 
         cv_bridge::CvImagePtr cv_ptr1;
         cv_bridge::CvImagePtr cv_ptr2;
@@ -121,7 +122,7 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                false);
+                false,req->potential_for_necessary_peak);
 
         this->registrationMutex.unlock();
 
@@ -130,22 +131,27 @@ private:
         //set result in res
         geometry_msgs::msg::Pose resultingPose;
 
-        tf2::convert(orientation, resultingPose.orientation);
+//        tf2::convert(orientation, resultingPose.orientation);
         resultingPose.position.x = position.x();
         resultingPose.position.y = position.y();
         resultingPose.position.z = position.z();
 
+        resultingPose.orientation.x = orientation.x();
+        resultingPose.orientation.y = orientation.y();
+        resultingPose.orientation.z = orientation.z();
+        resultingPose.orientation.w = orientation.w();
 
         //tf2::convert(position, resultingPose.position);
-        res->potential_solution.rotation_covariance;
+        res->potential_solution.rotation_covariance = -1;
         res->potential_solution.resulting_transformation = resultingPose;
-
+        std::cout << resultingRegistrationTransformation << std::endl;
+        std::cout << "done registration for image:" << std::endl;
         return true;
     }
 
     bool sendAllSolutionsCallback(const std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Request> req,
                                   std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Response> res) {
-
+        std::cout << "starting all solution callback" << std::endl;
         cv_bridge::CvImagePtr cv_ptr1;
         cv_bridge::CvImagePtr cv_ptr2;
         cv::Mat sonarImage1;
@@ -185,9 +191,10 @@ private:
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, false);
+                false, false,req->potential_for_necessary_peak);
         this->registrationMutex.unlock();
-
+        std::cout << "req->potential_for_necessary_peak" << std::endl;
+        std::cout << req->potential_for_necessary_peak << std::endl;
         for (int i = 0; i < listPotentialSolutions.size(); i++) {
             Eigen::Quaterniond orientationEigen;
             orientationEigen = generalHelpfulTools::getQuaternionFromRPY(0, 0,
@@ -220,9 +227,14 @@ private:
                 fs2d::msg::PotentialSolution potentialSolutionMSG;
                 //tf2::convert(position, resultingPose.position);
 
-                potentialSolutionMSG.rotation_covariance;
-                potentialSolutionMSG.resulting_transformation = resultingPose;
 
+                potentialSolutionMSG.resulting_transformation = resultingPose;
+                potentialSolutionMSG.transformation_peak_height = listPotentialSolutions[i].potentialTranslations[j].peakHeight;
+                potentialSolutionMSG.rotation_peak_height = listPotentialSolutions[i].potentialRotation.peakCorrelation;
+                potentialSolutionMSG.persistent_transformation_peak_value = listPotentialSolutions[i].potentialTranslations[j].persistenceValue;
+
+                potentialSolutionMSG.translation_covariance;//2x2 matrix
+                potentialSolutionMSG.rotation_covariance = 0.1;//currently missing
 
                 res->list_potential_solutions.push_back(potentialSolutionMSG);
             }
@@ -238,7 +250,7 @@ private:
 int main(int argc, char **argv) {
 
     rclcpp::init(argc, argv);
-//    auto node = std::make_shared<ROSClassRegistrationNode>();
+    //For now we Assume that it is always a 256 image.
     rclcpp::spin(std::make_shared<ROSClassRegistrationNode>(256));
 
 

@@ -1773,12 +1773,10 @@ std::vector<translationPeak> softRegistrationClass::peakDetectionOf2DCorrelation
             inInterestingArea = false;
         }
 
-
         if (p.birth_level > 0.1 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
 //            std::cout << levelPotential << std::endl;
-//            std::cout << "(" << p.birth_position.x << ", " << p.birth_position.y << ")\t"
-//                      << p.birth_level << "  " << p.persistence << "  " << levelPotential
-//                      << "\t(" << p.death_position.x << ", " << p.death_position.y << ")\n";
+//            std::cout << potentialNecessaryForPeak << std::endl;
+
             translationPeak tmpTranslationPeak;
             tmpTranslationPeak.translationSI.x() = -(((int) p.birth_position.x - (int) (this->correlationN / 2.0)) *
                                                      cellSize);
@@ -1789,6 +1787,7 @@ std::vector<translationPeak> softRegistrationClass::peakDetectionOf2DCorrelation
             tmpTranslationPeak.peakHeight = resultingCorrelationDouble[p.birth_position.y +
                                                                        this->correlationN * p.birth_position.x] *
                                             maxValue;
+            tmpTranslationPeak.persistenceValue = levelPotential;
             tmpTranslations.push_back(tmpTranslationPeak);
 
 //            std::cout << tmpTranslationPeak.translationSI.x() << "  " << tmpTranslationPeak.translationSI.y()

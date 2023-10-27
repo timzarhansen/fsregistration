@@ -2,5 +2,6 @@ sensor_msgs/Image sonar_scan_1
 sensor_msgs/Image sonar_scan_2
 float64 size_of_pixel
 geometry_msgs/Pose initial_guess
+float64 potential_for_necessary_peak  # default mostly 0.1 Higher values less peaks, lower values more peaks
 ---
-fs2d/PotentialSolution potential_solution
+fs2d/PotentialSolution potential_solution # always calculates the closest peak of the initial guess

@@ -39,6 +39,7 @@ struct translationPeak {
     Eigen::Vector2d translationSI;
     Eigen::Vector2i translationVoxel;
     double peakHeight;
+    double persistenceValue;
     Eigen::Matrix2d covariance;
 };
 
