@@ -1,5 +1,8 @@
-float64[16] resulting_transformation
-float64 peak_height
-float64
+geometry_msgs/Pose resulting_transformation
+float64 transformation_peak_height
+float64 persistent_transformation_peak_value
+float64 rotation_peak_height
+float64[4] translation_covariance
+float64 rotation_covariance
 
 

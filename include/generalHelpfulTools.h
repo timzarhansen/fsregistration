@@ -1,5 +1,5 @@
-#ifndef FMS2D_GENERALHELPFULTOOLS_H
-#define FMS2D_GENERALHELPFULTOOLS_H
+#ifndef FS2D_GENERALHELPFULTOOLS_H
+#define FS2D_GENERALHELPFULTOOLS_H
 
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -22,6 +22,13 @@ public:
                                       double &t);// from 1 to two by t[0-1]
     static Eigen::Matrix4d getTransformationMatrix(Eigen::Vector3d &translation, Eigen::Quaterniond &rotation);
 
+    static Eigen::Matrix4d getTransformationMatrixTF2(tf2::Vector3 &translation, tf2::Quaternion &rotation);
+
+    static void getTF2FromTransformationMatrix(tf2::Vector3 &translation, tf2::Quaternion &rotation , Eigen::Matrix4d transformationMatrix);
+
+    static void splitTransformationMatrixToQuadAndTrans(Eigen::Vector3d &translation, Eigen::Quaterniond &rotation,
+                                                                      Eigen::Matrix4d transformationMatrix);
+
     static double weighted_mean(const std::vector<double> &data);
 
     static void
@@ -35,4 +42,4 @@ public:
 };
 
 
-#endif //FMS2D_GENERALHELPFULTOOLS_H
+#endif //FS2D_GENERALHELPFULTOOLS_H

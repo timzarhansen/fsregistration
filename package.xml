@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>fms2d</name>
+  <name>fs2d</name>
   <description>basic utility</description>
 
   <version>0.0.11</version>

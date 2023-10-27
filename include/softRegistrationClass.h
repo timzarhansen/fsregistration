@@ -2,8 +2,8 @@
 // Created by tim-linux on 01.03.22.
 //
 
-#ifndef FMS2D_softRegistrationClass_H
-#define FMS2D_softRegistrationClass_H
+#ifndef FS2D_softRegistrationClass_H
+#define FS2D_softRegistrationClass_H
 
 #include "softRegistrationClass.h"
 #include "softCorrelationClass.h"

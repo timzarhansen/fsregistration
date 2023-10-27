@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set(CATKIN_ENABLE_TESTING OFF)
-project(fms2d)
+project(fs2d)
 
 
 
@@ -24,8 +24,11 @@ find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
 
-rosidl_generate_interfaces( fms2d
+rosidl_generate_interfaces( fs2d
         "msg/PotentialSolution.msg"
 
         "srv/RequestListPotentialSolution.srv"
@@ -68,14 +71,17 @@ target_link_libraries(findpeaks INTERFACE UNION_FIND)
 ################################################################################
 
 add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
-target_link_libraries(registrationOfTwoImages fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} fftw3)
+target_link_libraries(registrationOfTwoImages fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
 target_include_directories(registrationOfTwoImages PUBLIC  ${OpenCV_INCLUDE_DIRS})
 
 
 
-#add_executable(ros2ServiceRegistration src/serviceImage.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
-#target_link_libraries(ros2ServiceRegistration fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} fftw3)
-#target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS})
+add_executable(ros2ServiceRegistration src/serviceRegistrationImage.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
+ament_target_dependencies(ros2ServiceRegistration rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
+target_link_libraries(ros2ServiceRegistration soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
+target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS})
+rosidl_target_interfaces(ros2ServiceRegistration
+        ${PROJECT_NAME} "rosidl_typesupport_cpp")
 ## create a library for registration
 
 ## create a ROS2 service for registration
