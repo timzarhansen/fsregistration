@@ -1,2 +1,2 @@
-# fms2D
-fourie mellin Soft 2D Registration Method
+# fs2d
+fourie Soft 2D Registration Method
