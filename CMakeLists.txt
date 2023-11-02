@@ -83,12 +83,12 @@ target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS
 rosidl_target_interfaces(ros2ServiceRegistration
         ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(servicecall src/callingServiceExample.cpp )
-ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
-target_link_libraries(servicecall  ${OpenCV_LIBS} generalhelpfullib)
-target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
-rosidl_target_interfaces(servicecall
-        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#add_executable(servicecall src/callingServiceExample.cpp )
+#ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
+#target_link_libraries(servicecall  ${OpenCV_LIBS} generalhelpfullib)
+#target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
+#rosidl_target_interfaces(servicecall
+#        ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 
 
