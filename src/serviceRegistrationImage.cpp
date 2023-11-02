@@ -72,28 +72,30 @@ private:
                                     std::shared_ptr<fs2d::srv::RequestOnePotentialSolution::Response> res) {
         std::cout << "getting registration for image:" << std::endl;
 
-        cv_bridge::CvImagePtr cv_ptr1;
-        cv_bridge::CvImagePtr cv_ptr2;
-        cv::Mat sonarImage1;
-        cv::Mat sonarImage2;
-        try {
-            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
-            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
-            return false;
-        }
-
-        try {
-            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
-            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
-            return false;
-        }
-
+//        cv_bridge::CvImagePtr cv_ptr1;
+//        cv_bridge::CvImagePtr cv_ptr2;
+//        cv::Mat sonarImage1;
+//        cv::Mat sonarImage2;
+//        try {
+//            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
+//            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
+//        }
+//        catch (cv_bridge::Exception &e) {
+//            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
+//            return false;
+//        }
+//
+//        try {
+//            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
+//            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
+//        }
+//        catch (cv_bridge::Exception &e) {
+//            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
+//            return false;
+//        }
+//        cv::imshow("sonar1", sonarImage1);
+//        cv::imshow("sonar2", sonarImage2);
+//        int k = cv::waitKey(0); // Wait for a keystroke in the window
 
         tf2::Quaternion orientation;
         tf2::Vector3 position;
@@ -107,8 +109,21 @@ private:
         voxelData1 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
         voxelData2 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
 
-        convertMatToDoubleArray(sonarImage1, voxelData1);
-        convertMatToDoubleArray(sonarImage2, voxelData2);
+        for(int i  = 0 ; i<this->dimensionOfImages * this->dimensionOfImages ; i++){
+            voxelData1[i] = req->sonar_scan_1[i];
+            voxelData2[i] = req->sonar_scan_2[i];
+        }
+
+//        cv::Mat magTMP1(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData1);
+//        cv::Mat magTMP2(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData2);
+//        cv::imshow("sonar1", magTMP1);
+//        cv::imshow("sonar2", magTMP2);
+//        int k = cv::waitKey(0); // Wait for a keystroke in the window
+
+
+
+//        convertMatToDoubleArray(sonarImage1, voxelData1);
+//        convertMatToDoubleArray(sonarImage2, voxelData2);
 
         Eigen::Matrix3d covarianceMatrixResult;
         this->registrationMutex.lock();
@@ -140,39 +155,46 @@ private:
         resultingPose.orientation.y = orientation.y();
         resultingPose.orientation.z = orientation.z();
         resultingPose.orientation.w = orientation.w();
-
+        Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2,2>(0,0);
         //tf2::convert(position, resultingPose.position);
-        res->potential_solution.rotation_covariance = -1;
+        res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
         res->potential_solution.resulting_transformation = resultingPose;
+        res->potential_solution.translation_covariance[0] = covarianceTranslation(0);
+        res->potential_solution.translation_covariance[1] = covarianceTranslation(1);
+        res->potential_solution.translation_covariance[2] = covarianceTranslation(2);
+        res->potential_solution.translation_covariance[3] = covarianceTranslation(3);
+        //printing the results
+        std::cout << initialGuess << std::endl;
         std::cout << resultingRegistrationTransformation << std::endl;
         std::cout << "done registration for image:" << std::endl;
+
         return true;
     }
 
     bool sendAllSolutionsCallback(const std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Request> req,
                                   std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Response> res) {
         std::cout << "starting all solution callback" << std::endl;
-        cv_bridge::CvImagePtr cv_ptr1;
-        cv_bridge::CvImagePtr cv_ptr2;
-        cv::Mat sonarImage1;
-        cv::Mat sonarImage2;
-        try {
-            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
-            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
-            return false;
-        }
-
-        try {
-            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
-            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
-            return false;
-        }
+//        cv_bridge::CvImagePtr cv_ptr1;
+//        cv_bridge::CvImagePtr cv_ptr2;
+//        cv::Mat sonarImage1;
+//        cv::Mat sonarImage2;
+//        try {
+//            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
+//            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
+//        }
+//        catch (cv_bridge::Exception &e) {
+//            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
+//            return false;
+//        }
+//
+//        try {
+//            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
+//            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
+//        }
+//        catch (cv_bridge::Exception &e) {
+//            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
+//            return false;
+//        }
 
 
         double *voxelData1;
@@ -180,14 +202,17 @@ private:
         voxelData1 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
         voxelData2 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
 
-        convertMatToDoubleArray(sonarImage1, voxelData1);
-        convertMatToDoubleArray(sonarImage2, voxelData2);
-
+//        convertMatToDoubleArray(sonarImage1, voxelData1);
+//        convertMatToDoubleArray(sonarImage2, voxelData2);
+        for(int i  = 0 ; i<this->dimensionOfImages * this->dimensionOfImages ; i++){
+            voxelData1[i] = req->sonar_scan_1[i];
+            voxelData2[i] = req->sonar_scan_2[i];
+        }
         Eigen::Matrix3d covarianceMatrixResult;
         this->registrationMutex.lock();
 
         //calculate the registration
-        std::vector<transformationPeak> listPotentialSolutions = scanRegistrationObject.registrationOfTwoVoxelsSOFFTAllSoluations(
+        std::vector<transformationPeakfs2D> listPotentialSolutions = scanRegistrationObject.registrationOfTwoVoxelsSOFFTAllSoluations(
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
