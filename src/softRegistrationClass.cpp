@@ -1,5 +1,5 @@
 //
-// Created by tim-external on 01.03.22.
+// Created by aya on 01.03.22.
 //
 
 #include "softRegistrationClass.h"
@@ -204,15 +204,15 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     if (debug) {
         std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
         myFile1.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
-        myFile2.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
+        myFile2.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
         myFile3.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
         myFile4.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
-        myFile5.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
+        myFile5.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
         myFile6.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
         for (int j = 0; j < N; j++) {
             for (int i = 0; i < N; i++) {
                 myFile1 << magnitude1[j + N * i]; // real part
@@ -356,9 +356,9 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     if (debug) {
         std::ofstream myFile7, myFile8;
         myFile7.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resampledVoxel1.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resampledVoxel1.csv");
         myFile8.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resampledVoxel2.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resampledVoxel2.csv");
 
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
@@ -378,7 +378,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     if (debug) {
         FILE *fp;
         fp = fopen(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultCorrelation3D.csv",
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultCorrelation3D.csv",
                 "w");
         for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++)
             fprintf(fp, "%.16f\n", resultingCorrelationComplex[i][0]);
@@ -458,7 +458,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
         FILE *fp;
         fp = fopen(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultCorrelation4D.csv",
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultCorrelation4D.csv",
                 "w");
         for (int i = 0; i < N_Long * N_Long * N_Long; i++)
             fprintf(fp, "%.16f\n", quaternionCorrelation[i]);
@@ -538,7 +538,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     if (debug) {
         std::ofstream myFile9;
         myFile9.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelation1D.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelation1D.csv");
 
         for (int i = 0; i < correlationAveraged.size(); i++) {
             myFile9 << correlationAveraged[i]; // real part
@@ -621,10 +621,10 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 ////    if (debug) {
 ////        std::ofstream myFile1, myFile2, myFile3;
 ////        myFile1.open(
-////                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
-////        myFile2.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
+////                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
+////        myFile2.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
 ////        myFile3.open(
-////                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
+////                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
 ////
 ////        for (int j = 0; j < this->correlationN; j++) {
 ////            for (int i = 0; i < this->correlationN; i++) {
@@ -648,10 +648,10 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 ////    if (debug) {
 ////        std::ofstream myFile4, myFile5, myFile6;
 ////        myFile4.open(
-////                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
-////        myFile5.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
+////                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
+////        myFile5.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
 ////        myFile6.open(
-////                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
+////                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
 ////        for (int j = 0; j < this->correlationN; j++) {
 ////            for (int i = 0; i < this->correlationN; i++) {
 ////                myFile4 << magnitude2Correlation[j + this->correlationN * i]; // real part
@@ -794,7 +794,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 //    if (debug) {
 //        std::ofstream myFile10;
 //        myFile10.open(
-//                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelationShift.csv");
+//                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelationShift.csv");
 //
 //        for (int j = 0; j < this->correlationN; j++) {
 //            for (int i = 0; i < this->correlationN; i++) {
@@ -1030,7 +1030,7 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     if (debug) {
         std::ofstream myFile10;
         myFile10.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelationShift_" +
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultingCorrelationShift_" +
                 std::to_string(numberOfRotationForDebug) + "_.csv");
 
         for (int j = 0; j < this->correlationN; j++) {
@@ -1337,7 +1337,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
         std::ofstream myFile12;
         myFile12.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/dataForReadIn.csv");
+                "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/dataForReadIn.csv");
 
         myFile12 << listOfTransformations.size();//number of possible rotations
         myFile12 << "\n";
@@ -1366,7 +1366,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
                 std::ofstream myFile12;
                 myFile12.open(
-                        "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/potentialTransformation" +
+                        "/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/potentialTransformation" +
                         std::to_string(numberOfTransformations) + ".csv");
                 for (int i = 0; i < 4; i++) {
                     for (int j = 0; j < 4; j++) {
