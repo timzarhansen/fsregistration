@@ -23,10 +23,12 @@
 #define FINDPEAK_UNION_FIND_H
 
 #include <vector>
+#include <cstddef>
+
 
 namespace findpeaks {
 
-typedef std::make_signed_t<size_t> signed_size_t;
+typedef std::make_signed_t<std::size_t> signed_size_t;
 
 class union_find {
 
