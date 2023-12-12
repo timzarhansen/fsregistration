@@ -53,7 +53,7 @@ double angleDifference(double angle1, double angle2) {//gives angle 1 - angle 2
 
 double
 softRegistrationClass::getSpectrumFromVoxelData2D(double voxelData[], double magnitude[], double phase[],
-                                                       bool gaussianBlur) {
+                                                  bool gaussianBlur) {
 
     double *voxelDataTMP;
     voxelDataTMP = (double *) malloc(sizeof(double) * N * N);
@@ -106,8 +106,8 @@ softRegistrationClass::getSpectrumFromVoxelData2D(double voxelData[], double mag
 
 double
 softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[], double magnitude[],
-                                                                  double phase[],
-                                                                  bool gaussianBlur, double normalizationFactor) {
+                                                             double phase[],
+                                                             bool gaussianBlur, double normalizationFactor) {
 
     double *voxelDataTMP;
     voxelDataTMP = (double *) malloc(sizeof(double) * correlationN * correlationN);
@@ -172,7 +172,7 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
 
 double
 softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[],
-                                                                 double goodGuessAlpha,double &covariance, bool debug) {
+                                                            double goodGuessAlpha, double &covariance, bool debug) {
 
     std::vector<rotationPeakfs2D> allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input,
                                                                                                         voxelData2Input,
@@ -191,9 +191,9 @@ softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Inp
 
 std::vector<rotationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double voxelData1Input[],
-                                                                            double voxelData2Input[], bool debug,
-                                                                            bool multipleRadii, bool useClahe,
-                                                                            bool useHamming) {
+                                                                       double voxelData2Input[], bool debug,
+                                                                       bool multipleRadii, bool useClahe,
+                                                                       bool useHamming) {
 
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
                                                                     this->phase1, false);
@@ -274,7 +274,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     int maxRNumber = N / 2 - floor(N * 0.05);
     int bandwidth = N / 2;
 
-    if(multipleRadii){
+    if (multipleRadii) {
         minRNumber = maxRNumber - 1;
     }
     //CHANGE HERE HAPPEND TESTS
@@ -324,11 +324,10 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
         magTMP2.convertTo(magTMP2, CV_8UC1);
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
         clahe->setClipLimit(3);
-        if (useClahe){
+        if (useClahe) {
             clahe->apply(magTMP1, magTMP1);
             clahe->apply(magTMP2, magTMP2);
         }
-
 
 
         for (int j = 0; j < 2 * bandwidth; j++) {
@@ -336,7 +335,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 //                double hammingCoeff = 1;
 
                 double hammingCoeff = 1;
-                if(useHamming){
+                if (useHamming) {
                     hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
                 }
 
@@ -909,12 +908,12 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                    double voxelData2Input[],
-                                                                                    double cellSize,
-                                                                                    double normalizationFactor,
-                                                                                    bool debug,
-                                                                                    int numberOfRotationForDebug,
-                                                                                    double potentialNecessaryForPeak) {
+                                                                               double voxelData2Input[],
+                                                                               double cellSize,
+                                                                               double normalizationFactor,
+                                                                               bool debug,
+                                                                               int numberOfRotationForDebug,
+                                                                               double potentialNecessaryForPeak) {
     //copy and normalize voxelDataInput
 
 
@@ -1015,8 +1014,9 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
 //                                                                 registrationNoiseImpactFactor,
 //                                                                 ignorePercentageFactor);
 
-    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(cellSize,
-                                                                                                                potentialNecessaryForPeak);
+    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
+            cellSize,
+            potentialNecessaryForPeak);
 
     //function of 2D peak detection
 
@@ -1140,15 +1140,15 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
 }
 
 Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
-                                                                             double voxelData2Input[],
-                                                                             Eigen::Matrix4d &initialGuess,
-                                                                             Eigen::Matrix3d &covarianceMatrix,
-                                                                             bool useInitialAngle,
-                                                                             bool useInitialTranslation,
-                                                                             double cellSize,
-                                                                             bool useGauss,
-                                                                             bool debug,double potentialNecessaryForPeak) {
-    if(!useInitialAngle || !useInitialTranslation){
+                                                                        double voxelData2Input[],
+                                                                        Eigen::Matrix4d &initialGuess,
+                                                                        Eigen::Matrix3d &covarianceMatrix,
+                                                                        bool useInitialAngle,
+                                                                        bool useInitialTranslation,
+                                                                        double cellSize,
+                                                                        bool useGauss,
+                                                                        bool debug, double potentialNecessaryForPeak) {
+    if (!useInitialAngle || !useInitialTranslation) {
         std::cout << "this function has to be used with initial guess = true" << std::endl;
         exit(-1);
     }
@@ -1164,7 +1164,7 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
     std::vector<rotationPeakfs2D> estimatedAngles;
     double angleCovariance;
     double angleTMP = this->sofftRegistrationVoxel2DRotationOnly(voxelData1Input, voxelData2Input, goodGuessAlpha,
-                                                                 angleCovariance,debug);
+                                                                 angleCovariance, debug);
 
     rotationPeakfs2D rotationPeakTMP;
     rotationPeakTMP.angle = angleTMP;
@@ -1203,7 +1203,7 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
                 voxelData1, voxelData2,
                 cellSize,
                 1.0,
-                debug, angleIndex,potentialNecessaryForPeak);
+                debug, angleIndex, potentialNecessaryForPeak);
         Eigen::Matrix4d estimatedRotationScans = Eigen::Matrix4d::Identity();
         Eigen::AngleAxisd rotation_vectorTMP(estimatedAngle.angle, Eigen::Vector3d(0, 0, 1));
         Eigen::Matrix3d tmpRotMatrix3d = rotation_vectorTMP.toRotationMatrix();
@@ -1262,12 +1262,13 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
 
 std::vector<transformationPeakfs2D>
 softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
-                                                                      double voxelData2Input[],
-                                                                      double cellSize,
-                                                                      bool useGauss,
-                                                                      bool debug, double potentialNecessaryForPeak,bool multipleRadii,
-                                                                      bool useClahe,
-                                                                      bool useHamming) {
+                                                                 double voxelData2Input[],
+                                                                 double cellSize,
+                                                                 bool useGauss,
+                                                                 bool debug, double potentialNecessaryForPeak,
+                                                                 bool multipleRadii,
+                                                                 bool useClahe,
+                                                                 bool useHamming) {
 
     double timeToCalculate;
 
@@ -1277,7 +1278,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
-                                                                               debug,multipleRadii,useClahe,useHamming);
+                                                                               debug, multipleRadii, useClahe,
+                                                                               useHamming);
 //    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 //    std::cout << "1: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << std::endl;
 
@@ -1397,8 +1399,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::peakDetectionOf2DCorrelationSimpleDouble1D(double maximumCorrelation, double cellSize,
-                                                                       int impactOfNoiseFactor,
-                                                                       double percentageOfMaxCorrelationIgnored) {
+                                                                  int impactOfNoiseFactor,
+                                                                  double percentageOfMaxCorrelationIgnored) {
 
     float impactOfNoise = std::pow(2, impactOfNoiseFactor);
 
@@ -1465,8 +1467,8 @@ softRegistrationClass::peakDetectionOf2DCorrelationSimpleDouble1D(double maximum
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::peakDetectionOf2DCorrelationOpenCVHoughTransform(double maximumCorrelation, double cellSize,
-                                                                             int impactOfNoiseFactor,
-                                                                             double percentageOfMaxCorrelationIgnored) {
+                                                                        int impactOfNoiseFactor,
+                                                                        double percentageOfMaxCorrelationIgnored) {
 
     float impactOfNoise = std::pow(2, impactOfNoiseFactor);
 
@@ -1797,4 +1799,8 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
     free(current2DCorrelation);
     return (tmpTranslations);
 
+}
+
+int softRegistrationClass::getSizeOfRegistration() {
+    return this->N;
 }

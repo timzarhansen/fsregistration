@@ -222,6 +222,8 @@ public:
     peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
                                                  double ignoreSidesPercentage = 0.05);
 
+    int getSizeOfRegistration();
+
 
 private://here everything is created. malloc is done in the constructor
 
