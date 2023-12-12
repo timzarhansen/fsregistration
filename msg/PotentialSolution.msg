@@ -4,5 +4,6 @@ float64 persistent_transformation_peak_value
 float64 rotation_peak_height #between 0 and 1
 float64[4] translation_covariance
 float64 rotation_covariance
+float64 time_to_calculate #in ms
 
 

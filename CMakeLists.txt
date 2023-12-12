@@ -43,10 +43,15 @@ rosidl_generate_interfaces( fs2d
 ################################################################################
 # generalhelpfullib
 ################################################################################
+
 add_library(generalhelpfullib SHARED src/generalHelpfulTools.cpp)
 target_include_directories(generalhelpfullib PUBLIC include)
 ament_target_dependencies(generalhelpfullib tf2 Eigen3)
 
+install(
+        DIRECTORY include
+        DESTINATION include
+)
 
 ################################################################################
 # 2D Peak Algorithm
@@ -80,15 +85,16 @@ add_executable(ros2ServiceRegistration src/serviceRegistrationImage.cpp src/soft
 ament_target_dependencies(ros2ServiceRegistration rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
 target_link_libraries(ros2ServiceRegistration soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
 target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS})
-rosidl_target_interfaces(ros2ServiceRegistration
-        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#rosidl_target_interfaces(ros2ServiceRegistration
+#        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(ros2ServiceRegistration "${cpp_typesupport_target}")
 
 #add_executable(servicecall src/callingServiceExample.cpp )
 #ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
 #target_link_libraries(servicecall  ${OpenCV_LIBS} generalhelpfullib)
 #target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
-#rosidl_target_interfaces(servicecall
-#        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#target_link_libraries(servicecall "${cpp_typesupport_target}")
 
 
 
@@ -99,7 +105,6 @@ install(TARGETS
         #        guibluerov2
         DESTINATION lib/${PROJECT_NAME}
 )
-
 
 
 
