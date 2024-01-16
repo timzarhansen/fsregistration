@@ -14,6 +14,14 @@
 #include <opencv4/opencv2/highgui.hpp>
 #include <filesystem>
 #include "softRegistrationClass.h"
+//#include <pcl/point_types.h>
+//#include <pcl/io/pcd_io.h>
+//#include <pcl/filters/voxel_grid.h>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
 
 
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
@@ -37,6 +45,43 @@ void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
 }
 
+
+int getVoxelIndex(float x, float y, float z, float voxelSize, int N) {
+    int voxelX = static_cast<int>(x / voxelSize);
+    int voxelY = static_cast<int>(y / voxelSize);
+    int voxelZ = static_cast<int>(z / voxelSize);
+    return voxelX + voxelY * N + voxelZ * N * N;
+}
+
+
+void process3Dimage(const std::string& filename, float gridSideLength, float voxelSize, int N) {
+    std::ifstream file(filename);
+    std::string line;
+    bool headerEnded = false;
+
+    while (std::getline(file, line)) {
+        if (line == "end_header") {
+            headerEnded = true;
+            continue;
+        }
+
+        if (headerEnded) {
+            std::istringstream iss(line);
+            float x, y, z, confidence, intensity;
+            if (!(iss >> x >> y >> z >> confidence >> intensity)) { break; } // Error
+
+            x += gridSideLength / 2;
+            y += gridSideLength / 2;
+            z += gridSideLength / 2;
+
+            std::vector<int> voxelGrid(N * N * N, 0);
+            int index = getVoxelIndex(x, y, z, voxelSize, N);
+            if (index >= 0 && index < voxelGrid.size()) {
+                voxelGrid[index] = 1;
+            }
+        }
+    }
+}
 
 int main(int argc, char **argv) {
     // input needs to be two scans as voxelData
