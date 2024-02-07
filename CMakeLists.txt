@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.3)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-
+set(VTK_LEGACY_REMOVE)
 set(CATKIN_ENABLE_TESTING OFF)
 project(fs2d)
 
@@ -19,7 +19,7 @@ find_package(Eigen3)
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
-find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
+find_package(PCL 1.10 REQUIRED )
 
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -70,16 +70,22 @@ target_include_directories(UNION_FIND PRIVATE
 )
 target_link_libraries(findpeaks INTERFACE UNION_FIND)
 
+#include_directories(${PCL_INCLUDE_DIRS})
+#
+#link_directories(${PCL_LIBRARY_DIRS})
+#
+#add_definitions(${PCL_DEFINITIONS})
 
 ################################################################################
 # executables
 ################################################################################
 
-add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
+add_executable(registration3DVoxels src/registrationOf3DVoxels.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
         src/softCorrelationClass3D.cpp
         src/softRegistrationClass3D.cpp)
-target_link_libraries(registrationOfTwoImages fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
-target_include_directories(registrationOfTwoImages PUBLIC  ${OpenCV_INCLUDE_DIRS})
+ament_target_dependencies(registration3DVoxels PCL)
+target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
+target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
 
 
