@@ -28,7 +28,7 @@ find_package(rclcpp REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 
-rosidl_generate_interfaces( fs2d
+rosidl_generate_interfaces(fs2d
         "msg/PotentialSolution.msg"
 
         "srv/RequestListPotentialSolution.srv"
@@ -43,10 +43,15 @@ rosidl_generate_interfaces( fs2d
 ################################################################################
 # generalhelpfullib
 ################################################################################
+
 add_library(generalhelpfullib SHARED src/generalHelpfulTools.cpp)
 target_include_directories(generalhelpfullib PUBLIC include)
 ament_target_dependencies(generalhelpfullib tf2 Eigen3)
 
+install(
+        DIRECTORY include
+        DESTINATION include
+)
 
 ################################################################################
 # 2D Peak Algorithm
@@ -70,7 +75,6 @@ target_link_libraries(findpeaks INTERFACE UNION_FIND)
 # executables
 ################################################################################
 
-
 add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
         src/softCorrelationClass3D.cpp
         src/softRegistrationClass3D.cpp)
@@ -79,22 +83,26 @@ target_include_directories(registrationOfTwoImages PUBLIC  ${OpenCV_INCLUDE_DIRS
 
 
 
+
+
+add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
+target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
+target_include_directories(registrationOfTwoImages PUBLIC ${OpenCV_INCLUDE_DIRS})
+
+
 add_executable(ros2ServiceRegistration src/serviceRegistrationImage.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
 ament_target_dependencies(ros2ServiceRegistration rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
 target_link_libraries(ros2ServiceRegistration soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
-target_include_directories(ros2ServiceRegistration PUBLIC  ${OpenCV_INCLUDE_DIRS})
-rosidl_target_interfaces(ros2ServiceRegistration
-        ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_include_directories(ros2ServiceRegistration PUBLIC ${OpenCV_INCLUDE_DIRS})
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(ros2ServiceRegistration "${cpp_typesupport_target}")
 
-add_executable(servicecall src/callingServiceExample.cpp )
-ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
-target_link_libraries(servicecall  ${OpenCV_LIBS} generalhelpfullib)
-target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
-rosidl_target_interfaces(servicecall
-        ${PROJECT_NAME} "rosidl_typesupport_cpp")
-
-
-
+#add_executable(servicecall src/callingServiceExample.cpp )
+#ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
+#target_link_libraries(servicecall soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
+#target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#target_link_libraries(servicecall "${cpp_typesupport_target}")
 
 
 install(TARGETS
@@ -102,8 +110,6 @@ install(TARGETS
         #        guibluerov2
         DESTINATION lib/${PROJECT_NAME}
 )
-
-
 
 
 ament_export_dependencies(rosidl_default_runtime)
