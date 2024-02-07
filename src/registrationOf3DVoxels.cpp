@@ -127,25 +127,34 @@ int main(int argc, char **argv) {
     double fitnessY;
     Eigen::Matrix4d ourInitialGuess = Eigen::Matrix4d::Identity();
     Eigen::Matrix3d covarianceMatrixResult;
-    Eigen::Matrix4d estimatedTransformation = scanRegistrationObject.registrationOfTwoVoxelsSOFFTFast(voxelData1,
-                                                                                                      voxelData2,
-                                                                                                      ourInitialGuess,
-                                                                                                      covarianceMatrixResult,
-                                                                                                      true, true,
-                                                                                                      1,
-                                                                                                      false,
-                                                                                                      true);
+//    Eigen::Matrix4d estimatedTransformation = scanRegistrationObject.registrationOfTwoVoxelsSOFFTFast(voxelData1,
+//                                                                                                      voxelData2,
+//                                                                                                      ourInitialGuess,
+//                                                                                                      covarianceMatrixResult,
+//                                                                                                      true, true,
+//                                                                                                      1,
+//                                                                                                      false,
+//                                                                                                      true);
+
+    std::vector<transformationPeakfs2D> vectorOfSolutions = scanRegistrationObject.registrationOfTwoVoxelsSOFFTAllSoluations(
+            voxelData1, voxelData2,
+            1, false, true, 0.1,
+            false, true, true);
+
+
+
+
 //    Eigen::Matrix4d tmpMatrix4d = estimatedTransformation.inverse();
 //    estimatedTransformation = tmpMatrix4d;
 
 //    estimatedTransformation(1, 3) = estimatedTransformation(1, 3)-5;
 //    estimatedTransformation(0, 3) = estimatedTransformation(0, 3)-2;
-    cv::Mat trans_mat = (cv::Mat_<double>(2, 3) << estimatedTransformation(0,0),
-            estimatedTransformation(0,1),
-            estimatedTransformation(0, 3),
-            estimatedTransformation(1,0),
-            estimatedTransformation(1,1),
-            estimatedTransformation(1, 3));
+//    cv::Mat trans_mat = (cv::Mat_<double>(2, 3) << estimatedTransformation(0,0),
+//            estimatedTransformation(0,1),
+//            estimatedTransformation(0, 3),
+//            estimatedTransformation(1,0),
+//            estimatedTransformation(1,1),
+//            estimatedTransformation(1, 3));
 
 
 
@@ -158,8 +167,8 @@ int main(int argc, char **argv) {
 
     cv::Mat magTMP2(dimensionScan, dimensionScan, CV_64F, voxelData2);
 
-    std::cout << trans_mat << std::endl;
-    warpAffine(magTMP2, magTMP2, trans_mat, magTMP2.size());
+//    std::cout << trans_mat << std::endl;
+//    warpAffine(magTMP2, magTMP2, trans_mat, magTMP2.size());
 //            convertMatToDoubleArray(img1, voxelData1);
 //            convertMatToDoubleArray(img2, voxelData2);
 

@@ -16,6 +16,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "cv_bridge/cv_bridge.h"
 
+#define DEBUG_MODE true
+
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
     std::vector<uchar> array;
@@ -122,7 +124,7 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                false,req->potential_for_necessary_peak);
+                DEBUG_MODE,req->potential_for_necessary_peak);
 
         this->registrationMutex.unlock();
 
@@ -191,7 +193,7 @@ private:
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, false,req->potential_for_necessary_peak);
+                false, DEBUG_MODE,req->potential_for_necessary_peak,req->multiple_radii,req->use_clahe,req->use_hamming);
         this->registrationMutex.unlock();
         std::cout << "req->potential_for_necessary_peak" << std::endl;
         std::cout << req->potential_for_necessary_peak << std::endl;
