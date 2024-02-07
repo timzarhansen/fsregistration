@@ -176,7 +176,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleRotations(double 
                 }
                 // test on dataset with N and N/2 and 0   first test + n/2
                 tmpHolding.theta = y;
-                        tmpHolding.phi = std::fmod(-(z1 + z2) + 6 * M_PI + 0.0 * M_PI / (N),
+                tmpHolding.phi = std::fmod(-(z1 + z2) + 6 * M_PI + 0.0 * M_PI / (N),
                                                    2 * M_PI);
                 correlationOfAngle.push_back(tmpHolding);
             }

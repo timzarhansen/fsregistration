@@ -5,8 +5,8 @@
 //
 // Created by jurobotics on 13.09.21.
 //
-// /home/aya/dataFolder/StPereDataset/lowNoise52/scanNumber_0/00_ForShow.jpg /home/aya/dataFolder/StPereDataset/lowNoise52/scanNumber_1/00_ForShow.jpg
-// /home/aya/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/aya/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
+// /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_0/00_ForShow.jpg /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_1/00_ForShow.jpg
+// /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
 #include "generalHelpfulTools.h"
 //#include "slamToolsRos.h"
 #include <opencv4/opencv2/core.hpp>
@@ -14,15 +14,19 @@
 #include <opencv4/opencv2/highgui.hpp>
 #include <filesystem>
 #include "softRegistrationClass.h"
-//#include <pcl/point_types.h>
-//#include <pcl/io/pcd_io.h>
-//#include <pcl/filters/voxel_grid.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/io/ply_io.h>
+#include <pcl/surface/convex_hull.h>
+#include <pcl/common/norms.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <string>
-
+#include "softRegistrationClass3D.h"
 
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
@@ -54,7 +58,7 @@ int getVoxelIndex(float x, float y, float z, float voxelSize, int N) {
 }
 
 
-void process3Dimage(const std::string& filename, float gridSideLength, float voxelSize, int N) {
+void process3Dimage(const std::string &filename, float gridSideLength, float voxelSize, int N) {
     std::ifstream file(filename);
     std::string line;
     bool headerEnded = false;
@@ -87,104 +91,48 @@ int main(int argc, char **argv) {
     // input needs to be two scans as voxelData
 
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PLYReader Reader;
+    Reader.read("/home/tim-external/ros2_ws/src/fs2D/exampleData/dragon_recon/dragon_vrip.ply", *cloud);
 
-    std::string current_exec_name = argv[0]; // Name of the current exec program
-    std::vector<std::string> all_args;
+    pcl::ConvexHull<pcl::PointXYZ> cHull;
+    pcl::PointCloud<pcl::PointXYZ> cHull_points;
+    cHull.setInputCloud(cloud);
+    cHull.reconstruct(cHull_points);
+    double maximumDistance = 0;
+    for (int i = 0; i < cloud->points.size(); i++) {
+        Eigen::Vector3d tmpPoint;
+        tmpPoint.x() = cloud->points[i].x;
+        tmpPoint.y() = cloud->points[i].y;
+        tmpPoint.z() = cloud->points[i].z;
+        if (maximumDistance < tmpPoint.norm()) {
+            maximumDistance = tmpPoint.norm();
+        }
 
-    if (argc > 2) {
-        //std::cout << "temp1" << std::endl;
-        all_args.assign(argv + 1, argv + argc);
-        //std::cout << "12"<< all_args[1]<<std::endl;
-    } else {
-        std::cout << "no arguments given" << std::endl;
-        exit(-1);
     }
-    std::cout << all_args[0] << std::endl;
-
-    cv::Mat img1 = cv::imread(
-            all_args[0],
-            cv::IMREAD_GRAYSCALE);
-    cv::Mat img2 = cv::imread(
-            all_args[1],
-            cv::IMREAD_GRAYSCALE);
-//   cv::imshow("Display window", img1);
-//    int k = cv::waitKey(0);
-//    cv::Mat img1 = cv::imread("/home/aya/Documents/matlabTestEnvironment/registrationFourier/FMT/firstImage.jpg", cv::IMREAD_GRAYSCALE);
-//    cv::Mat img2 = cv::imread("/home/aya/Documents/matlabTestEnvironment/registrationFourier/FMT/secondImage.jpg", cv::IMREAD_GRAYSCALE);
-    int dimensionScan = img1.rows;
-    std::cout << "image size: " << dimensionScan << std::endl;
+//    std::cout << maximumDistance << std::endl;
+    double sizeVoxelOneDirection = 2 * maximumDistance * 1.4;
+    int N = 256;
     double *voxelData1;
     double *voxelData2;
-    voxelData1 = (double *) malloc(sizeof(double) * dimensionScan * dimensionScan);
-    voxelData2 = (double *) malloc(sizeof(double) * dimensionScan * dimensionScan);
+    voxelData1 = (double *) malloc(sizeof(double) * N * N * N);
+    voxelData2 = (double *) malloc(sizeof(double) * N * N * N);
 
-    convertMatToDoubleArray(img1, voxelData1);
-    convertMatToDoubleArray(img2, voxelData2);
-
-    softRegistrationClass scanRegistrationObject(img1.rows, img1.rows / 2, img1.rows / 2, img1.rows / 2 - 1);
-
-    double fitnessX;
-    double fitnessY;
-    Eigen::Matrix4d ourInitialGuess = Eigen::Matrix4d::Identity();
-    Eigen::Matrix3d covarianceMatrixResult;
-//    Eigen::Matrix4d estimatedTransformation = scanRegistrationObject.registrationOfTwoVoxelsSOFFTFast(voxelData1,
-//                                                                                                      voxelData2,
-//                                                                                                      ourInitialGuess,
-//                                                                                                      covarianceMatrixResult,
-//                                                                                                      true, true,
-//                                                                                                      1,
-//                                                                                                      false,
-//                                                                                                      true);
-
-    std::vector<transformationPeakfs2D> vectorOfSolutions = scanRegistrationObject.registrationOfTwoVoxelsSOFFTAllSoluations(
-            voxelData1, voxelData2,
-            1, false, true, 0.1,
-            false, true, true);
-
-
-
-
-//    Eigen::Matrix4d tmpMatrix4d = estimatedTransformation.inverse();
-//    estimatedTransformation = tmpMatrix4d;
-
-//    estimatedTransformation(1, 3) = estimatedTransformation(1, 3)-5;
-//    estimatedTransformation(0, 3) = estimatedTransformation(0, 3)-2;
-//    cv::Mat trans_mat = (cv::Mat_<double>(2, 3) << estimatedTransformation(0,0),
-//            estimatedTransformation(0,1),
-//            estimatedTransformation(0, 3),
-//            estimatedTransformation(1,0),
-//            estimatedTransformation(1,1),
-//            estimatedTransformation(1, 3));
-
-
-
-
-
-
-    cv::Mat magTMP1(dimensionScan, dimensionScan, CV_64F, voxelData1);
-    //add gaussian blur
-    //            cv::imwrite("/home/aya/Documents/imreg_fmt/firstImage.jpg", magTMP1);
-
-    cv::Mat magTMP2(dimensionScan, dimensionScan, CV_64F, voxelData2);
-
-//    std::cout << trans_mat << std::endl;
-//    warpAffine(magTMP2, magTMP2, trans_mat, magTMP2.size());
-//            convertMatToDoubleArray(img1, voxelData1);
-//            convertMatToDoubleArray(img2, voxelData2);
-
-    std::ofstream myFile1, myFile2;
-    myFile1.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel1.csv");
-    myFile2.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel2.csv");
-    for (int i = 0; i < dimensionScan; i++) {
-        for (int j = 0; j < dimensionScan; j++) {
-            myFile1 << voxelData1[j + dimensionScan * i]; // real part
-            myFile1 << "\n";
-            myFile2 << voxelData2[j + dimensionScan * i]; // imaginary part
-            myFile2 << "\n";
-        }
+    // compute voxel 1
+    for (int i = 0; i < cloud->points.size(); i++) {
+        int xIndex = N / 2 + cloud->points[i].x * N / sizeVoxelOneDirection;
+        int yIndex = N / 2 + cloud->points[i].y * N / sizeVoxelOneDirection;
+        int zIndex = N / 2 + cloud->points[i].z * N / sizeVoxelOneDirection;
+        voxelData1[xIndex + N * yIndex + N * N * zIndex] = 1;
+        voxelData2[xIndex + N * yIndex + N * N * zIndex] = 1;
     }
-    myFile1.close();
-    myFile2.close();
+    // compute voxel 2 maybe with a small rotation No Translation necessary for now
+
+
+
+    softRegistrationClass3D registrationObject(N, N / 2, N / 2, N / 2 - 1);
+    registrationObject.sofftRegistrationVoxel3DListOfPossibleRotations(voxelData1,voxelData2,true,true);
+    // compute 3D registration
 
 
 
@@ -192,7 +140,14 @@ int main(int argc, char **argv) {
 
 
 
-//    Eigen::Matrix4d estimatedTransformation = scanRegistrationObject.sofftRegistration(*scan1,*scan2,fitnessX,fitnessY,-100,true);
+
+
+
+
+
+
+
+
 
 
     return (0);
