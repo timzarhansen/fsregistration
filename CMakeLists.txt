@@ -19,7 +19,7 @@ find_package(Eigen3)
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
-#find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
+find_package(PCL 1.10 REQUIRED COMPONENTS common io visualization)
 
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -75,7 +75,10 @@ target_link_libraries(findpeaks INTERFACE UNION_FIND)
 # executables
 ################################################################################
 
-add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
+
+add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
+        src/softCorrelationClass3D.cpp
+        src/softRegistrationClass3D.cpp)
 target_link_libraries(registrationOfTwoImages fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
 target_include_directories(registrationOfTwoImages PUBLIC  ${OpenCV_INCLUDE_DIRS})
 

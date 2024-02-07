@@ -64,6 +64,37 @@ std::vector<linear_index_t> neighbours(const pixel_index_t<> &p, const image_t<p
 	return ret;
 }
 
+// 3D
+template<typename pixel_data_type>
+std::vector<linear_index_t> neighbours3d(const pixel_index_3d<> &p, const volume_t<pixel_data_type> &volume) {
+    std::vector<linear_index_t> ret;
+
+    // considering adding diagonals (26) tbdl
+
+        ret.reserve(6);
+        if (p.x > 0) {
+            ret.push_back(index_3d_to_1d(p.x - 1, p.y, p.z, volume.width, volume.height, volume.depth));
+        }
+        if (p.x < volume.width - 1) {
+            ret.push_back(index_3d_to_1d(p.x + 1, p.y, p.z, volume.width, volume.height, volume.depth));
+        }
+        if (p.y > 0) {
+            ret.push_back(index_3d_to_1d(p.x, p.y - 1, p.z, volume.width, volume.height, volume.depth));
+        }
+        if (p.y < volume.height - 1) {
+            ret.push_back(index_3d_to_1d(p.x, p.y + 1, p.z, volume.width, volume.height, volume.depth));
+        }
+        if (p.z > 0) {
+        ret.push_back(index_3d_to_1d(p.x, p.y, p.z - 1, volume.width, volume.height, volume.depth));
+        }
+        if (p.z < volume.depth - 1) {
+        ret.push_back(index_3d_to_1d(p.x, p.y + 1, p.z + 1, volume.width, volume.height, volume.depth));
+        }
+
+        return ret;
+    }
+
+
 template <typename pixel_data_type>
 struct PixelCompByValueAbstract {
     virtual bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const =0;
@@ -236,6 +267,126 @@ std::vector<peak_t<pixel_data_type>> persistance(image_t<pixel_data_type> &image
 	return peaks_sorted;
 }
 
+
+template <typename pixel_data_type>
+std::vector<peak_3d<pixel_data_type>> persistance3d(volume_t<pixel_data_type> &volume, extremum_t extremum = maximum){
+
+    std::vector<pixel_index_3d<>> indices(volume.width * volume.height * volume.depth);
+    {
+        size_t ii = 0;
+        for (size_t k = 0; k < volume.depth; k++)
+            for (size_t j = 0; j < volume.height; j++) {
+                for (size_t i = 0; i < volume.width; i++) {
+                    indices[ii] = {i, j, k};
+                    ii++;
+                }
+            }
+    }
+
+
+    switch (extremum) {
+        case maximum:
+            std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
+                return volume.get_pixel_value(a) > volume.get_pixel_value(b);
+            });
+            break;
+        case minimum:
+            std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
+                return volume.get_pixel_value(a) < volume.get_pixel_value(b);
+            });
+            break;
+    }
+
+
+    union_find ds(volume.height * volume.width * volume.depth);
+
+    std::map<linear_index_t, peak_3d<pixel_data_type>> peaks;
+
+    // first iteration: init global maximum
+    {
+        pixel_index_3d<> const &p = indices[0];
+        const linear_index_t linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height, volume.depth);
+        const pixel_data_type v = volume.get_pixel_value(linear_index);
+        constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
+                                        std::numeric_limits<pixel_data_type>::infinity(): std::numeric_limits<pixel_data_type>::max();
+        peaks[linear_index] = {v, inf, p};
+    }
+
+    ordered_set_abstract<pixel_data_type> *nc;
+    if (extremum == maximum) {
+        nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
+    } else {
+        nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
+    }
+
+    for (signed_size_t i = 0; i < indices.size(); i++) {
+
+        pixel_index_3d<> const &p = indices[i];
+        linear_index_t p_linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height, volume.depth);
+        pixel_data_type v = volume.get_pixel_value(p_linear_index); // water level
+
+        std::vector<linear_index_t> ni = neighbours3d(p, volume);
+
+
+        for (const linear_index_t &q: ni) {
+            if (!ds.contains(q)) {
+                continue;
+            }
+            const linear_index_t set_index = ds.find_set(q);
+            nc->insert({
+                               volume.get_pixel_value(set_index),
+                               set_index
+                       });
+        }
+
+        ds.add(p_linear_index, -i);
+
+        if (!nc->empty()) {
+            auto nci = nc->cbegin();
+            const linear_index_t oldp = nci->position;
+            //ds.union_set(oldp, p_linear_index);
+            ds.join(oldp, p_linear_index);
+            for (nci++; nci != nc->cend(); nci++) {
+                const linear_index_t setid = ds.find_set(nci->position);
+                if (peaks.count(setid) == 0) {
+                    peaks[setid] = {
+                            nci->value,
+                            extremum == maximum ? (nci->value - v) : (v - nci->value),
+                            index_1d_to_3d(setid, volume.width, volume.height, volume.depth),
+                            p
+                    };
+                }
+
+                ds.join(oldp, nci->position);
+            }
+        }
+
+        nc->clear();
+
+    }
+
+    delete nc;
+
+    std::vector<peak_3d<pixel_data_type>> peaks_sorted(peaks.size());
+    size_t i = 0;
+    for (auto const &[key, val]: peaks) {
+        peaks_sorted[i] = val;
+        i++;
+    }
+
+    std::sort(peaks_sorted.begin(), peaks_sorted.end(), [](const peak_3d<pixel_data_type> &a, const peak_3d<pixel_data_type> &b) {
+                  return a.persistence > b.persistence;
+              });
+
+
+	return peaks_sorted;
 }
+
+}
+
+
+
+
+
 
 #endif //FINDPEAKS_PERSISTENCE_HPP
