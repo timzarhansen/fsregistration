@@ -5,8 +5,8 @@
 //
 // Created by jurobotics on 13.09.21.
 //
-// /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_0/00_ForShow.jpg /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_1/00_ForShow.jpg
-// /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
+// /home/aya/dataFolder/StPereDataset/lowNoise52/scanNumber_0/00_ForShow.jpg /home/aya/dataFolder/StPereDataset/lowNoise52/scanNumber_1/00_ForShow.jpg
+// /home/aya/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/aya/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
 #include "generalHelpfulTools.h"
 //#include "slamToolsRos.h"
 #include <opencv4/opencv2/core.hpp>
@@ -14,6 +14,14 @@
 #include <opencv4/opencv2/highgui.hpp>
 #include <filesystem>
 #include "softRegistrationClass.h"
+//#include <pcl/point_types.h>
+//#include <pcl/io/pcd_io.h>
+//#include <pcl/filters/voxel_grid.h>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
 
 
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
@@ -38,6 +46,43 @@ void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 }
 
 
+int getVoxelIndex(float x, float y, float z, float voxelSize, int N) {
+    int voxelX = static_cast<int>(x / voxelSize);
+    int voxelY = static_cast<int>(y / voxelSize);
+    int voxelZ = static_cast<int>(z / voxelSize);
+    return voxelX + voxelY * N + voxelZ * N * N;
+}
+
+
+void process3Dimage(const std::string& filename, float gridSideLength, float voxelSize, int N) {
+    std::ifstream file(filename);
+    std::string line;
+    bool headerEnded = false;
+
+    while (std::getline(file, line)) {
+        if (line == "end_header") {
+            headerEnded = true;
+            continue;
+        }
+
+        if (headerEnded) {
+            std::istringstream iss(line);
+            float x, y, z, confidence, intensity;
+            if (!(iss >> x >> y >> z >> confidence >> intensity)) { break; } // Error
+
+            x += gridSideLength / 2;
+            y += gridSideLength / 2;
+            z += gridSideLength / 2;
+
+            std::vector<int> voxelGrid(N * N * N, 0);
+            int index = getVoxelIndex(x, y, z, voxelSize, N);
+            if (index >= 0 && index < voxelGrid.size()) {
+                voxelGrid[index] = 1;
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     // input needs to be two scans as voxelData
 
@@ -54,7 +99,7 @@ int main(int argc, char **argv) {
         std::cout << "no arguments given" << std::endl;
         exit(-1);
     }
-
+    std::cout << all_args[0] << std::endl;
 
     cv::Mat img1 = cv::imread(
             all_args[0],
@@ -62,9 +107,10 @@ int main(int argc, char **argv) {
     cv::Mat img2 = cv::imread(
             all_args[1],
             cv::IMREAD_GRAYSCALE);
-
-//    cv::Mat img1 = cv::imread("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/FMT/firstImage.jpg", cv::IMREAD_GRAYSCALE);
-//    cv::Mat img2 = cv::imread("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/FMT/secondImage.jpg", cv::IMREAD_GRAYSCALE);
+//   cv::imshow("Display window", img1);
+//    int k = cv::waitKey(0);
+//    cv::Mat img1 = cv::imread("/home/aya/Documents/matlabTestEnvironment/registrationFourier/FMT/firstImage.jpg", cv::IMREAD_GRAYSCALE);
+//    cv::Mat img2 = cv::imread("/home/aya/Documents/matlabTestEnvironment/registrationFourier/FMT/secondImage.jpg", cv::IMREAD_GRAYSCALE);
     int dimensionScan = img1.rows;
     std::cout << "image size: " << dimensionScan << std::endl;
     double *voxelData1;
@@ -108,7 +154,7 @@ int main(int argc, char **argv) {
 
     cv::Mat magTMP1(dimensionScan, dimensionScan, CV_64F, voxelData1);
     //add gaussian blur
-    //            cv::imwrite("/home/tim-external/Documents/imreg_fmt/firstImage.jpg", magTMP1);
+    //            cv::imwrite("/home/aya/Documents/imreg_fmt/firstImage.jpg", magTMP1);
 
     cv::Mat magTMP2(dimensionScan, dimensionScan, CV_64F, voxelData2);
 
@@ -118,8 +164,8 @@ int main(int argc, char **argv) {
 //            convertMatToDoubleArray(img2, voxelData2);
 
     std::ofstream myFile1, myFile2;
-    myFile1.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel1.csv");
-    myFile2.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel2.csv");
+    myFile1.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel1.csv");
+    myFile2.open("/home/aya/Documents/matlabTestEnvironment/registrationFourier/csvFiles/resultVoxel2.csv");
     for (int i = 0; i < dimensionScan; i++) {
         for (int j = 0; j < dimensionScan; j++) {
             myFile1 << voxelData1[j + dimensionScan * i]; // real part
