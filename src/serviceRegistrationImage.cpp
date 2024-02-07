@@ -16,8 +16,6 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "cv_bridge/cv_bridge.h"
 
-#define DEBUG_MODE true
-
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
     std::vector<uchar> array;
@@ -41,11 +39,11 @@ void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
 class ROSClassRegistrationNode : public rclcpp::Node {
 public:
-    ROSClassRegistrationNode(int sizeImage) : Node("fs2dregistrationnode"),
-                                              scanRegistrationObject(sizeImage, sizeImage / 2, sizeImage / 2,
-                                                                     sizeImage / 2 - 1) {
+    ROSClassRegistrationNode() : Node("fs2dregistrationnode") {
+
         // for now 256 could be 32/64/128/256/512 More gets complicated to compute
-        this->dimensionOfImages = sizeImage;
+        this->potentialImageSizes = std::vector<int>{ 32, 64, 128,256,512 };
+//        this->dimensionOfImages = sizeImage;
         this->serviceOnePotentialSolution = this->create_service<fs2d::srv::RequestOnePotentialSolution>(
                 "fs2d/registration/one_solution",
                 std::bind(&ROSClassRegistrationNode::sendSingleSolutionCallback,
@@ -65,37 +63,57 @@ private:
 
     rclcpp::Service<fs2d::srv::RequestOnePotentialSolution>::SharedPtr serviceOnePotentialSolution;
     rclcpp::Service<fs2d::srv::RequestListPotentialSolution>::SharedPtr servicelistPotentialSolutions;
-
+    std::vector<int> potentialImageSizes;
     std::mutex registrationMutex;
-    softRegistrationClass scanRegistrationObject;
-    int dimensionOfImages;
+//    softRegistrationClass scanRegistrationObject;
+//    int dimensionOfImages;
+    std::vector<softRegistrationClass *> softRegistrationObjectList;
+
+    int getIndexOfRegistration(int sizeOfTheImage){
+        if ( std::find(this->potentialImageSizes.begin(), this->potentialImageSizes.end(), sizeOfTheImage) == this->potentialImageSizes.end() ){
+            std::cout << sizeOfTheImage << std::endl;
+            std::cout << "Wrong size of image " << std::endl;
+            return -1;
+        }
+
+        if(softRegistrationObjectList.empty()){
+            //Create correct image size
+            this->softRegistrationObjectList.push_back(
+                    new softRegistrationClass(sizeOfTheImage, sizeOfTheImage / 2, sizeOfTheImage / 2, sizeOfTheImage / 2 - 1));
+        }
+        bool alreadyHaveCorrectRegistration = false;
+        int positionOfCorrect = 0;
+        for(int i  = 0 ; i<this->softRegistrationObjectList.size();i++){
+            if(this->softRegistrationObjectList[i]->getSizeOfRegistration() == sizeOfTheImage){
+                positionOfCorrect = i;
+                alreadyHaveCorrectRegistration = true;
+                break;
+            }
+        }
+
+        if(!alreadyHaveCorrectRegistration){
+            //Create correct image size
+            this->softRegistrationObjectList.push_back(
+                    new softRegistrationClass(sizeOfTheImage, sizeOfTheImage / 2, sizeOfTheImage / 2, sizeOfTheImage / 2 - 1));
+
+            positionOfCorrect = this->softRegistrationObjectList.size()-1;
+        }
+        return positionOfCorrect;
+    }
 
     bool sendSingleSolutionCallback(const std::shared_ptr<fs2d::srv::RequestOnePotentialSolution::Request> req,
                                     std::shared_ptr<fs2d::srv::RequestOnePotentialSolution::Response> res) {
-        std::cout << "getting registration for image:" << std::endl;
 
-        cv_bridge::CvImagePtr cv_ptr1;
-        cv_bridge::CvImagePtr cv_ptr2;
-        cv::Mat sonarImage1;
-        cv::Mat sonarImage2;
-        try {
-            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
-            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
+        int sizeOfTheImage = req->size_image;
+
+        int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheImage);
+        if(positionOfCorrectRegistration <0){
             return false;
         }
 
-        try {
-            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
-            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
-            return false;
-        }
 
+
+        std::cout << "getting registration for image: " << std::endl;
 
         tf2::Quaternion orientation;
         tf2::Vector3 position;
@@ -106,17 +124,36 @@ private:
         Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(position, orientation);
         double *voxelData1;
         double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
-        voxelData2 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
+        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
+        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
 
-        convertMatToDoubleArray(sonarImage1, voxelData1);
-        convertMatToDoubleArray(sonarImage2, voxelData2);
+        for(int i  = 0 ; i<sizeOfTheImage*sizeOfTheImage ; i++){
+            voxelData1[i] = req->sonar_scan_1[i];
+            voxelData2[i] = req->sonar_scan_2[i];
+        }
 
+//        cv::Mat magTMP1(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData1);
+//        cv::Mat magTMP2(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData2);
+//        cv::imshow("sonar1", magTMP1);
+//        cv::imshow("sonar2", magTMP2);
+//        int k = cv::waitKey(0); // Wait for a keystroke in the window
+
+
+
+//        convertMatToDoubleArray(sonarImage1, voxelData1);
+//        convertMatToDoubleArray(sonarImage2, voxelData2);
+        // computation time measurement
         Eigen::Matrix3d covarianceMatrixResult;
         this->registrationMutex.lock();
+        std::chrono::steady_clock::time_point begin;
+
+        begin = std::chrono::steady_clock::now();
+
+
+
 
         //calculate the registration
-        Eigen::Matrix4d resultingRegistrationTransformation = scanRegistrationObject.registrationOfTwoVoxelsSOFFTFast(
+        Eigen::Matrix4d resultingRegistrationTransformation = softRegistrationObjectList[positionOfCorrectRegistration]->registrationOfTwoVoxelsSOFFTFast(
                 voxelData1,
                 voxelData2,
                 initialGuess,
@@ -124,10 +161,14 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                DEBUG_MODE,req->potential_for_necessary_peak);
+                false,req->potential_for_necessary_peak);
+        std::chrono::steady_clock::time_point end;
+        end = std::chrono::steady_clock::now();
 
+        double timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
         this->registrationMutex.unlock();
-
+        free(voxelData1);
+        free(voxelData2);
 
         generalHelpfulTools::getTF2FromTransformationMatrix(position, orientation, resultingRegistrationTransformation);
         //set result in res
@@ -142,59 +183,67 @@ private:
         resultingPose.orientation.y = orientation.y();
         resultingPose.orientation.z = orientation.z();
         resultingPose.orientation.w = orientation.w();
-
+        Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2,2>(0,0);
         //tf2::convert(position, resultingPose.position);
-        res->potential_solution.rotation_covariance = -1;
+        res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
         res->potential_solution.resulting_transformation = resultingPose;
+        res->potential_solution.translation_covariance[0] = covarianceTranslation(0);
+        res->potential_solution.translation_covariance[1] = covarianceTranslation(1);
+        res->potential_solution.translation_covariance[2] = covarianceTranslation(2);
+        res->potential_solution.translation_covariance[3] = covarianceTranslation(3);
+        res->potential_solution.time_to_calculate = timeToCalculate;
+        //printing the results
+        std::cout << initialGuess << std::endl;
         std::cout << resultingRegistrationTransformation << std::endl;
         std::cout << "done registration for image:" << std::endl;
+
         return true;
     }
 
     bool sendAllSolutionsCallback(const std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Request> req,
                                   std::shared_ptr<fs2d::srv::RequestListPotentialSolution::Response> res) {
         std::cout << "starting all solution callback" << std::endl;
-        cv_bridge::CvImagePtr cv_ptr1;
-        cv_bridge::CvImagePtr cv_ptr2;
-        cv::Mat sonarImage1;
-        cv::Mat sonarImage2;
-        try {
-            cv_ptr1 = cv_bridge::toCvCopy(req->sonar_scan_1, req->sonar_scan_1.encoding);
-            cv::Mat(cv_ptr1->image).convertTo(sonarImage1, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 1: %s", e.what());
-            return false;
-        }
+        int sizeOfTheImage = req->size_image;
 
-        try {
-            cv_ptr2 = cv_bridge::toCvCopy(req->sonar_scan_2, req->sonar_scan_2.encoding);
-            cv::Mat(cv_ptr2->image).convertTo(sonarImage2, CV_8UC1);
-        }
-        catch (cv_bridge::Exception &e) {
-            RCLCPP_ERROR(this->get_logger(), "couldnt convert sonar image 2: %s", e.what());
+        int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheImage);
+        if(positionOfCorrectRegistration <0){
             return false;
         }
 
 
         double *voxelData1;
         double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
-        voxelData2 = (double *) malloc(sizeof(double) * this->dimensionOfImages * this->dimensionOfImages);
+        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
+        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
 
-        convertMatToDoubleArray(sonarImage1, voxelData1);
-        convertMatToDoubleArray(sonarImage2, voxelData2);
-
+//        convertMatToDoubleArray(sonarImage1, voxelData1);
+//        convertMatToDoubleArray(sonarImage2, voxelData2);
+        for(int i  = 0 ; i< sizeOfTheImage*sizeOfTheImage ; i++){
+            voxelData1[i] = req->sonar_scan_1[i];
+            voxelData2[i] = req->sonar_scan_2[i];
+        }
         Eigen::Matrix3d covarianceMatrixResult;
         this->registrationMutex.lock();
+        std::chrono::steady_clock::time_point begin;
+
+        begin = std::chrono::steady_clock::now();
 
         //calculate the registration
-        std::vector<transformationPeak> listPotentialSolutions = scanRegistrationObject.registrationOfTwoVoxelsSOFFTAllSoluations(
+        std::vector<transformationPeakfs2D> listPotentialSolutions = softRegistrationObjectList[positionOfCorrectRegistration]->registrationOfTwoVoxelsSOFFTAllSoluations(
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, DEBUG_MODE,req->potential_for_necessary_peak,req->multiple_radii,req->use_clahe,req->use_hamming);
+                false, false,req->potential_for_necessary_peak);
+
+        std::chrono::steady_clock::time_point end;
+        end = std::chrono::steady_clock::now();
+
+        double timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+
         this->registrationMutex.unlock();
+        free(voxelData1);
+        free(voxelData2);
+
         std::cout << "req->potential_for_necessary_peak" << std::endl;
         std::cout << req->potential_for_necessary_peak << std::endl;
         for (int i = 0; i < listPotentialSolutions.size(); i++) {
@@ -237,7 +286,7 @@ private:
 
                 potentialSolutionMSG.translation_covariance;//2x2 matrix
                 potentialSolutionMSG.rotation_covariance = 0.1;//currently missing
-
+                potentialSolutionMSG.time_to_calculate = timeToCalculate;
                 res->list_potential_solutions.push_back(potentialSolutionMSG);
             }
         }
@@ -253,7 +302,7 @@ int main(int argc, char **argv) {
 
     rclcpp::init(argc, argv);
     //For now we Assume that it is always a 256 image.
-    rclcpp::spin(std::make_shared<ROSClassRegistrationNode>(256));
+    rclcpp::spin(std::make_shared<ROSClassRegistrationNode>());
 
 
     rclcpp::shutdown();
