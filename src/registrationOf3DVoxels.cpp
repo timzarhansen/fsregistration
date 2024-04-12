@@ -123,8 +123,8 @@ int main(int argc, char **argv) {
         int xIndex = N / 2 + cloud->points[i].x * N / sizeVoxelOneDirection;
         int yIndex = N / 2 + cloud->points[i].y * N / sizeVoxelOneDirection;
         int zIndex = N / 2 + cloud->points[i].z * N / sizeVoxelOneDirection;
-        voxelData1[xIndex + N * yIndex + N * N * zIndex] = 1;
-        voxelData2[xIndex + N * yIndex + N * N * zIndex] = 1;
+        voxelData1[zIndex + N * yIndex + N * N * xIndex] = 1;
+        voxelData2[zIndex + N * yIndex + N * N * xIndex] = 1;
     }
     // compute voxel 2 maybe with a small rotation No Translation necessary for now
 
@@ -133,21 +133,6 @@ int main(int argc, char **argv) {
     softRegistrationClass3D registrationObject(N, N / 2, N / 2, N / 2 - 1);
     registrationObject.sofftRegistrationVoxel3DListOfPossibleRotations(voxelData1,voxelData2,true,true);
     // compute 3D registration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     return (0);

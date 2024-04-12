@@ -31,23 +31,26 @@
 #include "fftw3.h"
 
 struct rotationPeak3D {
-    double theta;
-    double phi;
-    double peakCorrelation;
-    double covariance;
+    double z1Rotation;
+    double yRotation;
+    double z2Rotation;
+    double persistence;
+    double levelPotential;
+    double correlationHeight;
 };
 
 
 class softRegistrationClass3D {
 public:
     softRegistrationClass3D(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject3D(N, bwOut, bwIn,
-                                                                                           degLim) {
+                                                                                               degLim) {
         this->N = N;
         this->correlationN = N * 2 - 1;
         this->bwOut = bwOut;
         this->bwIn = bwIn;
         this->degLim = degLim;
-        this->resultingCorrelationDouble = (double *) malloc(sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+        this->resultingCorrelationDouble = (double *) malloc(
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->resultingCorrelationComplex = fftw_alloc_complex(8 * bwOut * bwOut * bwOut);
 
         this->resultingPhaseDiff3D = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
@@ -100,7 +103,6 @@ public:
                                                            spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
 
 
-
     }
 
     ~softRegistrationClass3D() {
@@ -138,15 +140,14 @@ public:
 
 
     double
-    sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,double &covariance,
+    sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,
+                                         double &covariance,
                                          bool debug = false);
 
-   std::vector<rotationPeak3D>
+    std::vector<rotationPeak3D>
     sofftRegistrationVoxel3DListOfPossibleRotations(double voxelData1Input[], double voxelData2Input[],
                                                     bool debug = false, bool multipleRadii = false,
                                                     bool useClahe = true, bool useHamming = true);
-
-
 
 
     bool isPeak(cv::Mat mx[], std::vector<cv::Point> &conn_points);
@@ -159,7 +160,7 @@ public:
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
-
+    std::vector<rotationPeak3D> peakDetectionOf3DCorrelationFindPeaksLibrary(fftw_complex* inputcorrelation,double cellSize);
 
 private://here everything is created. malloc is done in the constructor
 

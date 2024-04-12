@@ -201,43 +201,6 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
                                                                     this->phase2, false);
 
 
-    if (debug) {
-        std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
-        myFile1.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
-        myFile2.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
-        myFile3.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
-        myFile4.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
-        myFile5.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
-        myFile6.open(
-                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
-        for (int j = 0; j < N; j++) {
-            for (int i = 0; i < N; i++) {
-                myFile1 << magnitude1[j + N * i]; // real part
-                myFile1 << "\n";
-                myFile2 << phase1[j + N * i]; // imaginary part
-                myFile2 << "\n";
-                myFile3 << voxelData1Input[j + N * i]; // imaginary part
-                myFile3 << "\n";
-                myFile4 << magnitude2[j + N * i]; // real part
-                myFile4 << "\n";
-                myFile5 << phase2[j + N * i]; // imaginary part
-                myFile5 << "\n";
-                myFile6 << voxelData2Input[j + N * i]; // imaginary part
-                myFile6 << "\n";
-            }
-        }
-
-        myFile1.close();
-        myFile2.close();
-        myFile3.close();
-        myFile4.close();
-        myFile5.close();
-        myFile6.close();
-    }
-
     double globalMaximumMagnitude;
     if (maximumScan2Magnitude < maximumScan1Magnitude) {
         globalMaximumMagnitude = maximumScan1Magnitude;
