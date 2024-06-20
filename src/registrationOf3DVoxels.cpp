@@ -137,8 +137,6 @@ int main(int argc, char **argv) {
             }
 
             for (int i = 0; i < cloud->points.size(); i++) {
-
-
                 Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
                 Eigen::Vector4d shiftVector(10, 5, -14, 0);// in pixel
                 currentVector += shiftVector * sizeVoxelOneDirection / N;
