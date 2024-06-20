@@ -225,6 +225,42 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     }
 
 
+    if (debug) {
+        std::ofstream myFile1, myFile2, myFile3,myFile4,myFile5,myFile6;
+        myFile1.open(
+                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW1.csv");
+        myFile2.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW1.csv");
+        myFile3.open(
+                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW1.csv");
+        myFile4.open(
+                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/magnitudeFFTW2.csv");
+        myFile5.open("/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/phaseFFTW2.csv");
+        myFile6.open(
+                "/home/tim-external/Documents/matlabTestEnvironment/registrationFourier/csvFiles/voxelDataFFTW2.csv");
+        for (int j = 0; j < this->N; j++) {
+            for (int i = 0; i < this->N; i++) {
+                myFile1 << magnitude1Shifted[j + this->N * i]; // real part
+                myFile1 << "\n";
+                myFile2 << phase1[j + this->N * i]; // imaginary part
+                myFile2 << "\n";
+                myFile3 << voxelData1Input[j + this->N * i]; // imaginary part
+                myFile3 << "\n";
+                myFile4 << magnitude2Shifted[j + this->N * i]; // real part
+                myFile4 << "\n";
+                myFile5 << phase2[j + this->N * i]; // imaginary part
+                myFile5 << "\n";
+                myFile6 << voxelData2Input[j + this->N * i]; // imaginary part
+                myFile6 << "\n";
+            }
+        }
+        myFile1.close();
+        myFile2.close();
+        myFile3.close();
+    }
+
+
+
+
     //re-initialize to zero
     for (int i = 0; i < N * N; i++) {
         resampledMagnitudeSO3_1[i] = 0;
