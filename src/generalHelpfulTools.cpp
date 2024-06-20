@@ -4,6 +4,7 @@
 
 Eigen::Vector3d generalHelpfulTools::getRollPitchYaw(Eigen::Quaterniond quat) {
     tf2::Quaternion tmp(quat.x(), quat.y(), quat.z(), quat.w());
+    tmp.normalize();
     tf2::Matrix3x3 m(tmp);
     double r, p, y;
     m.getRPY(r, p, y);
@@ -187,4 +188,25 @@ void generalHelpfulTools::getTF2FromTransformationMatrix(tf2::Vector3 &translati
     rotation = tf2::Quaternion(rotationEigen.x(),rotationEigen.y(),rotationEigen.z(),rotationEigen.w());
 }
 
+int generalHelpfulTools::index3D(int x, int y, int z,int NInput){
+    if (x < 0 || x > NInput) {
+        return -1;
+    }
+    if (y < 0 || y > NInput) {
+        return -1;
+    }
+    if (z < 0 || z > NInput) {
+        return -1;
+    }
+    return z + y * NInput + x * NInput * NInput;
+}
 
+int generalHelpfulTools::index2D(int x, int y,int NInput){
+    if (x < 0 || x > NInput) {
+        return -1;
+    }
+    if (y < 0 || y > NInput) {
+        return -1;
+    }
+    return  y + x * NInput;
+}

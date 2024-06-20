@@ -31,21 +31,31 @@
 #include "fftw3.h"
 
 struct rotationPeak3D {
-    double z1Rotation;
-    double yRotation;
-    double z2Rotation;
+    double xTranslation;
+    double yTranslation;
+    double zTranslation;
     double persistence;
     double levelPotential;
     double correlationHeight;
 };
-
+struct rotationPeak4D {
+    double x;
+    double y;
+    double z;
+    double w;
+    double persistence;
+    double levelPotential;
+    double correlationHeight;
+};
 
 class softRegistrationClass3D {
 public:
     softRegistrationClass3D(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject3D(N, bwOut, bwIn,
                                                                                                degLim) {
         this->N = N;
-        this->correlationN = N * 2 - 1;
+//        this->correlationN = N * 2 - 1;
+        this->correlationN = N ;
+
         this->bwOut = bwOut;
         this->bwIn = bwIn;
         this->degLim = degLim;
@@ -154,14 +164,18 @@ public:
 
     cv::Mat imregionalmax(cv::Mat &src);
 
-    double normalizationFactorCalculation(int x, int y);
+    double normalizationFactorCalculation(int x, int y,int z);
 
     cv::Mat opencv_imextendedmax(cv::Mat &inputMatrix, double hParam);
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
-    std::vector<rotationPeak3D> peakDetectionOf3DCorrelationFindPeaksLibrary(fftw_complex* inputcorrelation,double cellSize);
-
+    std::vector<rotationPeak3D> peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_COMPLEX(fftw_complex* inputcorrelation,double cellSize);
+    std::vector<rotationPeak3D> peakDetectionOf3DCorrelationFindPeaksLibrary(double* inputcorrelation, int dimensionN, double cellSize);
+    std::vector<rotationPeak4D> peakDetectionOf4DCorrelationFindPeaksLibrary(double* inputcorrelation, long dimensionN, double cellSize);
+    std::vector<rotationPeak4D> peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation);
+    double getPixelValueInterpolated(Eigen::Vector3d positionVector,double *volumeData);
+//    int index3D(int x, int y, int z,int NInput);
 private://here everything is created. malloc is done in the constructor
 
 

@@ -16,6 +16,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "cv_bridge/cv_bridge.h"
 
+#define DEBUG_MODE false
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
     std::vector<uchar> array;
@@ -161,7 +162,7 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                false,req->potential_for_necessary_peak);
+                DEBUG_MODE,req->potential_for_necessary_peak);
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();
 
@@ -233,7 +234,7 @@ private:
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, false,req->potential_for_necessary_peak);
+                false, DEBUG_MODE,req->potential_for_necessary_peak);
 
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();

@@ -91,12 +91,12 @@ int main(int argc, char **argv) {
     // input needs to be two scans as voxelData
 
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud <pcl::PointXYZ>);
     pcl::PLYReader Reader;
-    Reader.read("/home/tim-external/ros2_ws/src/fs2D/exampleData/dragon_recon/dragon_vrip.ply", *cloud);
+    Reader.read("/home/tim-external/ros2_underlay/src/fs2D/exampleData/dragon_recon/dragon_vrip.ply", *cloud);
 
-    pcl::ConvexHull<pcl::PointXYZ> cHull;
-    pcl::PointCloud<pcl::PointXYZ> cHull_points;
+    pcl::ConvexHull <pcl::PointXYZ> cHull;
+    pcl::PointCloud <pcl::PointXYZ> cHull_points;
     cHull.setInputCloud(cloud);
     cHull.reconstruct(cHull_points);
     double maximumDistance = 0;
@@ -112,27 +112,136 @@ int main(int argc, char **argv) {
     }
 //    std::cout << maximumDistance << std::endl;
     double sizeVoxelOneDirection = 2 * maximumDistance * 1.4;
-    int N = 256;
+    int N = 128;
     double *voxelData1;
     double *voxelData2;
     voxelData1 = (double *) malloc(sizeof(double) * N * N * N);
     voxelData2 = (double *) malloc(sizeof(double) * N * N * N);
-
-    // compute voxel 1
-    for (int i = 0; i < cloud->points.size(); i++) {
-        int xIndex = N / 2 + cloud->points[i].x * N / sizeVoxelOneDirection;
-        int yIndex = N / 2 + cloud->points[i].y * N / sizeVoxelOneDirection;
-        int zIndex = N / 2 + cloud->points[i].z * N / sizeVoxelOneDirection;
-        voxelData1[zIndex + N * yIndex + N * N * xIndex] = 1;
-        voxelData2[zIndex + N * yIndex + N * N * xIndex] = 1;
+    for (int i = 0; i < N * N * N; i++) {
+        voxelData1[i] = 0;
+        voxelData2[i] = 0;
     }
-    // compute voxel 2 maybe with a small rotation No Translation necessary for now
+
+    int whichObject = 0;// 0 = dragon ; 1 = double dragon ; 2 = cube
+
+    switch (whichObject) {
+        case 0:
+            ///////////////////////// Dragon
+            for (int i = 0; i < cloud->points.size(); i++) {
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                currentVector = generalHelpfulTools::getTransformationMatrixFromRPY(0, 0, 0) * currentVector;
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData1[generalHelpfulTools::index3D(xIndex, yIndex, zIndex, N)] = 1;
+            }
+
+            for (int i = 0; i < cloud->points.size(); i++) {
 
 
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                Eigen::Vector4d shiftVector(10, 5, -14, 0);// in pixel
+                currentVector += shiftVector * sizeVoxelOneDirection / N;
+                currentVector =
+                        generalHelpfulTools::getTransformationMatrixFromRPY(40.0 / 180.0 * M_PI, -30.0 / 180.0 * M_PI,
+                                                                            10.0 / 180.0 * M_PI) * currentVector;
+
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData2[generalHelpfulTools::index3D(xIndex, yIndex, zIndex, N)] = 1;
+            }
+
+            break;
+        case 1:
+            ///////////////////////// Dragon Mirrored
+            for (int i = 0; i < cloud->points.size(); i++) {
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                currentVector = generalHelpfulTools::getTransformationMatrixFromRPY(0, 0, 0) * currentVector;
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData1[zIndex + N * yIndex + N * N * xIndex] = 1;
+            }
+
+            for (int i = 0; i < cloud->points.size(); i++) {
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                currentVector = generalHelpfulTools::getTransformationMatrixFromRPY(M_PI, 0, 0) * currentVector;
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData1[zIndex + N * yIndex + N * N * xIndex] = 1;
+            }
+
+
+            for (int i = 0; i < cloud->points.size(); i++) {
+
+
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                currentVector =
+                        generalHelpfulTools::getTransformationMatrixFromRPY(0.0 / 180.0 * M_PI, 20.0 / 180.0 * M_PI,
+                                                                            00.0 / 180.0 * M_PI) * currentVector;
+
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData2[zIndex + N * yIndex + N * N * xIndex] = 1;
+            }
+
+            for (int i = 0; i < cloud->points.size(); i++) {
+
+
+                Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
+                currentVector =
+                        generalHelpfulTools::getTransformationMatrixFromRPY(180.0 / 180.0 * M_PI, 20.0 / 180.0 * M_PI,
+                                                                            0.0 / 180.0 * M_PI) * currentVector;
+
+
+                int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
+                int yIndex = N / 2 + currentVector.y() * N / sizeVoxelOneDirection;
+                int zIndex = N / 2 + currentVector.z() * N / sizeVoxelOneDirection;
+                voxelData2[zIndex + N * yIndex + N * N * xIndex] = 1;
+            }
+            break;
+        case 2:
+            /////////////////////// CUUUUUUUUUUUUUUUUUBEEEEEEEEEEEEEEEEE
+            int cubeSize = 30;
+
+            for (int i = -cubeSize; i < cubeSize; i++) {
+                for (int j = -cubeSize; j < cubeSize; j++) {
+                    for (int k = -cubeSize; k < cubeSize; k++) {
+
+                        int xIndex = N / 2 + i;
+                        int yIndex = N / 2 + j;
+                        int zIndex = N / 2 + k;
+                        voxelData1[zIndex + N * yIndex + N * N * xIndex] = 1;
+                    }
+                }
+            }
+            for (int i = -cubeSize; i < cubeSize; i++) {
+                for (int j = -cubeSize; j < cubeSize; j++) {
+                    for (int k = -cubeSize; k < cubeSize; k++) {
+                        Eigen::Vector4d currentVector(i, j, k, 1);
+                        currentVector = generalHelpfulTools::getTransformationMatrixFromRPY(0.0 / 180.0 * M_PI,
+                                                                                            0.0 / 180.0 * M_PI,
+                                                                                            0.0 / 180.0 * M_PI) *                                        currentVector;
+
+
+                        int xIndex = N / 2 + currentVector.x();
+                        int yIndex = N / 2 + currentVector.y();
+                        int zIndex = N / 2 + currentVector.z();
+
+                        voxelData2[zIndex + N * yIndex + N * N * xIndex] = 1;
+                    }
+                }
+            }
+            break;
+    }
 
     softRegistrationClass3D registrationObject(N, N / 2, N / 2, N / 2 - 1);
-    registrationObject.sofftRegistrationVoxel3DListOfPossibleRotations(voxelData1,voxelData2,true,true);
-    // compute 3D registration
+
+    registrationObject.sofftRegistrationVoxel3DListOfPossibleRotations(voxelData1, voxelData2, true, true, true,
+                                                                       false);
 
 
     return (0);

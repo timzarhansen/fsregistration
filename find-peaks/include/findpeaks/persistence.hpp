@@ -24,6 +24,7 @@
 
 #include <findpeaks/findpeaks.hpp>
 #include <findpeaks/union_find.hpp>
+#include <kdtree/kdtree.hpp>
 #include <vector>
 #include <map>
 #include <set>
@@ -31,45 +32,45 @@
 
 namespace findpeaks {
 
-template <typename pixel_data_type>
-std::vector<linear_index_t> neighbours(const pixel_index_t<> &p, const image_t<pixel_data_type> &image){
-	std::vector<linear_index_t> ret;
-	/*
-	ret.reserve(8);
+    template<typename pixel_data_type>
+    std::vector<linear_index_t> neighbours(const pixel_index_t<> &p, const image_t<pixel_data_type> &image) {
+        std::vector<linear_index_t> ret;
+        /*
+        ret.reserve(8);
 
-	for(signed_size_t i = signed_size_t(p.x)-1; i<=signed_size_t(p.x)+1; i++){
-	for(signed_size_t j = signed_size_t(p.y)-1; j<=signed_size_t(p.y)+1; j++){
-		if(i<0 || j<0 || i>=image.width || j>=image.height || (i==p.x && j==p.y)){
-			continue;
-		}
-		ret.push_back(index_2d_to_1d(i,j,image.width, image.height));
-	}
-	}*/
+        for(signed_size_t i = signed_size_t(p.x)-1; i<=signed_size_t(p.x)+1; i++){
+        for(signed_size_t j = signed_size_t(p.y)-1; j<=signed_size_t(p.y)+1; j++){
+            if(i<0 || j<0 || i>=image.width || j>=image.height || (i==p.x && j==p.y)){
+                continue;
+            }
+            ret.push_back(index_2d_to_1d(i,j,image.width, image.height));
+        }
+        }*/
 
 
-	ret.reserve(4);
-	if(p.x>0){
-		ret.push_back(index_2d_to_1d(p.x-1, p.y, image.width, image.height));
-	}
-	if(p.x<image.width-1){
-		ret.push_back(index_2d_to_1d(p.x+1, p.y, image.width, image.height));
-	}
-	if(p.y>0){
-		ret.push_back(index_2d_to_1d(p.x, p.y-1, image.width, image.height));
-	}
-	if(p.y<image.height-1){
-		ret.push_back(index_2d_to_1d(p.x, p.y+1, image.width, image.height));
-	}
+        ret.reserve(4);
+        if (p.x > 0) {
+            ret.push_back(index_2d_to_1d(p.x - 1, p.y, image.width, image.height));
+        }
+        if (p.x < image.width - 1) {
+            ret.push_back(index_2d_to_1d(p.x + 1, p.y, image.width, image.height));
+        }
+        if (p.y > 0) {
+            ret.push_back(index_2d_to_1d(p.x, p.y - 1, image.width, image.height));
+        }
+        if (p.y < image.height - 1) {
+            ret.push_back(index_2d_to_1d(p.x, p.y + 1, image.width, image.height));
+        }
 
-	return ret;
-}
+        return ret;
+    }
 
 // 3D
-template<typename pixel_data_type>
-std::vector<linear_index_t> neighbours3d(const pixel_index_3d<> &p, const volume_t<pixel_data_type> &volume) {
-    std::vector<linear_index_t> ret;
+    template<typename pixel_data_type>
+    std::vector<linear_index_t> neighbours3d(const pixel_index_3d<> &p, const volume_t<pixel_data_type> &volume) {
+        std::vector<linear_index_t> ret;
 
-    // considering adding diagonals (26) tbdl
+        // considering adding diagonals (26) tbdl
 
         ret.reserve(6);
         if (p.x > 0) {
@@ -85,308 +86,612 @@ std::vector<linear_index_t> neighbours3d(const pixel_index_3d<> &p, const volume
             ret.push_back(index_3d_to_1d(p.x, p.y + 1, p.z, volume.width, volume.height, volume.depth));
         }
         if (p.z > 0) {
-        ret.push_back(index_3d_to_1d(p.x, p.y, p.z - 1, volume.width, volume.height, volume.depth));
+            ret.push_back(index_3d_to_1d(p.x, p.y, p.z - 1, volume.width, volume.height, volume.depth));
         }
         if (p.z < volume.depth - 1) {
-        ret.push_back(index_3d_to_1d(p.x, p.y + 1, p.z + 1, volume.width, volume.height, volume.depth));
+            ret.push_back(index_3d_to_1d(p.x, p.y, p.z + 1, volume.width, volume.height, volume.depth));
         }
 
         return ret;
     }
 
+    // 4D
+    template<typename pixel_data_type>
+    std::vector<linear_index_t> neighbours4d(const pixel_index_4d<> &p, const volume4D_t<pixel_data_type> &volume) {
+        std::vector<linear_index_t> ret;
 
-template <typename pixel_data_type>
-struct PixelCompByValueAbstract {
-    virtual bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const =0;
-};
+        // considering adding diagonals (26) tbdl
 
-template <typename pixel_data_type>
-struct PixelCompByValueMaximum : public PixelCompByValueAbstract<pixel_data_type> {
-    bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const{
-        return a.value > b.value;
+        ret.reserve(8);
+        if (p.x > 0) {
+            ret.push_back(index_4d_to_1d(p.x - 1, p.y, p.z, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+        if (p.x < volume.dim1 - 1) {
+            ret.push_back(index_4d_to_1d(p.x + 1, p.y, p.z, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+
+        if (p.y > 0) {
+            ret.push_back(index_4d_to_1d(p.x, p.y - 1, p.z, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+        if (p.y < volume.dim2 - 1) {
+            ret.push_back(index_4d_to_1d(p.x, p.y + 1, p.z, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+
+
+        if (p.z > 0) {
+            ret.push_back(index_4d_to_1d(p.x, p.y, p.z - 1, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+        if (p.z < volume.dim3 - 1) {
+            ret.push_back(index_4d_to_1d(p.x, p.y, p.z + 1, p.w, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+
+
+        if (p.w > 0) {
+            ret.push_back(index_4d_to_1d(p.x, p.y, p.z, p.w - 1, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+        if (p.w < volume.dim4 - 1) {
+            ret.push_back(index_4d_to_1d(p.x, p.y, p.z, p.w + 1, volume.dim1, volume.dim2, volume.dim3, volume.dim4));
+        }
+
+
+        return ret;
     }
-};
 
-template <typename pixel_data_type>
-struct PixelCompByValueMinimum : public PixelCompByValueAbstract<pixel_data_type> {
-    bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const{
-        return a.value < b.value;
-    }
-};
+    template<typename pixel_data_type>
+    struct PixelCompByValueAbstract {
+        virtual bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const = 0;
+    };
 
+    template<typename pixel_data_type>
+    struct PixelCompByValueMaximum : public PixelCompByValueAbstract<pixel_data_type> {
+        bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const {
+            return a.value > b.value;
+        }
+    };
 
-template <typename pixel_data_type>
-class ordered_set_abstract{
-public:
-	inline virtual std::pair<typename std::set<pixel_t<pixel_data_type>>::iterator, bool> insert( const pixel_t<pixel_data_type>& value ) =0;
-	inline virtual bool empty() const =0;
-	inline virtual typename std::set<pixel_t<pixel_data_type>>::iterator cbegin() const noexcept =0;
-	inline virtual typename std::set<pixel_t<pixel_data_type>>::iterator cend() const noexcept =0;
-	inline virtual void clear() =0;
-
-};
-
-template <typename pixel_data_type, template<typename> typename sorter >
-class ordered_set : public ordered_set_abstract<pixel_data_type>{
-public:
-	inline std::pair<typename std::set<pixel_t<pixel_data_type>>::iterator, bool> insert( const pixel_t<pixel_data_type>& value ){
-		return s.insert(value);
-	}
-
-	inline bool empty() const {
-		return s.empty();
-	}
-
-	inline typename std::set<pixel_t<pixel_data_type>>::iterator cbegin() const noexcept {
-		return s.cbegin();
-	}
-
-	inline typename std::set<pixel_t<pixel_data_type>>::iterator cend() const noexcept {
-		return s.cend();
-	}
-
-	inline void clear(){
-		 s.clear();
-	}
-
-private:
-	std::set<pixel_t<pixel_data_type>, sorter<pixel_data_type>> s;
-
-};
+    template<typename pixel_data_type>
+    struct PixelCompByValueMinimum : public PixelCompByValueAbstract<pixel_data_type> {
+        bool operator()(const pixel_t<pixel_data_type> &a, const pixel_t<pixel_data_type> &b) const {
+            return a.value < b.value;
+        }
+    };
 
 
-template <typename pixel_data_type>
-std::vector<peak_t<pixel_data_type>> persistance(image_t<pixel_data_type> &image, extremum_t extremum = maximum){
-	std::vector<pixel_index_t<>> indices(image.width * image.height);
+    template<typename pixel_data_type>
+    class ordered_set_abstract {
+    public:
+        inline virtual std::pair<typename std::set<pixel_t<pixel_data_type>>::iterator, bool>
+        insert(const pixel_t<pixel_data_type> &value) = 0;
 
-	{
-		size_t ii = 0;
-		for (size_t j = 0; j < image.height; j++) {
-		for (size_t i = 0; i < image.width; i++) {
-			indices[ii] = {i, j};
-			ii++;
-		}
-		}
-	}
+        inline virtual bool empty() const = 0;
 
+        inline virtual typename std::set<pixel_t<pixel_data_type>>::iterator cbegin() const noexcept = 0;
 
-	switch(extremum){
-		case maximum:
-			std::sort(indices.begin(), indices.end(), [&image](pixel_index_t<> &a, pixel_index_t<> &b) -> bool {
-				return image.get_pixel_value(a) > image.get_pixel_value(b);
-			});
-			break;
-		case minimum:
-			std::sort(indices.begin(), indices.end(), [&image](pixel_index_t<> &a, pixel_index_t<> &b) -> bool {
-				return image.get_pixel_value(a) < image.get_pixel_value(b);
-			});
-			break;
-	}
+        inline virtual typename std::set<pixel_t<pixel_data_type>>::iterator cend() const noexcept = 0;
 
+        inline virtual void clear() = 0;
 
-	union_find ds(image.height*image.width);
+    };
 
-	std::map<linear_index_t, peak_t<pixel_data_type>> peaks;
+    template<typename pixel_data_type, template<typename> typename sorter>
+    class ordered_set : public ordered_set_abstract<pixel_data_type> {
+    public:
+        inline std::pair<typename std::set<pixel_t<pixel_data_type>>::iterator, bool>
+        insert(const pixel_t<pixel_data_type> &value) {
+            return s.insert(value);
+        }
 
-	// first iteration: init global maximum
-	{
-		pixel_index_t<> const &p = indices[0];
-		const linear_index_t linear_index = index_2d_to_1d(p.x,p.y,image.width, image.height);
-		const pixel_data_type v = image.get_pixel_value(linear_index);
-		constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
-				std::numeric_limits<pixel_data_type>::infinity() : std::numeric_limits<pixel_data_type>::max();
-		peaks[linear_index] = {v, inf, p};
-	}
+        inline bool empty() const {
+            return s.empty();
+        }
 
-	ordered_set_abstract<pixel_data_type> * nc;
-	if(extremum == maximum){
-		nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
-	}else{
-		nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
-	}
+        inline typename std::set<pixel_t<pixel_data_type>>::iterator cbegin() const noexcept {
+            return s.cbegin();
+        }
 
-	for(signed_size_t i = 0; i<indices.size(); i++){
-		pixel_index_t<> const &p = indices[i];
-		linear_index_t p_linear_index = index_2d_to_1d(p.x,p.y,image.width, image.height);
-		pixel_data_type v = image.get_pixel_value(p_linear_index); // water level
+        inline typename std::set<pixel_t<pixel_data_type>>::iterator cend() const noexcept {
+            return s.cend();
+        }
 
-		std::vector<linear_index_t> ni = neighbours(p, image);
+        inline void clear() {
+            s.clear();
+        }
+
+    private:
+        std::set<pixel_t<pixel_data_type>, sorter<pixel_data_type>> s;
+
+    };
 
 
-		for(const linear_index_t &q : ni){
-			if(!ds.contains(q)){
-				continue;
-			}
-			const linear_index_t set_index = ds.find_set(q);
-			nc->insert({
-				image.get_pixel_value(set_index),
-				set_index
-			});
-		}
+    template<typename pixel_data_type>
+    std::vector<peak_t<pixel_data_type>> persistance(image_t<pixel_data_type> &image, extremum_t extremum = maximum) {
+        std::vector<pixel_index_t<>> indices(image.width * image.height);
 
-		ds.add(p_linear_index, -i);
-
-		if(!nc->empty()){
-			auto nci = nc->cbegin();
-			const linear_index_t oldp = nci->position;
-			//ds.union_set(oldp, p_linear_index);
-			ds.join(oldp, p_linear_index);
-			for(nci++; nci != nc->cend(); nci++){
-				const linear_index_t setid = ds.find_set(nci->position);
-				if(peaks.count(setid) == 0){
-					peaks[setid] = {
-						nci->value,
-						extremum == maximum ? (nci->value-v) : (v-nci->value),
-						index_1d_to_2d(setid, image.width, image.height),
-						p
-					};
-				}
-
-				ds.join(oldp, nci->position);
-			}
-		}
-
-		nc->clear();
-
-	}
-
-	delete nc;
-
-	std::vector<peak_t<pixel_data_type>> peaks_sorted(peaks.size());
-	size_t i=0;
-	for(auto const& [key, val] : peaks){
-		peaks_sorted[i] = val;
-		i++;
-	}
-
-	std::sort(peaks_sorted.begin(), peaks_sorted.end(), [](const peak_t<pixel_data_type> &a, const peak_t<pixel_data_type> &b){
-		return a.persistence > b.persistence;
-	});
-
-
-	return peaks_sorted;
-}
-
-
-template <typename pixel_data_type>
-std::vector<peak_3d<pixel_data_type>> persistance3d(volume_t<pixel_data_type> &volume, extremum_t extremum = maximum){
-
-    std::vector<pixel_index_3d<>> indices(volume.width * volume.height * volume.depth);
-    {
-        size_t ii = 0;
-        for (size_t k = 0; k < volume.depth; k++)
-            for (size_t j = 0; j < volume.height; j++) {
-                for (size_t i = 0; i < volume.width; i++) {
-                    indices[ii] = {i, j, k};
+        {
+            size_t ii = 0;
+            for (size_t j = 0; j < image.height; j++) {
+                for (size_t i = 0; i < image.width; i++) {
+                    indices[ii] = {i, j};
                     ii++;
                 }
             }
-    }
-
-
-    switch (extremum) {
-        case maximum:
-            std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
-                return volume.get_pixel_value(a) > volume.get_pixel_value(b);
-            });
-            break;
-        case minimum:
-            std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
-                return volume.get_pixel_value(a) < volume.get_pixel_value(b);
-            });
-            break;
-    }
-
-
-    union_find ds(volume.height * volume.width * volume.depth);
-
-    std::map<linear_index_t, peak_3d<pixel_data_type>> peaks;
-
-    // first iteration: init global maximum
-    {
-        pixel_index_3d<> const &p = indices[0];
-        const linear_index_t linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height, volume.depth);
-        const pixel_data_type v = volume.get_pixel_value(linear_index);
-        constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
-                                        std::numeric_limits<pixel_data_type>::infinity(): std::numeric_limits<pixel_data_type>::max();
-        peaks[linear_index] = {v, inf, p};
-    }
-
-    ordered_set_abstract<pixel_data_type> *nc;
-    if (extremum == maximum) {
-        nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
-    } else {
-        nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
-    }
-
-    for (signed_size_t i = 0; i < indices.size(); i++) {
-
-        pixel_index_3d<> const &p = indices[i];
-        linear_index_t p_linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height, volume.depth);
-        pixel_data_type v = volume.get_pixel_value(p_linear_index); // water level
-
-        std::vector<linear_index_t> ni = neighbours3d(p, volume);
-
-
-        for (const linear_index_t &q: ni) {
-            if (!ds.contains(q)) {
-                continue;
-            }
-            const linear_index_t set_index = ds.find_set(q);
-            nc->insert({
-                               volume.get_pixel_value(set_index),
-                               set_index
-                       });
         }
 
-        ds.add(p_linear_index, -i);
 
-        if (!nc->empty()) {
-            auto nci = nc->cbegin();
-            const linear_index_t oldp = nci->position;
-            //ds.union_set(oldp, p_linear_index);
-            ds.join(oldp, p_linear_index);
-            for (nci++; nci != nc->cend(); nci++) {
-                const linear_index_t setid = ds.find_set(nci->position);
-                if (peaks.count(setid) == 0) {
-                    peaks[setid] = {
-                            nci->value,
-                            extremum == maximum ? (nci->value - v) : (v - nci->value),
-                            index_1d_to_3d(setid, volume.width, volume.height, volume.depth),
-                            p
-                    };
+        switch (extremum) {
+            case maximum:
+                std::sort(indices.begin(), indices.end(), [&image](pixel_index_t<> &a, pixel_index_t<> &b) -> bool {
+                    return image.get_pixel_value(a) > image.get_pixel_value(b);
+                });
+                break;
+            case minimum:
+                std::sort(indices.begin(), indices.end(), [&image](pixel_index_t<> &a, pixel_index_t<> &b) -> bool {
+                    return image.get_pixel_value(a) < image.get_pixel_value(b);
+                });
+                break;
+        }
+
+
+        union_find ds(image.height * image.width);
+
+        std::map<linear_index_t, peak_t<pixel_data_type>> peaks;
+
+        // first iteration: init global maximum
+        {
+            pixel_index_t<> const &p = indices[0];
+            const linear_index_t linear_index = index_2d_to_1d(p.x, p.y, image.width, image.height);
+            const pixel_data_type v = image.get_pixel_value(linear_index);
+            constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
+                                            std::numeric_limits<pixel_data_type>::infinity()
+                                                                                               : std::numeric_limits<pixel_data_type>::max();
+            peaks[linear_index] = {v, inf, p};
+        }
+
+        ordered_set_abstract<pixel_data_type> *nc;
+        if (extremum == maximum) {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
+        } else {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
+        }
+
+        for (signed_size_t i = 0; i < indices.size(); i++) {
+            pixel_index_t<> const &p = indices[i];
+            linear_index_t p_linear_index = index_2d_to_1d(p.x, p.y, image.width, image.height);
+            pixel_data_type v = image.get_pixel_value(p_linear_index); // water level
+
+            std::vector<linear_index_t> ni = neighbours(p, image);
+
+
+            for (const linear_index_t &q: ni) {
+                if (!ds.contains(q)) {
+                    continue;
                 }
+                const linear_index_t set_index = ds.find_set(q);
+                nc->insert({
+                                   image.get_pixel_value(set_index),
+                                   set_index
+                           });
+            }
 
-                ds.join(oldp, nci->position);
+            ds.add(p_linear_index, -i);
+
+            if (!nc->empty()) {
+                auto nci = nc->cbegin();
+                const linear_index_t oldp = nci->position;
+                //ds.union_set(oldp, p_linear_index);
+                ds.join(oldp, p_linear_index);
+                for (nci++; nci != nc->cend(); nci++) {
+                    const linear_index_t setid = ds.find_set(nci->position);
+                    if (peaks.count(setid) == 0) {
+                        peaks[setid] = {
+                                nci->value,
+                                extremum == maximum ? (nci->value - v) : (v - nci->value),
+                                index_1d_to_2d(setid, image.width, image.height),
+                                p
+                        };
+                    }
+
+                    ds.join(oldp, nci->position);
+                }
+            }
+
+            nc->clear();
+
+        }
+
+        delete nc;
+
+        std::vector<peak_t<pixel_data_type>> peaks_sorted(peaks.size());
+        size_t i = 0;
+        for (auto const &[key, val]: peaks) {
+            peaks_sorted[i] = val;
+            i++;
+        }
+
+        std::sort(peaks_sorted.begin(), peaks_sorted.end(),
+                  [](const peak_t<pixel_data_type> &a, const peak_t<pixel_data_type> &b) {
+                      return a.persistence > b.persistence;
+                  });
+
+
+        return peaks_sorted;
+    }
+
+
+    template<typename pixel_data_type>
+    std::vector<peak_3d<pixel_data_type>>
+    persistance3d(volume_t<pixel_data_type> &volume, extremum_t extremum = maximum) {
+
+        std::vector<pixel_index_3d<>> indices(volume.width * volume.height * volume.depth);
+        {
+            size_t ii = 0;
+            for (size_t k = 0; k < volume.depth; k++)
+                for (size_t j = 0; j < volume.height; j++) {
+                    for (size_t i = 0; i < volume.width; i++) {
+                        indices[ii] = {i, j, k};
+                        ii++;
+                    }
+                }
+        }
+
+
+        switch (extremum) {
+            case maximum:
+                std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
+                    return volume.get_pixel_value(a) > volume.get_pixel_value(b);
+                });
+                break;
+            case minimum:
+                std::sort(indices.begin(), indices.end(), [&volume](pixel_index_3d<> &a, pixel_index_3d<> &b) -> bool {
+                    return volume.get_pixel_value(a) < volume.get_pixel_value(b);
+                });
+                break;
+        }
+
+
+        union_find ds(volume.height * volume.width * volume.depth);
+
+        std::map<linear_index_t, peak_3d<pixel_data_type>> peaks;
+
+        // first iteration: init global maximum
+        {
+            pixel_index_3d<> const &p = indices[0];
+            const linear_index_t linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height,
+                                                               volume.depth);
+            const pixel_data_type v = volume.get_pixel_value(linear_index);
+            constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
+                                            std::numeric_limits<pixel_data_type>::infinity()
+                                                                                               : std::numeric_limits<pixel_data_type>::max();
+            peaks[linear_index] = {v, inf, p};
+        }
+
+        ordered_set_abstract<pixel_data_type> *nc;
+        if (extremum == maximum) {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
+        } else {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
+        }
+
+        for (signed_size_t i = 0; i < indices.size(); i++) {
+
+            pixel_index_3d<> const &p = indices[i];
+            linear_index_t p_linear_index = index_3d_to_1d(p.x, p.y, p.z, volume.width, volume.height, volume.depth);
+            pixel_data_type v = volume.get_pixel_value(p_linear_index); // water level
+//        if(p.x == 63 && p.y == 63 && p.z == 60){
+//            std::cout << "lets test tit "<< std::endl;
+//        }
+            std::vector<linear_index_t> ni = neighbours3d(p, volume);
+
+
+            for (const linear_index_t &q: ni) {
+                if (!ds.contains(q)) {
+                    continue;
+                }
+                const linear_index_t set_index = ds.find_set(q);
+                nc->insert({
+                                   volume.get_pixel_value(set_index),
+                                   set_index
+                           });
+            }
+
+            ds.add(p_linear_index, -i);
+
+            if (!nc->empty()) {
+                auto nci = nc->cbegin();
+                const linear_index_t oldp = nci->position;
+                //ds.union_set(oldp, p_linear_index);
+                ds.join(oldp, p_linear_index);
+                for (nci++; nci != nc->cend(); nci++) {
+                    const linear_index_t setid = ds.find_set(nci->position);
+                    if (peaks.count(setid) == 0) {
+                        peaks[setid] = {
+                                nci->value,
+                                extremum == maximum ? (nci->value - v) : (v - nci->value),
+                                index_1d_to_3d(setid, volume.width, volume.height, volume.depth),
+                                p
+                        };
+                    }
+
+                    ds.join(oldp, nci->position);
+                }
+            }
+
+            nc->clear();
+
+        }
+
+        delete nc;
+
+        std::vector<peak_3d<pixel_data_type>> peaks_sorted(peaks.size());
+        size_t i = 0;
+        for (auto const &[key, val]: peaks) {
+            peaks_sorted[i] = val;
+            i++;
+        }
+
+        std::sort(peaks_sorted.begin(), peaks_sorted.end(),
+                  [](const peak_3d<pixel_data_type> &a, const peak_3d<pixel_data_type> &b) {
+                      return a.persistence > b.persistence;
+                  });
+
+
+        return peaks_sorted;
+    }
+
+
+    template<typename pixel_data_type>
+    std::vector<peak_4d<pixel_data_type>>
+    persistance4d(volume4D_t<pixel_data_type> &volume, extremum_t extremum = maximum) {
+
+        std::vector<pixel_index_4d<>> indices(volume.dim1 * volume.dim2 * volume.dim3 * volume.dim4);
+        {
+            size_t ii = 0;
+            for (size_t l = 0; l < volume.dim4; l++) {
+                for (size_t k = 0; k < volume.dim3; k++) {
+                    for (size_t j = 0; j < volume.dim2; j++) {
+                        for (size_t i = 0; i < volume.dim1; i++) {
+                            indices[ii] = {i, j, k, l};
+                            ii++;
+                        }
+                    }
+                }
             }
         }
 
-        nc->clear();
 
+        switch (extremum) {
+            case maximum:
+                std::sort(indices.begin(), indices.end(), [&volume](pixel_index_4d<> &a, pixel_index_4d<> &b) -> bool {
+                    return volume.get_pixel_value(a) > volume.get_pixel_value(b);
+                });
+                break;
+            case minimum:
+                std::sort(indices.begin(), indices.end(), [&volume](pixel_index_4d<> &a, pixel_index_4d<> &b) -> bool {
+                    return volume.get_pixel_value(a) < volume.get_pixel_value(b);
+                });
+                break;
+        }
+
+
+        union_find ds(volume.dim1 * volume.dim2 * volume.dim3 * volume.dim4);
+
+        std::map<linear_index_t, peak_4d<pixel_data_type>> peaks;
+
+        // first iteration: init global maximum
+        {
+            pixel_index_4d<> const &p = indices[0];
+            const linear_index_t linear_index = index_4d_to_1d(p.x, p.y, p.z, p.w, volume.dim1, volume.dim2,
+                                                               volume.dim3, volume.dim4);
+            const pixel_data_type v = volume.get_pixel_value(linear_index);
+            constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity ?
+                                            std::numeric_limits<pixel_data_type>::infinity()
+                                                                                               : std::numeric_limits<pixel_data_type>::max();
+            peaks[linear_index] = {v, inf, p};
+        }
+
+        ordered_set_abstract<pixel_data_type> *nc;
+        if (extremum == maximum) {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
+        } else {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
+        }
+
+        for (signed_size_t i = 0; i < indices.size(); i++) {
+
+            pixel_index_4d<> const &p = indices[i];
+            linear_index_t p_linear_index = index_4d_to_1d(p.x, p.y, p.z, p.w, volume.dim1, volume.dim2, volume.dim3,
+                                                           volume.dim4);
+            pixel_data_type v = volume.get_pixel_value(p_linear_index); // water level
+//        if(p.x == 63 && p.y == 63 && p.z == 60){
+//            std::cout << "lets test tit "<< std::endl;
+//        }
+            std::vector<linear_index_t> ni = neighbours4d(p, volume);
+
+
+            for (const linear_index_t &q: ni) {
+                if (!ds.contains(q)) {
+                    continue;
+                }
+                const linear_index_t set_index = ds.find_set(q);
+                nc->insert({
+                                   volume.get_pixel_value(set_index),
+                                   set_index
+                           });
+            }
+
+            ds.add(p_linear_index, -i);
+
+            if (!nc->empty()) {
+                auto nci = nc->cbegin();
+                const linear_index_t oldp = nci->position;
+                //ds.union_set(oldp, p_linear_index);
+                ds.join(oldp, p_linear_index);
+                for (nci++; nci != nc->cend(); nci++) {
+                    const linear_index_t setid = ds.find_set(nci->position);
+                    if (peaks.count(setid) == 0) {
+                        peaks[setid] = {
+                                nci->value,
+                                extremum == maximum ? (nci->value - v) : (v - nci->value),
+                                index_1d_to_4d(setid, volume.dim1, volume.dim2, volume.dim3, volume.dim4),
+                                p
+                        };
+                    }
+
+                    ds.join(oldp, nci->position);
+                }
+            }
+
+            nc->clear();
+
+        }
+
+        delete nc;
+
+        std::vector<peak_4d<pixel_data_type>> peaks_sorted(peaks.size());
+        size_t i = 0;
+        for (auto const &[key, val]: peaks) {
+            peaks_sorted[i] = val;
+            i++;
+        }
+
+        std::sort(peaks_sorted.begin(), peaks_sorted.end(),
+                  [](const peak_4d<pixel_data_type> &a, const peak_4d<pixel_data_type> &b) {
+                      return a.persistence > b.persistence;
+                  });
+
+
+        return peaks_sorted;
     }
 
-    delete nc;
+    template<typename pixel_data_type>
+    std::vector<peak_1d<pixel_data_type>>
+    persistanceQuaternionsKDTree(oneDimensionalList_t<pixel_data_type> &listData,kdt::KDTree<My4DPoint> &kdtree, extremum_t extremum = maximum) {
 
-    std::vector<peak_3d<pixel_data_type>> peaks_sorted(peaks.size());
-    size_t i = 0;
-    for (auto const &[key, val]: peaks) {
-        peaks_sorted[i] = val;
-        i++;
+        std::vector<pixel_index_1d<>> indices(listData.dim1);
+        {
+            size_t ii = 0;
+            for (size_t i = 0; i < listData.dim1; i++) {
+                indices[ii] = {i};
+                ii++;
+            }
+        }
+
+
+        switch (extremum) {
+            case maximum:
+                std::sort(indices.begin(), indices.end(),
+                          [&listData](pixel_index_1d<> &a, pixel_index_1d<> &b) -> bool {
+                              return listData.get_pixel_value(a) > listData.get_pixel_value(b);
+                          });
+                break;
+            case minimum:
+                std::sort(indices.begin(), indices.end(),
+                          [&listData](pixel_index_1d<> &a, pixel_index_1d<> &b) -> bool {
+                              return listData.get_pixel_value(a) < listData.get_pixel_value(b);
+                          });
+                break;
+        }
+
+
+        union_find ds(listData.dim1);
+
+        std::map<linear_index_t, peak_1d<pixel_data_type>> peaks;
+
+// first iteration: init global maximum
+        {
+            pixel_index_1d<> const &p = indices[0];
+//            const linear_index_t linear_index = index_4d_to_1d(p.x, p.y, p.z, p.w, volume.dim1, volume.dim2,
+//                                                               volume.dim3, volume.dim4);
+            const pixel_data_type v = listData.get_pixel_value(p.x);
+            constexpr pixel_data_type inf = std::numeric_limits<pixel_data_type>::has_infinity
+                                            ? std::numeric_limits<pixel_data_type>::infinity()
+                                            : std::numeric_limits<pixel_data_type>::max();
+            peaks[p.x] = {
+                    v, inf, p};
+        }
+
+        ordered_set_abstract<pixel_data_type> *nc;
+        if (extremum == maximum) {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMaximum>;
+        } else {
+            nc = new ordered_set<pixel_data_type, PixelCompByValueMinimum>;
+        }
+
+        for (signed_size_t i = 0; i < indices.size(); i++) {
+
+            pixel_index_1d<> const &p = indices[i];
+//            linear_index_t p_linear_index = index_4d_to_1d(p.x, p.y, p.z, p.w, volume.dim1, volume.dim2, volume.dim3,
+//                                                           volume.dim4);
+            pixel_data_type v = listData.get_pixel_value(p.x); // water level
+//        if(p.x == 63 && p.y == 63 && p.z == 60){
+//            std::cout << "lets test tit "<< std::endl;
+//        }
+            //here the KD-Tree is used to calculate N different neighbors
+//            std::vector<linear_index_t> ni = neighbours4d(p, listData);
+            My4DPoint quere = kdtree.getPoint(p.x);
+
+//            quere[0] = p.x;
+//            quere[1] = p.x;
+//            quere[2] = p.x;
+//            quere[3] = p.x;
+//            quere.correlation = listData[p.x]
+//            std::vector<int> ni = kdtree.knnSearch(quere,kNeighestNeighbour);
+            std::vector<int> ni = kdtree.radiusSearch(quere,0.025);
+            if(abs(quere[0])<0.01){
+                My4DPoint quere2;
+                quere2.correlation = quere.correlation;
+                quere2[0] = quere[0];
+                quere2[1] = -quere[1];
+                quere2[2] = -quere[2];
+                quere2[3] = -quere[3];
+                std::vector<int> ni2 = kdtree.radiusSearch(quere2,0.025);
+                ni.insert( ni.end(), ni2.begin(), ni2.end());
+            }
+
+            for (const linear_index_t &q: ni) {
+                if (!ds.contains(q)) {
+                    continue;
+                }
+                const linear_index_t set_index = ds.find_set(q);
+                nc->insert({listData.get_pixel_value(set_index), set_index});
+            }
+            ds.add(p.x, -i);
+            if (!nc->empty()) {
+                auto nci = nc->cbegin();
+                const linear_index_t oldp = nci->position;
+//ds.union_set(oldp, p_linear_index);
+                ds.join(oldp, p.x);
+                for (nci++; nci != nc->cend(); nci++) {
+                    const linear_index_t setid = ds.find_set(nci->position);
+                    if (peaks.count(setid) == 0) {
+                        peaks[setid] = {nci->value, extremum == maximum ? (nci->value - v) : (v - nci->value), setid,
+                                        p};
+                    }
+                    ds.join(oldp, nci->position);
+                }
+            }
+
+            nc->clear();
+        }
+
+        delete nc;
+
+        std::vector<peak_1d<pixel_data_type>> peaks_sorted(peaks.size());
+        size_t i = 0;
+        for (auto const &[key, val]: peaks) {
+            peaks_sorted[i] = val;
+            i++;
+        }
+
+        std::sort(peaks_sorted.begin(), peaks_sorted.end(),
+                  [](const peak_1d<pixel_data_type> &a, const peak_1d<pixel_data_type> &b) {
+                      return a.persistence > b.persistence;
+                  });
+
+
+        return peaks_sorted;
     }
-
-    std::sort(peaks_sorted.begin(), peaks_sorted.end(), [](const peak_3d<pixel_data_type> &a, const peak_3d<pixel_data_type> &b) {
-                  return a.persistence > b.persistence;
-              });
-
-
-	return peaks_sorted;
 }
-
-}
-
-
-
-
 
 
 #endif //FINDPEAKS_PERSISTENCE_HPP

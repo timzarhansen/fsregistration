@@ -78,7 +78,7 @@ void softCorrelationClass3D::correlationOfTwoSignalsInSO3(double resampledMagnit
 //    jj = floor(tmp / (2. * bwOut));
 //    tmp = maxloc - (ii * 4 * bwOut * bwOut) - jj * (2 * bwOut);
 //    kk = tmp;
-
+//
 //    printf("ii = %d\tjj = %d\tkk = %d\n", ii, jj, kk);
 //
 //    printf("alpha = %f\nbeta = %f\ngamma = %f\n",
