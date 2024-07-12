@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
         voxelData2[i] = 0;
     }
 
-    int whichObject = 0;// 0 = dragon ; 1 = double dragon ; 2 = cube
+    int whichObject = 1;// 0 = dragon ; 1 = double dragon ; 2 = cube
 
     switch (whichObject) {
         case 0:
@@ -138,8 +138,13 @@ int main(int argc, char **argv) {
 
             for (int i = 0; i < cloud->points.size(); i++) {
                 Eigen::Vector4d currentVector(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z, 1);
-                Eigen::Vector4d shiftVector(10, 5, -14, 0);// in pixel
+                Eigen::Vector4d shiftVector(8, 3, -11, 0);// in pixel
+//                Eigen::Vector4d shiftVector(0, 0, 0, 0);// in pixel
+
                 currentVector += shiftVector * sizeVoxelOneDirection / N;
+//                currentVector =
+//                        generalHelpfulTools::getTransformationMatrixFromRPY(10.0 / 180.0 * M_PI, -0.0 / 180.0 * M_PI,
+//                                                                            0.0 / 180.0 * M_PI) * currentVector;
                 currentVector =
                         generalHelpfulTools::getTransformationMatrixFromRPY(40.0 / 180.0 * M_PI, -30.0 / 180.0 * M_PI,
                                                                             10.0 / 180.0 * M_PI) * currentVector;
@@ -235,12 +240,19 @@ int main(int argc, char **argv) {
             }
             break;
     }
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
 
     softRegistrationClass3D registrationObject(N, N / 2, N / 2, N / 2 - 1);
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    std::chrono::duration<double, std::milli> diff = now - begin;
+    std::cout << "objectCreation: " << diff.count() << std::endl;
 
-    registrationObject.sofftRegistrationVoxel3DListOfPossibleRotations(voxelData1, voxelData2, true, true, true,
-                                                                       false);
-
+    begin = std::chrono::steady_clock::now();
+    registrationObject.sofftRegistrationVoxel3DListOfPossibleTransformations(voxelData1, voxelData2, true, true,false);
+    now = std::chrono::steady_clock::now();
+    diff = now - begin;
+    std::cout << "registration: " << diff.count() << std::endl;
 
     return (0);
 }

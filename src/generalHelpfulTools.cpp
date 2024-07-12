@@ -189,23 +189,23 @@ void generalHelpfulTools::getTF2FromTransformationMatrix(tf2::Vector3 &translati
 }
 
 int generalHelpfulTools::index3D(int x, int y, int z,int NInput){
-    if (x < 0 || x > NInput) {
+    if (x < 0 || x >= NInput) {
         return -1;
     }
-    if (y < 0 || y > NInput) {
+    if (y < 0 || y >= NInput) {
         return -1;
     }
-    if (z < 0 || z > NInput) {
+    if (z < 0 || z >= NInput) {
         return -1;
     }
     return z + y * NInput + x * NInput * NInput;
 }
 
 int generalHelpfulTools::index2D(int x, int y,int NInput){
-    if (x < 0 || x > NInput) {
+    if (x < 0 || x >= NInput) {
         return -1;
     }
-    if (y < 0 || y > NInput) {
+    if (y < 0 || y >= NInput) {
         return -1;
     }
     return  y + x * NInput;
