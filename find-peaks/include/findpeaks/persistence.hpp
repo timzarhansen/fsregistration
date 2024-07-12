@@ -565,7 +565,7 @@ namespace findpeaks {
 
     template<typename pixel_data_type>
     std::vector<peak_1d<pixel_data_type>>
-    persistanceQuaternionsKDTree(oneDimensionalList_t<pixel_data_type> &listData,kdt::KDTree<My4DPoint> &kdtree, extremum_t extremum = maximum) {
+    persistanceQuaternionsKDTree(oneDimensionalList_t<pixel_data_type> &listData,    std::vector<std::vector<int>> lookupTableForCorrelations, extremum_t extremum = maximum) {
 
         std::vector<pixel_index_1d<>> indices(listData.dim1);
         {
@@ -628,7 +628,7 @@ namespace findpeaks {
 //        }
             //here the KD-Tree is used to calculate N different neighbors
 //            std::vector<linear_index_t> ni = neighbours4d(p, listData);
-            My4DPoint quere = kdtree.getPoint(p.x);
+//            My4DPoint quere = kdtree->getPoint(p.x);
 
 //            quere[0] = p.x;
 //            quere[1] = p.x;
@@ -636,17 +636,18 @@ namespace findpeaks {
 //            quere[3] = p.x;
 //            quere.correlation = listData[p.x]
 //            std::vector<int> ni = kdtree.knnSearch(quere,kNeighestNeighbour);
-            std::vector<int> ni = kdtree.radiusSearch(quere,0.025);
-            if(abs(quere[0])<0.01){
-                My4DPoint quere2;
-                quere2.correlation = quere.correlation;
-                quere2[0] = quere[0];
-                quere2[1] = -quere[1];
-                quere2[2] = -quere[2];
-                quere2[3] = -quere[3];
-                std::vector<int> ni2 = kdtree.radiusSearch(quere2,0.025);
-                ni.insert( ni.end(), ni2.begin(), ni2.end());
-            }
+//            std::vector<int> ni = kdtree->radiusSearch(quere,0.025);
+            std::vector<int> ni = lookupTableForCorrelations[p.x];
+//            if(abs(quere[0])<0.01){
+//                My4DPoint quere2;
+//                quere2.correlation = quere.correlation;
+//                quere2[0] = quere[0];
+//                quere2[1] = -quere[1];
+//                quere2[2] = -quere[2];
+//                quere2[3] = -quere[3];
+//                std::vector<int> ni2 = kdtree->radiusSearch(quere2,0.025);
+//                ni.insert( ni.end(), ni2.begin(), ni2.end());
+//            }
 
             for (const linear_index_t &q: ni) {
                 if (!ds.contains(q)) {

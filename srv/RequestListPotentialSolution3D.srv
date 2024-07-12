@@ -1,10 +1,10 @@
 float64[] sonar_scan_1 # we assume values between 0 and 1
 float64[] sonar_scan_2 # we assume values between 0 and 1
-int32 size_image
-float64 size_of_pixel
+int32 size_voxel
+float64 size_of_voxel
 float64 potential_for_necessary_peak  # default mostly 0.1 Higher values less peaks, lower values more peaks
 bool multiple_radii
 bool use_clahe
 bool use_hamming
 ---
-fs2d/PotentialSolution[] list_potential_solutions
+fsregistration/PotentialSolution3D[] list_potential_solutions

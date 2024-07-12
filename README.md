@@ -1,4 +1,4 @@
-# fs2d
+# fsregistration
 fourie Soft 2D Registration Method
 Currently FS2D hast two versions. First a direkt Image registration, where based on strings, two images can be read in and the registration can be calculated
 The second version is a ROS2 Service, where you send two images and recieve an awnser.(See `msg` and `srv`)

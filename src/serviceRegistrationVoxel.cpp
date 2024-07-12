@@ -17,6 +17,7 @@
 #include "cv_bridge/cv_bridge.h"
 
 #define DEBUG_MODE false
+
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
     std::vector<uchar> array;
@@ -40,10 +41,10 @@ void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
 
 class ROSClassRegistrationNode : public rclcpp::Node {
 public:
-    ROSClassRegistrationNode() : Node("fsregistrationregistrationnode") {
+    ROSClassRegistrationNode() : Node("fs3dregistrationnode") {
 
         // for now 256 could be 32/64/128/256/512 More gets complicated to compute
-        this->potentialVoxelSizes = std::vector<int>{32, 64, 128, 256, 512 };
+        this->potentialVoxelSizes = std::vector<int>{16, 32, 64, 128, 256};
 //        this->dimensionOfImages = sizeImage;
         this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution>(
                 "fsregistration/registration/one_solution",
@@ -70,34 +71,37 @@ private:
 //    int dimensionOfImages;
     std::vector<softRegistrationClass *> softRegistrationObjectList;
 
-    int getIndexOfRegistration(int sizeOfTheImage){
-        if (std::find(this->potentialVoxelSizes.begin(), this->potentialVoxelSizes.end(), sizeOfTheImage) == this->potentialVoxelSizes.end() ){
-            std::cout << sizeOfTheImage << std::endl;
-            std::cout << "Wrong size of image " << std::endl;
+    int getIndexOfRegistration(int sizeOfTheVoxel) {
+        if (std::find(this->potentialVoxelSizes.begin(), this->potentialVoxelSizes.end(), sizeOfTheVoxel) ==
+            this->potentialVoxelSizes.end()) {
+            std::cout << sizeOfTheVoxel << std::endl;
+            std::cout << "Wrong size of Voxels " << std::endl;
             return -1;
         }
 
-        if(softRegistrationObjectList.empty()){
+        if (softRegistrationObjectList.empty()) {
             //Create correct image size
             this->softRegistrationObjectList.push_back(
-                    new softRegistrationClass(sizeOfTheImage, sizeOfTheImage / 2, sizeOfTheImage / 2, sizeOfTheImage / 2 - 1));
+                    new softRegistrationClass(sizeOfTheVoxel, sizeOfTheVoxel / 2, sizeOfTheVoxel / 2,
+                                              sizeOfTheVoxel / 2 - 1));
         }
         bool alreadyHaveCorrectRegistration = false;
         int positionOfCorrect = 0;
-        for(int i  = 0 ; i<this->softRegistrationObjectList.size();i++){
-            if(this->softRegistrationObjectList[i]->getSizeOfRegistration() == sizeOfTheImage){
+        for (int i = 0; i < this->softRegistrationObjectList.size(); i++) {
+            if (this->softRegistrationObjectList[i]->getSizeOfRegistration() == sizeOfTheVoxel) {
                 positionOfCorrect = i;
                 alreadyHaveCorrectRegistration = true;
                 break;
             }
         }
 
-        if(!alreadyHaveCorrectRegistration){
+        if (!alreadyHaveCorrectRegistration) {
             //Create correct image size
             this->softRegistrationObjectList.push_back(
-                    new softRegistrationClass(sizeOfTheImage, sizeOfTheImage / 2, sizeOfTheImage / 2, sizeOfTheImage / 2 - 1));
+                    new softRegistrationClass(sizeOfTheVoxel, sizeOfTheVoxel / 2, sizeOfTheVoxel / 2,
+                                              sizeOfTheVoxel / 2 - 1));
 
-            positionOfCorrect = this->softRegistrationObjectList.size()-1;
+            positionOfCorrect = this->softRegistrationObjectList.size() - 1;
         }
         return positionOfCorrect;
     }
@@ -105,13 +109,12 @@ private:
     bool sendSingleSolutionCallback(const std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution::Request> req,
                                     std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution::Response> res) {
 
-        int sizeOfTheImage = req->size_image;
+        int sizeOfTheVoxel = req->size_image;
 
-        int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheImage);
-        if(positionOfCorrectRegistration <0){
+        int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheVoxel);
+        if (positionOfCorrectRegistration < 0) {
             return false;
         }
-
 
 
         std::cout << "getting registration for image: " << std::endl;
@@ -125,10 +128,10 @@ private:
         Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(position, orientation);
         double *voxelData1;
         double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
-        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
+        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheVoxel * sizeOfTheVoxel);
+        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheVoxel * sizeOfTheVoxel);
 
-        for(int i  = 0 ; i<sizeOfTheImage*sizeOfTheImage ; i++){
+        for (int i = 0; i < sizeOfTheVoxel * sizeOfTheVoxel; i++) {
             voxelData1[i] = req->sonar_scan_1[i];
             voxelData2[i] = req->sonar_scan_2[i];
         }
@@ -162,7 +165,7 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                DEBUG_MODE,req->potential_for_necessary_peak);
+                DEBUG_MODE, req->potential_for_necessary_peak);
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();
 
@@ -184,7 +187,7 @@ private:
         resultingPose.orientation.y = orientation.y();
         resultingPose.orientation.z = orientation.z();
         resultingPose.orientation.w = orientation.w();
-        Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2,2>(0,0);
+        Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2, 2>(0, 0);
         //tf2::convert(position, resultingPose.position);
         res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
         res->potential_solution.resulting_transformation = resultingPose;
@@ -201,25 +204,25 @@ private:
         return true;
     }
 
-    bool sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution::Request> req,
-                                  std::shared_ptr<fsregistration::srv::RequestListPotentialSolution::Response> res) {
+    bool sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Request> req,
+                                  std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Response> res) {
         std::cout << "starting all solution callback" << std::endl;
         int sizeOfTheImage = req->size_image;
 
         int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheImage);
-        if(positionOfCorrectRegistration <0){
+        if (positionOfCorrectRegistration < 0) {
             return false;
         }
 
 
         double *voxelData1;
         double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
-        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheImage*sizeOfTheImage);
+        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheImage * sizeOfTheImage);
+        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheImage * sizeOfTheImage);
 
 //        convertMatToDoubleArray(sonarImage1, voxelData1);
 //        convertMatToDoubleArray(sonarImage2, voxelData2);
-        for(int i  = 0 ; i< sizeOfTheImage*sizeOfTheImage ; i++){
+        for (int i = 0; i < sizeOfTheImage * sizeOfTheImage; i++) {
             voxelData1[i] = req->sonar_scan_1[i];
             voxelData2[i] = req->sonar_scan_2[i];
         }
@@ -234,7 +237,7 @@ private:
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, DEBUG_MODE,req->potential_for_necessary_peak);
+                false, DEBUG_MODE, req->potential_for_necessary_peak);
 
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();
@@ -276,7 +279,7 @@ private:
                 resultingPose.position.y = position.y();
                 resultingPose.position.z = position.z();
 
-                fsregistration::msg::PotentialSolution potentialSolutionMSG;
+                fs2d::msg::PotentialSolution potentialSolutionMSG;
                 //tf2::convert(position, resultingPose.position);
 
 

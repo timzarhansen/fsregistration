@@ -2,8 +2,8 @@
 // Created by tim-linux on 01.03.22.
 //
 
-#ifndef FS2D_softCorrelationClass_H
-#define FS2D_softCorrelationClass_H
+#ifndef FSREGISTRATION_softCorrelationClass_H
+#define FSREGISTRATION_softCorrelationClass_H
 #include "fftw3.h"
 
 #include "soft20/s2_cospmls.h"
