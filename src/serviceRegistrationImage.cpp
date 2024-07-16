@@ -9,8 +9,8 @@
 
 //#include "ekfDVL.h"
 #include "rclcpp/rclcpp.hpp"
-#include "fsregistration/srv/request_list_potential_solution.hpp"
-#include "fsregistration/srv/request_one_potential_solution.hpp"
+#include "fsregistration/srv/request_list_potential_solution2_d.hpp"
+#include "fsregistration/srv/request_one_potential_solution2_d.hpp"
 #include "softRegistrationClass.h"
 #include <tf2/transform_datatypes.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -45,14 +45,14 @@ public:
         // for now 256 could be 32/64/128/256/512 More gets complicated to compute
         this->potentialVoxelSizes = std::vector<int>{32, 64, 128, 256, 512 };
 //        this->dimensionOfImages = sizeImage;
-        this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution>(
-                "fsregistration/registration/one_solution",
+        this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution2D>(
+                "fs2d/registration/one_solution",
                 std::bind(&ROSClassRegistrationNode::sendSingleSolutionCallback,
                           this,
                           std::placeholders::_1,
                           std::placeholders::_2));
-        this->servicelistPotentialSolutions = this->create_service<fsregistration::srv::RequestListPotentialSolution>(
-                "fsregistration/registration/all_solutions",
+        this->servicelistPotentialSolutions = this->create_service<fsregistration::srv::RequestListPotentialSolution2D>(
+                "fs2d/registration/all_solutions",
                 std::bind(&ROSClassRegistrationNode::sendAllSolutionsCallback,
                           this,
                           std::placeholders::_1,
@@ -62,8 +62,8 @@ public:
 
 private:
 
-    rclcpp::Service<fsregistration::srv::RequestOnePotentialSolution>::SharedPtr serviceOnePotentialSolution;
-    rclcpp::Service<fsregistration::srv::RequestListPotentialSolution>::SharedPtr servicelistPotentialSolutions;
+    rclcpp::Service<fsregistration::srv::RequestOnePotentialSolution2D>::SharedPtr serviceOnePotentialSolution;
+    rclcpp::Service<fsregistration::srv::RequestListPotentialSolution2D>::SharedPtr servicelistPotentialSolutions;
     std::vector<int> potentialVoxelSizes;
     std::mutex registrationMutex;
 //    softRegistrationClass scanRegistrationObject;
@@ -102,8 +102,8 @@ private:
         return positionOfCorrect;
     }
 
-    bool sendSingleSolutionCallback(const std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution::Request> req,
-                                    std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution::Response> res) {
+    bool sendSingleSolutionCallback(const std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution2D::Request> req,
+                                    std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution2D::Response> res) {
 
         int sizeOfTheImage = req->size_image;
 
@@ -201,8 +201,8 @@ private:
         return true;
     }
 
-    bool sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution::Request> req,
-                                  std::shared_ptr<fsregistration::srv::RequestListPotentialSolution::Response> res) {
+    bool sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution2D::Request> req,
+                                  std::shared_ptr<fsregistration::srv::RequestListPotentialSolution2D::Response> res) {
         std::cout << "starting all solution callback" << std::endl;
         int sizeOfTheImage = req->size_image;
 
@@ -276,7 +276,7 @@ private:
                 resultingPose.position.y = position.y();
                 resultingPose.position.z = position.z();
 
-                fsregistration::msg::PotentialSolution potentialSolutionMSG;
+                fsregistration::msg::PotentialSolution2D potentialSolutionMSG;
                 //tf2::convert(position, resultingPose.position);
 
 

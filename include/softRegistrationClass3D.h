@@ -287,6 +287,8 @@ public:
     peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation);
 
     double getPixelValueInterpolated(Eigen::Vector3d positionVector, double *volumeData, int dimensionN);
+
+    int getSizeOfRegistration();
 //    int index3D(int x, int y, int z,int NInput);
 private://here everything is created. malloc is done in the constructor
 

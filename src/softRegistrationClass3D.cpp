@@ -138,7 +138,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         myFile6.close();
     }
 
-
+ // get global maximum for normalization
     double globalMaximumMagnitude;
     if (maximumScan2Magnitude < maximumScan1Magnitude) {
         globalMaximumMagnitude = maximumScan1Magnitude;
@@ -246,7 +246,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 //        cv::imshow("a1", magTMP1);
 //        cv::imshow("a2", magTMP2);
 //        int k = cv::waitKey(0); // Wait for a keystroke in the window
-        //transform signal back to 0 to 1
+        //transform signal back to 0-1
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
                 resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
@@ -401,8 +401,8 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         begin = std::chrono::steady_clock::now();
     }
     std::vector<transformationPeakfs3D> allSolutions;
-//    for (int p = 0; p < potentialRotationsTMP.size(); p++) {
-    for (int p = 0; p < 1; p++) {
+    for (int p = 0; p < potentialRotationsTMP.size(); p++) {
+//    for (int p = 0; p < 1; p++) {
 
         double *voxelData2Rotated;
         voxelData2Rotated = (double *) malloc(sizeof(double) * this->N * this->N * this->N);
@@ -1092,4 +1092,8 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
     free(current1DCorrelation);
     return (tmpRotations);
 
+}
+
+int softRegistrationClass3D::getSizeOfRegistration() {
+    return this->N;
 }
