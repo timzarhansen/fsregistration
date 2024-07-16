@@ -33,9 +33,12 @@ find_package(cv_bridge REQUIRED)
 
 rosidl_generate_interfaces(fsregistration
         "msg/PotentialSolution2D.msg"
+        "msg/PotentialSolution3D.msg"
 
         "srv/RequestListPotentialSolution2D.srv"
         "srv/RequestOnePotentialSolution2D.srv"
+        "srv/RequestListPotentialSolution3D.srv"
+        "srv/RequestOnePotentialSolution3D.srv"
         DEPENDENCIES builtin_interfaces
         DEPENDENCIES std_msgs
         DEPENDENCIES geometry_msgs
@@ -115,12 +118,14 @@ target_link_libraries(ros2ServiceRegistrationFS3D "${cpp_typesupport_target}")
 
 
 
-#add_executable(servicecall src/callingServiceExample.cpp )
-#ament_target_dependencies(servicecall rclcpp  cv_bridge tf2_geometry_msgs)
-#target_link_libraries(servicecall soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
-#target_include_directories(servicecall PUBLIC  ${OpenCV_INCLUDE_DIRS})
-#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
-#target_link_libraries(servicecall "${cpp_typesupport_target}")
+add_executable(servicecall3D src/callingServiceExample3D.cpp )
+ament_target_dependencies(servicecall3D rclcpp  cv_bridge tf2_geometry_msgs PCL)
+target_link_libraries(servicecall3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
+target_include_directories(servicecall3D PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(servicecall3D "${cpp_typesupport_target}")
+
+
 
 
 install(TARGETS
