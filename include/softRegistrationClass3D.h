@@ -74,6 +74,7 @@ public:
     softRegistrationClass3D(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject3D(N, bwOut, bwIn,
                                                                                                degLim) {
         this->N = N;
+        this->correlationN = N * 2 - 1;
 //        this->N = N * 2 - 1;
 //        this->N = N;
 
@@ -81,15 +82,15 @@ public:
         this->bwIn = bwIn;
         this->degLim = degLim;
         this->resultingCorrelationDouble = (double *) malloc(
-                sizeof(double) * this->N * this->N * this->N);
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->resultingCorrelationComplex = fftw_alloc_complex(8 * bwOut * bwOut * bwOut);
 
         this->resultingPhaseDiff3D = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->resultingPhaseDiff3DCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->N * this->N * this->N);
+                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         this->resultingShiftPeaks3D = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->resultingShiftPeaks3DCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->N * this->N * this->N);
+                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
 
         this->magnitude1Shifted = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude2Shifted = (double *) malloc(sizeof(double) * N * N * N);
@@ -98,38 +99,38 @@ public:
 
         this->spectrumOut = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->spectrumOutCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->N * this->N * this->N);
+                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         this->phase1 = (double *) malloc(sizeof(double) * N * N * N);
         this->phase2 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude1 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude2 = (double *) malloc(sizeof(double) * N * N * N);
         this->phase1Correlation = (double *) malloc(
-                sizeof(double) * this->N * this->N * this->N);
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->phase2Correlation = (double *) malloc(
-                sizeof(double) * this->N * this->N * this->N);
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->magnitude1Correlation = (double *) malloc(
-                sizeof(double) * this->N * this->N * this->N);
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->magnitude2Correlation = (double *) malloc(
-                sizeof(double) * this->N * this->N * this->N);
+                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         resampledMagnitudeSO3_1 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_1TMP = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2TMP = (double *) malloc(sizeof(double) * N * N);
         inputSpacialData = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         inputSpacialDataCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->N * this->N * this->N);
+                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
 
 
         planFourierToVoxel3D = fftw_plan_dft_3d(N, N, N, resultingPhaseDiff3D,
                                                 resultingShiftPeaks3D, FFTW_BACKWARD, FFTW_ESTIMATE);
-        planFourierToVoxel3DCorrelation = fftw_plan_dft_3d(this->N, this->N, this->N,
+        planFourierToVoxel3DCorrelation = fftw_plan_dft_3d(this->correlationN, this->correlationN, this->correlationN,
                                                            resultingPhaseDiff3DCorrelation,
                                                            resultingShiftPeaks3DCorrelation, FFTW_BACKWARD,
                                                            FFTW_ESTIMATE);
 
         planVoxelToFourier3D = fftw_plan_dft_3d(N, N, N, inputSpacialData,
                                                 spectrumOut, FFTW_FORWARD, FFTW_ESTIMATE);
-        planVoxelToFourier3DCorrelation = fftw_plan_dft_3d(this->N, this->N, this->N,
+        planVoxelToFourier3DCorrelation = fftw_plan_dft_3d(this->correlationN, this->correlationN, this->correlationN,
                                                            inputSpacialDataCorrelation,
                                                            spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
         //precalculating KD tree for faster neighbour calculation
@@ -180,7 +181,7 @@ public:
                 radiusOfKDTree = 0.1;
                 break;
             case 64:
-                radiusOfKDTree = 0.05;
+                radiusOfKDTree = 0.05;//was 0.05
                 break;
             case 128:
                 radiusOfKDTree = 0.025;
@@ -251,7 +252,8 @@ public:
 
     double
     getSpectrumFromVoxelData3D(double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
-
+    double
+    getSpectrumFromVoxelData3DCorrelation(double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
 
     double
     sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,
@@ -261,14 +263,14 @@ public:
     std::vector<transformationPeakfs3D>
     sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[], double voxelData2Input[],
                                                           bool debug = false, bool useClahe = true,
-                                                          bool timeStuff = false);
+                                                          bool timeStuff = false,double sizeVoxel = 1);
 
 
     bool isPeak(cv::Mat mx[], std::vector<cv::Point> &conn_points);
 
     cv::Mat imregionalmax(cv::Mat &src);
 
-    double normalizationFactorCalculation(int x, int y, int z);
+    double normalizationFactorCalculation(int x, int y, int z, int currentN);
 
     cv::Mat opencv_imextendedmax(cv::Mat &inputMatrix, double hParam);
 
@@ -296,6 +298,7 @@ private://here everything is created. malloc is done in the constructor
 
 
     int N;// correlationN;//describes the size of the overall voxel system + correlation N
+    int correlationN;
     int bwOut, bwIn, degLim;
     double *voxelData1;
     double *voxelData2;
