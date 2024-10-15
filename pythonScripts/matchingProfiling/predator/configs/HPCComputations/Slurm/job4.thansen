@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --job-name="Robotics ML"      ## Job Name
+#SBATCH --mail-type=ALL               ## Define when to send emails
+#SBATCH -N 1                          ## Number of Nodes
+#SBATCH -n 1                          ## Number of tasks (=processes)
+#SBATCH -c 12                         ## Number of cores (=number of CPUs in Slurm terms)
+#SBATCH -p Channel
+#SBATCH --exclude=channel01,channel02
+#SBATCH --gres=gpu:1
+
+export OMP_NUM_THREADS=12
+module add CUDA-Tools/CUDA-11.8
+source /home/thansen/Documents/mlvenv/bin/activate
+cd /home/thansen/Documents/3dmatchdiff
+python mainPredator.py predator/configs/HPCComputations/0_1/predatorTT.yaml
