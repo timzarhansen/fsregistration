@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud <pcl::PointXYZ>);
     pcl::PLYReader Reader;
-    Reader.read("/home/tim-external/ros2_underlay/src/fs2D/exampleData/dragon_recon/dragon_vrip.ply", *cloud);
+    Reader.read("exampleData/dragon_recon/dragon_vrip.ply", *cloud);
 
     pcl::ConvexHull <pcl::PointXYZ> cHull;
     pcl::PointCloud <pcl::PointXYZ> cHull_points;
