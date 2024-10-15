@@ -73,6 +73,7 @@ private:
     std::vector<softRegistrationClass3D *> softRegistrationObjectList;
     std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
+
     int getIndexOfRegistration(int sizeOfTheVoxel) {
         if (std::find(this->potentialVoxelSizes.begin(), this->potentialVoxelSizes.end(), sizeOfTheVoxel) ==
             this->potentialVoxelSizes.end()) {
@@ -224,18 +225,18 @@ private:
 
         double *voxelData1;
         double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize* dimensionSize);
-        voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize* dimensionSize);
+        voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
+        voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
 
 //        convertMatToDoubleArray(sonarImage1, voxelData1);
 //        convertMatToDoubleArray(sonarImage2, voxelData2);
-        for (int i = 0; i < dimensionSize * dimensionSize* dimensionSize; i++) {
+        for (int i = 0; i < dimensionSize * dimensionSize * dimensionSize; i++) {
             voxelData1[i] = req->sonar_scan_1[i];
             voxelData2[i] = req->sonar_scan_2[i];
         }
         Eigen::Matrix3d covarianceMatrixResult;
         this->registrationMutex.lock();
-        if(req->timing_computation_duration){
+        if (req->timing_computation_duration) {
             begin = std::chrono::steady_clock::now();
         }
 
@@ -245,9 +246,9 @@ private:
         //calculate the registration
         std::vector<transformationPeakfs3D> listPotentialSolutions = softRegistrationObjectList[positionOfCorrectRegistration]->sofftRegistrationVoxel3DListOfPossibleTransformations(
                 voxelData1,
-                voxelData2, req->debug,req->use_clahe, req->timing_computation_duration);
+                voxelData2, req->debug, req->use_clahe, req->timing_computation_duration, req->size_of_voxel);
         double timeToCalculate = -1;
-        if(req->timing_computation_duration){
+        if (req->timing_computation_duration) {
             end = std::chrono::steady_clock::now();
             timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
         }

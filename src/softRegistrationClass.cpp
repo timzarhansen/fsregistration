@@ -109,11 +109,11 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
                                                              double phase[],
                                                              bool gaussianBlur, double normalizationFactor) {
 
-    double *voxelDataTMP;
-    voxelDataTMP = (double *) malloc(sizeof(double) * correlationN * correlationN);
-    for (int i = 0; i < this->correlationN * this->correlationN; i++) {
-        voxelDataTMP[i] = voxelData[i];
-    }
+//    double *voxelDataTMP;
+//    voxelDataTMP = (double *) malloc(sizeof(double) * correlationN * correlationN);
+//    for (int i = 0; i < this->correlationN * this->correlationN; i++) {
+//        voxelDataTMP[i] = voxelData[i];
+//    }
     if (gaussianBlur) {
         cv::Mat magTMP1(this->correlationN, this->correlationN, CV_64F, voxelData);
         //add gaussian blur
@@ -165,7 +165,7 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
         }
     }
 
-    free(voxelDataTMP);
+//    free(voxelDataTMP);
     return maximumMagnitude;
 }
 
