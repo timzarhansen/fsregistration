@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     inputs = next(iter(config.train_loader))
 
-
+    inputs.shape
 
     print("test")
 
