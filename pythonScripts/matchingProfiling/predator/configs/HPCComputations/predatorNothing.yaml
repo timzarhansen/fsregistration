@@ -67,7 +67,7 @@ dataset:
 #  root: /home/thansen/dataFolder/predatorData/data/indoor
   root: /home/tim-external/dataFolder/3dmatch/models/predator/data/indoor
   batch_size: 1
-  num_workers: 10
+  num_workers: 0
   addedNoiseVal: False
   addedNoiseTrain: False
   augment_noise: 0.1
