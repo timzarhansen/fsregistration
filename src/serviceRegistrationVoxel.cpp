@@ -296,7 +296,7 @@ private:
 
 
                 potentialSolutionMSG.resulting_transformation = resultingPose;
-                potentialSolutionMSG.transformation_peak_height = listPotentialSolutions[i].potentialTranslations[j].levelPotential;
+                potentialSolutionMSG.transformation_peak_height = listPotentialSolutions[i].potentialTranslations[j].correlationHeight;
                 potentialSolutionMSG.rotation_peak_height = listPotentialSolutions[i].potentialRotation.correlationHeight;
                 potentialSolutionMSG.persistent_transformation_peak_value = listPotentialSolutions[i].potentialTranslations[j].persistence;
 
