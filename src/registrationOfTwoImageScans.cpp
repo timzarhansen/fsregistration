@@ -109,8 +109,8 @@ int main(int argc, char **argv) {
             cv::IMREAD_GRAYSCALE);
 //   cv::imshow("Display window", img1);
 //    int k = cv::waitKey(0);
-//    cv::Mat img1 = cv::imread("/home/ws/matlab/registrationFourier/FMT/firstImage.jpg", cv::IMREAD_GRAYSCALE);
-//    cv::Mat img2 = cv::imread("/home/ws/matlab/registrationFourier/FMT/secondImage.jpg", cv::IMREAD_GRAYSCALE);
+//    cv::Mat img1 = cv::imread("/home/tim-external/matlab/registrationFourier/FMT/firstImage.jpg", cv::IMREAD_GRAYSCALE);
+//    cv::Mat img2 = cv::imread("/home/tim-external/matlab/registrationFourier/FMT/secondImage.jpg", cv::IMREAD_GRAYSCALE);
     int dimensionScan = img1.rows;
     std::cout << "image size: " << dimensionScan << std::endl;
     double *voxelData1;
@@ -164,8 +164,8 @@ int main(int argc, char **argv) {
 //            convertMatToDoubleArray(img2, voxelData2);
 
     std::ofstream myFile1, myFile2;
-    myFile1.open("/home/ws/matlab/registrationFourier/csvFiles/resultVoxel1.csv");
-    myFile2.open("/home/ws/matlab/registrationFourier/csvFiles/resultVoxel2.csv");
+    myFile1.open("/home/tim-external/matlab/registrationFourier/csvFiles/resultVoxel1.csv");
+    myFile2.open("/home/tim-external/matlab/registrationFourier/csvFiles/resultVoxel2.csv");
     for (int i = 0; i < dimensionScan; i++) {
         for (int j = 0; j < dimensionScan; j++) {
             myFile1 << voxelData1[j + dimensionScan * i]; // real part
