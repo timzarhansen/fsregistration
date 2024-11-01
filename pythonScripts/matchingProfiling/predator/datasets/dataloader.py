@@ -234,7 +234,7 @@ def get_datasets(config):
         info_val = load_obj(config.val_info)
         info_benchmark = load_obj(f'predator/configs/indoor/{config.benchmark}.pkl')
 
-        train_set = IndoorDataset(info_train,config,data_augmentation=True,added_noise=config.addedNoiseTrain)
+        train_set = IndoorDataset(info_train,config,data_augmentation=False,added_noise=config.addedNoiseTrain)
         val_set = IndoorDataset(info_val,config,data_augmentation=False,added_noise=config.addedNoiseVal)
         benchmark_set = IndoorDataset(info_benchmark,config, data_augmentation=False)
     elif(config.dataset == 'kitti'):

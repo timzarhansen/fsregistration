@@ -561,7 +561,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                     std::complex<double> tmpComplex2 =
                             magnitude2Correlation[index] *
                             std::exp(std::complex<double>(0, phase2Correlation[index]));
-                    std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
+                    std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));// cross correlation
                     resultingPhaseDiff3DCorrelation[index][0] = resultComplex.real();
                     resultingPhaseDiff3DCorrelation[index][1] = resultComplex.imag();
                 }
@@ -576,9 +576,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
                 for (int k = 0; k < this->correlationN; k++) {
-                    int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;// changed j and i here
-                    int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
-                    int indexZ = (this->correlationN / 2 + k + this->correlationN) % this->correlationN;
+                    int indexX = ((this->correlationN / 2) + i + this->correlationN) % this->correlationN;// changed j and i here
+                    int indexY = ((this->correlationN / 2) + j + this->correlationN) % this->correlationN;
+                    int indexZ = ((this->correlationN / 2) + k + this->correlationN) % this->correlationN;
                     int indexShifted = generalHelpfulTools::index3D(indexX, indexY, indexZ, this->correlationN);
                     int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
                     //maybe without sqrt, but for now thats fine
@@ -626,7 +626,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         }
         // config -> settings for peak detection
         std::vector<translationPeak3D> resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
-                resultingCorrelationDouble, this->correlationN, 1);
+                resultingCorrelationDouble, this->correlationN, sizeVoxel);
         transformationPeakfs3D tmpSolution;
         tmpSolution.potentialRotation = potentialRotationsTMP[p];
         for (int i = 0; i < resulting3DPeakList.size(); i++) {
@@ -637,9 +637,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
             std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
                       << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
-                      << " , " << resulting3DPeakList[i].xTranslation * sizeVoxel << " , "
-                      << resulting3DPeakList[i].yTranslation * sizeVoxel
-                      << " , " << resulting3DPeakList[i].zTranslation * sizeVoxel << std::endl;
+                      << " , " << resulting3DPeakList[i].xTranslation << " , "
+                      << resulting3DPeakList[i].yTranslation
+                      << " , " << resulting3DPeakList[i].zTranslation << std::endl;
 
             tmpSolution.potentialTranslations.push_back(resulting3DPeakList[i]);
         }
@@ -992,11 +992,11 @@ softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibrary(double *in
 
         translationPeak3D tmpTranslationPeak;
         tmpTranslationPeak.xTranslation =
-                -(double) ((double) p.birth_position.x - (double) dimensionN / 2.0) * cellSize;
+                -(double) ((double) p.birth_position.x - (double) (dimensionN-1.0) / 2.0) * cellSize;
         tmpTranslationPeak.yTranslation =
-                -(double) ((double) p.birth_position.y - (double) dimensionN / 2.0) * cellSize;
+                -(double) ((double) p.birth_position.y - (double) (dimensionN-1.0) / 2.0) * cellSize;
         tmpTranslationPeak.zTranslation =
-                -(double) ((double) p.birth_position.z - (double) dimensionN / 2.0) * cellSize;
+                -(double) ((double) p.birth_position.z - (double) (dimensionN-1.0) / 2.0) * cellSize;
         tmpTranslationPeak.persistence = currentPersistence;
         tmpTranslationPeak.correlationHeight = current3DCorrelation[generalHelpfulTools::index3D(p.birth_position.x,
                                                                                                  p.birth_position.y,
