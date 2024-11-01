@@ -7,6 +7,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 from fsregistration.srv import RequestListPotentialSolution3D
+
 # from std_msgs.msg import Float64MultiArray
 import open3d as o3d
 import copy
@@ -25,7 +26,7 @@ class MinimalClientAsync(Node):
     def send_request(self, scan1, scan2, N, VoxelSize):
         self.req.size_of_voxel = VoxelSize
         self.req.potential_for_necessary_peak = 0.1
-        self.req.debug = False
+        self.req.debug = True
         self.req.dimension_size = N
         self.req.sonar_scan_1 = scan1.tolist()
         self.req.sonar_scan_2 = scan2.tolist()
@@ -62,7 +63,7 @@ def getVoxelIndex(x, y, z, voxelSize, N):
     voxelY = int(y / voxelSize)
     voxelZ = int(z / voxelSize)
 
-    return int(voxelX + N / 2 + (voxelY + N / 2) * N + (voxelZ + N / 2) * N * N)
+    return int(voxelZ + N / 2 + (voxelY + N / 2) * N + (voxelX + N / 2) * N * N)
 
 
 def pointToVoxel(pointcloud, N, voxelSize, shift):
@@ -171,8 +172,14 @@ if __name__ == '__main__':
 
         mean1, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd1)
         mean2, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd2)
+        # mean1 = mean1
         print(mean1)
         print(mean2)
+        mean1Transform = np.eye(4)
+        mean2Transform = np.eye(4)
+        mean1Transform[:3, 3] = np.squeeze(np.asarray(-mean1))
+        mean2Transform[:3, 3] = np.squeeze(np.asarray(-mean2))
+
         # draw_registration_result(pcd1,pcd2,np.identity(4))
 
         T = np.eye(4)
@@ -181,35 +188,57 @@ if __name__ == '__main__':
         print("rotation Matrix GT: ")
         print(T)
         print("rotation Quat GT: ")
-        print(quat.mat2quat(T[0:3,0:3]))
+        print(quat.mat2quat(T[0:3, 0:3]))
         voxelSize = 0.05
         print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
         pcd1Vox = pcd1.voxel_down_sample(voxel_size=voxelSize)
         pcd2Vox = pcd2.voxel_down_sample(voxel_size=voxelSize)
-        N = 128
-        voxelSize = 0.05
-        voxelArray1 = pointToVoxel(pcd1, N, voxelSize, mean1).astype(np.float64)
+        N = 64
+        voxelArray1 = pointToVoxel(pcd1, N, voxelSize, mean1 + [0 ,0, 0]).astype(np.float64)
         voxelArray2 = pointToVoxel(pcd2, N, voxelSize, mean2).astype(np.float64)
 
         response = RequestListPotentialSolution3D.Response()
         response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize)
         heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
-        for peak in response.list_potential_solutions:
-            currentQuaternion = [peak.resulting_transformation.orientation.w, peak.resulting_transformation.orientation.x,peak.resulting_transformation.orientation.y, peak.resulting_transformation.orientation.z]
-            currentQuaternionInv = quat.qinverse(currentQuaternion)
+        # find highest peak
+        # save percentage overlap, angle difference, translation difference, 
 
-            np.set_printoptions(suppress=True)
-            print("peak: ", peak.transformation_peak_height / heightFirstPotentialSolution)
-            print("x,y,z: ", peak.resulting_transformation.position)
-            print("rotation1: ")
-            print(o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion))
-            print(currentQuaternion)
-            print("rotation2: ")
-            print(o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternionInv))
-            print(currentQuaternionInv)
-            print("test")
 
+
+        highestPeak = 0.0
+        indexHighestPeak = 0
+        for index,peak in enumerate(response.list_potential_solutions):
+            if peak.transformation_peak_height> highestPeak:
+                highestPeak = peak.transformation_peak_height
+                indexHighestPeak = index
+
+        print("indexHighestPeak: ", indexHighestPeak)
+
+
+        peak = response.list_potential_solutions[indexHighestPeak]
+        currentQuaternion = [peak.resulting_transformation.orientation.w,
+                             peak.resulting_transformation.orientation.x,
+                             peak.resulting_transformation.orientation.y,
+                             peak.resulting_transformation.orientation.z]
+        currentQuaternionInv = quat.qinverse(currentQuaternion)
+
+        np.set_printoptions(suppress=True)
+        print("peak: ", peak.transformation_peak_height / heightFirstPotentialSolution)
+        print("x,y,z: ", peak.resulting_transformation.position)
+        print("rotation1: ")
+
+        resultingTransformation = np.eye(4)
+        resultingTransformation[:3, :3] = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
+        resultingTransformation[:3, 3] = np.squeeze(np.asarray(
+            [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
+             peak.resulting_transformation.position.z]))
+        print(resultingTransformation[:3, :3])
+        print(currentQuaternion)
+        estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform), np.matmul(resultingTransformation,mean1Transform))
+        print(estimatedActualRotation1)
+        print(T)
         # print(response)
-        draw_registration_result(pcd1Vox, pcd2Vox, T)
+        draw_registration_result(pcd1Vox, pcd2Vox, T)#GT
+        draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
 
         print("test2")

@@ -21,7 +21,7 @@ class IndoorDataset(Dataset):
         trans:          [3,1]
     """
 
-    def __init__(self, infos, config, data_augmentation=True,added_noise=False):
+    def __init__(self, infos, config, data_augmentation=True, added_noise=False):
         super(IndoorDataset, self).__init__()
         self.infos = infos
         self.base_dir = config.root
@@ -41,12 +41,16 @@ class IndoorDataset(Dataset):
         # get transformation
         rot = self.infos['rot'][item]
         trans = self.infos['trans'][item]
+        addedTrans = np.array([0, 0, 0])
+        # addedTrans = np.array([3, -2, +1])
+        trans = (trans.T + addedTrans).T
 
         # get pointcloud
         src_path = os.path.join(self.base_dir, self.infos['src'][item])
         tgt_path = os.path.join(self.base_dir, self.infos['tgt'][item])
         src_pcd = torch.load(src_path)
         tgt_pcd = torch.load(tgt_path)
+        tgt_pcd = addedTrans.T + tgt_pcd
 
         # if we get too many points, we do some downsampling
         if (src_pcd.shape[0] > self.max_points):
@@ -59,6 +63,7 @@ class IndoorDataset(Dataset):
         # add gaussian noise to transformation
         if self.data_augmentation:
             # rotate the point cloud
+            # trans = trans + np.reshape(np.asarray([2,0,0]),(3,1))
             euler_ab = np.random.rand(3) * np.pi * 2 / self.rot_factor  # anglez, angley, anglex
             rot_ab = Rotation.from_euler('zyx', euler_ab).as_matrix()
             if (np.random.rand(1)[0] > 0.5):
@@ -73,8 +78,8 @@ class IndoorDataset(Dataset):
             # tgt_pcd += (np.random.rand(tgt_pcd.shape[0], 3) - 0.5) * self.augment_noise
 
         if self.addedNoise:
-            src_pcd += (np.random.normal(0,self.augment_noise,src_pcd.shape))
-            tgt_pcd += (np.random.normal(0,self.augment_noise,tgt_pcd.shape))
+            src_pcd += (np.random.normal(0, self.augment_noise, src_pcd.shape))
+            tgt_pcd += (np.random.normal(0, self.augment_noise, tgt_pcd.shape))
 
         if (trans.ndim == 1):
             trans = trans[:, None]

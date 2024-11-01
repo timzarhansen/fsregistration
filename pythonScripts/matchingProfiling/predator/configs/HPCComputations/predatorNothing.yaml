@@ -70,7 +70,7 @@ dataset:
   num_workers: 0
   addedNoiseVal: False
   addedNoiseTrain: False
-  augment_noise: 0.1
+  augment_noise: 0.01
   train_info: predator/configs/indoor/train_info.pkl
   val_info: predator/configs/indoor/val_info.pkl
 
