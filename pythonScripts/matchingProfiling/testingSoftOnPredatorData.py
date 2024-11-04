@@ -1,4 +1,7 @@
 import os, torch, json, argparse, shutil
+
+from prompt_toolkit.utils import to_str
+
 from predator.datasets.dataloader import get_dataloader, get_datasets
 from easydict import EasyDict as edict
 from predator.lib.utils import setup_seed, load_config
@@ -25,13 +28,18 @@ class MinimalClientAsync(Node):
 
     def send_request(self, scan1, scan2, N, VoxelSize):
         self.req.size_of_voxel = VoxelSize
-        self.req.potential_for_necessary_peak = 0.1
-        self.req.debug = True
+        # self.req.potential_for_necessary_peak = 0.1
+        self.req.debug = False
         self.req.dimension_size = N
         self.req.sonar_scan_1 = scan1.tolist()
         self.req.sonar_scan_2 = scan2.tolist()
         self.req.timing_computation_duration = False
         self.req.use_clahe = True
+        self.req.r_min = N / 8
+        self.req.r_max = N / 2 - N / 8
+        self.req.level_potential_rotation = 0.01
+        self.req.level_potential_translation = 0.1
+        self.req.set_r_manual = True
 
         self.future = self.cli.call_async(self.req)
         rclpy.spin_until_future_complete(self, self.future)
@@ -160,9 +168,10 @@ if __name__ == '__main__':
     #                                        shuffle=False,
     #                                        num_workers=0,
     #                                        neighborhood_limits=neighborhood_limits)
+    dataIter = iter(config.train_loader)
 
-    for _ in range(10):
-        inputs = next(iter(config.train_loader))
+    for indexDataLoader in range(len(train_set)):
+        inputs = next(dataIter)
 
         # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
         pcd1 = o3d.geometry.PointCloud()
@@ -173,28 +182,31 @@ if __name__ == '__main__':
         mean1, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd1)
         mean2, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd2)
         # mean1 = mean1
-        print(mean1)
-        print(mean2)
+        # print(mean1)
+        # print(mean2)
         mean1Transform = np.eye(4)
         mean2Transform = np.eye(4)
         mean1Transform[:3, 3] = np.squeeze(np.asarray(-mean1))
         mean2Transform[:3, 3] = np.squeeze(np.asarray(-mean2))
 
+        N = 128
+        maxDistance = max(np.max(pcd1.points - mean1), np.max(pcd2.points - mean2))
+        voxelSize = (2 * maxDistance * 1.5) / N
         # draw_registration_result(pcd1,pcd2,np.identity(4))
 
         T = np.eye(4)
         T[:3, :3] = inputs["rot"]
         T[:3, 3] = np.squeeze(np.asarray(inputs["trans"]))
-        print("rotation Matrix GT: ")
-        print(T)
+        # print("rotation Matrix GT: ")
+        # print(T)
         print("rotation Quat GT: ")
         print(quat.mat2quat(T[0:3, 0:3]))
-        voxelSize = 0.05
-        print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
+        # voxelSize = 0.05
+        # print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
         pcd1Vox = pcd1.voxel_down_sample(voxel_size=voxelSize)
         pcd2Vox = pcd2.voxel_down_sample(voxel_size=voxelSize)
-        N = 64
-        voxelArray1 = pointToVoxel(pcd1, N, voxelSize, mean1 + [0 ,0, 0]).astype(np.float64)
+
+        voxelArray1 = pointToVoxel(pcd1, N, voxelSize, mean1 + [0, 0, 0]).astype(np.float64)
         voxelArray2 = pointToVoxel(pcd2, N, voxelSize, mean2).astype(np.float64)
 
         response = RequestListPotentialSolution3D.Response()
@@ -203,42 +215,75 @@ if __name__ == '__main__':
         # find highest peak
         # save percentage overlap, angle difference, translation difference, 
 
-
+        # save all solutions of estimation
+        with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
+                N) + '_' + to_str(indexDataLoader) + '.txt', 'w') as f:
+            # overlap Ratio:
+            np.savetxt(f, np.matrix(compute_overlap_ratio(pcd1, pcd2, T, voxelSize)), fmt='%.10f')
+            # N Size:
+            np.savetxt(f, np.matrix(N), fmt='%.10f')
+            # GT
+            for line in np.matrix(T):
+                np.savetxt(f, line, fmt='%.10f')
+            # Number Of Solutions:
+            np.savetxt(f, np.matrix(len(response.list_potential_solutions)), fmt='%.10f')
+            for index, peak in enumerate(response.list_potential_solutions):
+                # save all Transformation
+                currentQuaternion = [peak.resulting_transformation.orientation.w,
+                                     peak.resulting_transformation.orientation.x,
+                                     peak.resulting_transformation.orientation.y,
+                                     peak.resulting_transformation.orientation.z]
+                tmpTransformation = np.eye(4)
+                tmpTransformation[:3, :3] = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
+                tmpTransformation[:3, 3] = np.squeeze(np.asarray(
+                    [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
+                     peak.resulting_transformation.position.z]))
+                for line in np.matrix(tmpTransformation):
+                    np.savetxt(f, line, fmt='%.10f')
+                # save Peak
+                np.savetxt(f, np.matrix(peak.transformation_peak_height), fmt='%.10f')
 
         highestPeak = 0.0
         indexHighestPeak = 0
-        for index,peak in enumerate(response.list_potential_solutions):
-            if peak.transformation_peak_height> highestPeak:
+
+        for index, peak in enumerate(response.list_potential_solutions):
+            # find peak
+            if peak.transformation_peak_height > highestPeak:
                 highestPeak = peak.transformation_peak_height
                 indexHighestPeak = index
-
-        print("indexHighestPeak: ", indexHighestPeak)
-
 
         peak = response.list_potential_solutions[indexHighestPeak]
         currentQuaternion = [peak.resulting_transformation.orientation.w,
                              peak.resulting_transformation.orientation.x,
                              peak.resulting_transformation.orientation.y,
                              peak.resulting_transformation.orientation.z]
-        currentQuaternionInv = quat.qinverse(currentQuaternion)
+        # currentQuaternionInv = quat.qinverse(currentQuaternion)
 
         np.set_printoptions(suppress=True)
-        print("peak: ", peak.transformation_peak_height / heightFirstPotentialSolution)
-        print("x,y,z: ", peak.resulting_transformation.position)
-        print("rotation1: ")
+        # print("peak: ", peak.transformation_peak_height / heightFirstPotentialSolution)
+        # print("x,y,z: ", peak.resulting_transformation.position)
+        # print("rotation1: ")
 
         resultingTransformation = np.eye(4)
         resultingTransformation[:3, :3] = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
         resultingTransformation[:3, 3] = np.squeeze(np.asarray(
             [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
              peak.resulting_transformation.position.z]))
-        print(resultingTransformation[:3, :3])
-        print(currentQuaternion)
-        estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform), np.matmul(resultingTransformation,mean1Transform))
+        # print(resultingTransformation[:3, :3])
+        # print(currentQuaternion)
+        estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform),
+                                             np.matmul(resultingTransformation, mean1Transform))
+        print("Estimated Transformation: ")
         print(estimatedActualRotation1)
+        print("GT Transformation: ")
         print(T)
-        # print(response)
-        draw_registration_result(pcd1Vox, pcd2Vox, T)#GT
-        draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
+        print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
 
-        print("test2")
+        # for line in np.matrix(estimatedActualRotation1):
+        #     np.savetxt(f, line, fmt='%.10f')
+
+        # print(response)
+        # draw_registration_result(pcd1Vox, pcd2Vox, T)#GT
+        # draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
+
+        # print("test2")
