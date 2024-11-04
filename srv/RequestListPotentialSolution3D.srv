@@ -2,7 +2,11 @@ float64[] sonar_scan_1 # we assume values between 0 and 1
 float64[] sonar_scan_2 # we assume values between 0 and 1
 int32 dimension_size # in 3D: NxNxN then just give N
 float64 size_of_voxel
-float64 potential_for_necessary_peak  # default mostly 0.1 Higher values less peaks, lower values more peaks i think currently not used
+int32 r_min #used to filter out lower frequency of rotation estimation(supress big structures) default is N/8
+int32 r_max #used to filter out higher frequency of rotation estimation(basically noise) default is N / 2 - N / 8
+float64 level_potential_rotation 0.01 # Value to reduce(higher number) or increace(lower number) the size of potential Rotations V = [0,1]
+float64 level_potential_translation 0.1 # Value to reduce(higher number) or increace(lower number) the size of potential translations V = [0,1]
+bool set_r_manual
 bool use_clahe
 bool debug
 bool timing_computation_duration

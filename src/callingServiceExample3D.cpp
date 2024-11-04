@@ -97,7 +97,7 @@ createAllPotentialSolutionRequest(double* sonar1, double* sonar2, double sizeOfV
     request.use_clahe=true;
     request.dimension_size=N;
     request.size_of_voxel=sizeOfVoxel;
-    request.potential_for_necessary_peak = potentialForNecessaryPeak;
+    // request.potential_for_necessary_peak = potentialForNecessaryPeak;
 
     return request;
 }

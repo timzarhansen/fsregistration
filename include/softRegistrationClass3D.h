@@ -29,6 +29,7 @@
 #include <findpeaks/mask.hpp>
 #include <findpeaks/persistence.hpp>
 #include "fftw3.h"
+#include "../../../../../../opt/ros/humble/include/rclcpp/rclcpp/any_subscription_callback.hpp"
 
 struct translationPeak3D {
     double xTranslation;
@@ -38,6 +39,7 @@ struct translationPeak3D {
     double levelPotential;
     double correlationHeight;
 };
+
 struct rotationPeak4D {
     double x;
     double y;
@@ -72,25 +74,25 @@ struct transformationPeakfs3D {
 class softRegistrationClass3D {
 public:
     softRegistrationClass3D(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject3D(N, bwOut, bwIn,
-                                                                                               degLim) {
+        degLim) {
         this->N = N;
         this->correlationN = N * 2 - 1;
-//        this->N = N * 2 - 1;
-//        this->N = N;
+        //        this->N = N * 2 - 1;
+        //        this->N = N;
 
         this->bwOut = bwOut;
         this->bwIn = bwIn;
         this->degLim = degLim;
         this->resultingCorrelationDouble = (double *) malloc(
-                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->resultingCorrelationComplex = fftw_alloc_complex(8 * bwOut * bwOut * bwOut);
 
         this->resultingPhaseDiff3D = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->resultingPhaseDiff3DCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         this->resultingShiftPeaks3D = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->resultingShiftPeaks3DCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
 
         this->magnitude1Shifted = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude2Shifted = (double *) malloc(sizeof(double) * N * N * N);
@@ -99,26 +101,26 @@ public:
 
         this->spectrumOut = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         this->spectrumOutCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         this->phase1 = (double *) malloc(sizeof(double) * N * N * N);
         this->phase2 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude1 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude2 = (double *) malloc(sizeof(double) * N * N * N);
         this->phase1Correlation = (double *) malloc(
-                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->phase2Correlation = (double *) malloc(
-                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->magnitude1Correlation = (double *) malloc(
-                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         this->magnitude2Correlation = (double *) malloc(
-                sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
         resampledMagnitudeSO3_1 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_1TMP = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2TMP = (double *) malloc(sizeof(double) * N * N);
         inputSpacialData = (fftw_complex *) fftw_malloc(sizeof(fftw_complex) * N * N * N);
         inputSpacialDataCorrelation = (fftw_complex *) fftw_malloc(
-                sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
 
 
         planFourierToVoxel3D = fftw_plan_dft_3d(N, N, N, resultingPhaseDiff3D,
@@ -138,7 +140,6 @@ public:
         for (int i = 0; i < bwOut * 2; i++) {
             for (int j = 0; j < bwOut * 2; j++) {
                 for (int k = 0; k < bwOut * 2; k++) {
-
                     Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
                     Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
                     Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
@@ -172,7 +173,7 @@ public:
         kdt::KDTree<My4DPoint> *rotationKDTree = new kdt::KDTree<My4DPoint>(listOfQuaternionCorrelation);
 
         // use KD tree for computation of all the different things. Create a lookUpDataset for it.
-        double radiusOfKDTree;// 128: 0.025 64: 0.05 32: 0.1 16: 0.2 256: 0.0125 512: 0.00625
+        double radiusOfKDTree; // 128: 0.025 64: 0.05 32: 0.1 16: 0.2 256: 0.0125 512: 0.00625
         switch (this->N) {
             case 16:
                 radiusOfKDTree = 0.2;
@@ -181,7 +182,7 @@ public:
                 radiusOfKDTree = 0.1;
                 break;
             case 64:
-                radiusOfKDTree = 0.05;//was 0.05
+                radiusOfKDTree = 0.05; //was 0.05
                 break;
             case 128:
                 radiusOfKDTree = 0.025;
@@ -192,16 +193,14 @@ public:
             case 512:
                 radiusOfKDTree = 0.00625;
                 break;
-
         }
-//        My4DPoint testQuere = rotationKDTree->getPoint(0);
-//        std::vector<int> ni23 = rotationKDTree->radiusSearch(testQuere, radiusOfKDTree);
-//
-//        std::cout << ni23.size() << std::endl;
+        //        My4DPoint testQuere = rotationKDTree->getPoint(0);
+        //        std::vector<int> ni23 = rotationKDTree->radiusSearch(testQuere, radiusOfKDTree);
+        //
+        //        std::cout << ni23.size() << std::endl;
 
 
-
-//        std::vector<std::vector<int>> lookupTableForCorrelations;
+        //        std::vector<std::vector<int>> lookupTableForCorrelations;
         for (int i = 0; i < listOfQuaternionCorrelation.size(); i++) {
             My4DPoint quere = rotationKDTree->getPoint(i);
             std::vector<int> ni = rotationKDTree->radiusSearch(quere, radiusOfKDTree);
@@ -215,7 +214,7 @@ public:
                 std::vector<int> ni2 = rotationKDTree->radiusSearch(quere2, radiusOfKDTree);
                 ni.insert(ni.end(), ni2.begin(), ni2.end());
             }
-//            std::cout << ni.size() << std::endl;
+            //            std::cout << ni.size() << std::endl;
             this->lookupTableForCorrelations.push_back(ni);
         }
     }
@@ -224,36 +223,36 @@ public:
         sofftCorrelationObject3D.~softCorrelationClass3D();
 
 
-//        free(this->resultingCorrelationDouble);
-//        fftw_free(this->resultingCorrelationComplex);
-//        fftw_free(this->resultingPhaseDiff2D );
-//        fftw_free(this->resultingShiftPeaks2D);
-//        fftw_free(this->magnitude1Shifted );
-//        fftw_free(this->magnitude2Shifted );
-//        fftw_free(this->voxelData1 );
-//        fftw_free(this->voxelData2 );
-//        fftw_free(this->spectrumOut );
-//        fftw_free(this->phase1);
-//        fftw_free(this->phase2);
-//        fftw_free(this->magnitude1 );
-//        fftw_free(this->magnitude2 );
-//        fftw_free(resampledMagnitudeSO3_1 );
-//        fftw_free(resampledMagnitudeSO3_2);
-//        fftw_free(resampledMagnitudeSO3_1TMP);
-//        fftw_free(resampledMagnitudeSO3_2TMP );
-//        fftw_free(inputSpacialData);
-//        fftw_destroy_plan(planFourierToVoxel2D);
-//        fftw_destroy_plan(planVoxelToFourier3D);
-//        fftw_destroy_plan(planVoxelToFourier2D);
-
-
+        //        free(this->resultingCorrelationDouble);
+        //        fftw_free(this->resultingCorrelationComplex);
+        //        fftw_free(this->resultingPhaseDiff2D );
+        //        fftw_free(this->resultingShiftPeaks2D);
+        //        fftw_free(this->magnitude1Shifted );
+        //        fftw_free(this->magnitude2Shifted );
+        //        fftw_free(this->voxelData1 );
+        //        fftw_free(this->voxelData2 );
+        //        fftw_free(this->spectrumOut );
+        //        fftw_free(this->phase1);
+        //        fftw_free(this->phase2);
+        //        fftw_free(this->magnitude1 );
+        //        fftw_free(this->magnitude2 );
+        //        fftw_free(resampledMagnitudeSO3_1 );
+        //        fftw_free(resampledMagnitudeSO3_2);
+        //        fftw_free(resampledMagnitudeSO3_1TMP);
+        //        fftw_free(resampledMagnitudeSO3_2TMP );
+        //        fftw_free(inputSpacialData);
+        //        fftw_destroy_plan(planFourierToVoxel2D);
+        //        fftw_destroy_plan(planVoxelToFourier3D);
+        //        fftw_destroy_plan(planVoxelToFourier2D);
     }
 
 
     double
     getSpectrumFromVoxelData3D(double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
+
     double
-    getSpectrumFromVoxelData3DCorrelation(double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
+    getSpectrumFromVoxelData3DCorrelation(double voxelData[], double magnitude[], double phase[],
+                                          bool gaussianBlur = false);
 
     double
     sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,
@@ -263,7 +262,12 @@ public:
     std::vector<transformationPeakfs3D>
     sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[], double voxelData2Input[],
                                                           bool debug = false, bool useClahe = true,
-                                                          bool timeStuff = false,double sizeVoxel = 1);
+                                                          bool timeStuff = false, double sizeVoxel = 1,
+                                                          double r_min = 0.0,
+                                                          double r_max = 0.0,
+                                                          double level_potential_rotation = 0.01,
+                                                          double level_potential_translation = 0.1,
+                                                          bool set_r_manual = false);
 
 
     bool isPeak(cv::Mat mx[], std::vector<cv::Point> &conn_points);
@@ -280,30 +284,29 @@ public:
     peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_COMPLEX(fftw_complex *inputcorrelation, double cellSize);
 
     std::vector<translationPeak3D>
-    peakDetectionOf3DCorrelationFindPeaksLibrary(double *inputcorrelation, int dimensionN, double cellSize);
+    peakDetectionOf3DCorrelationFindPeaksLibrary(double *inputcorrelation, int dimensionN, double cellSize,double level_potential_translation=0.01);
 
     std::vector<rotationPeak4D>
     peakDetectionOf4DCorrelationFindPeaksLibrary(double *inputcorrelation, long dimensionN, double cellSize);
 
     std::vector<rotationPeak4D>
-    peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation);
+    peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation,double level_potential_rotation=0.01);
 
     double getPixelValueInterpolated(Eigen::Vector3d positionVector, double *volumeData, int dimensionN);
 
     int getSizeOfRegistration();
-//    int index3D(int x, int y, int z,int NInput);
-private://here everything is created. malloc is done in the constructor
+
+    //    int index3D(int x, int y, int z,int NInput);
+private: //here everything is created. malloc is done in the constructor
 
 
-
-
-    int N;// correlationN;//describes the size of the overall voxel system + correlation N
+    int N; // correlationN;//describes the size of the overall voxel system + correlation N
     int correlationN;
     int bwOut, bwIn, degLim;
     double *voxelData1;
     double *voxelData2;
-//    fftw_complex *spectrum1;
-//    fftw_complex *spectrum2;
+    //    fftw_complex *spectrum1;
+    //    fftw_complex *spectrum2;
     fftw_complex *spectrumOut;
     fftw_complex *spectrumOutCorrelation;
     double *magnitude1;
@@ -333,8 +336,8 @@ private://here everything is created. malloc is done in the constructor
     fftw_plan planVoxelToFourier3DCorrelation;
     fftw_plan planFourierToVoxel3D;
     fftw_plan planFourierToVoxel3DCorrelation;
-//    kdt::KDTree<My4DPoint> *rotationKDTree;
-    std::vector<std::vector<int>> lookupTableForCorrelations;
+    //    kdt::KDTree<My4DPoint> *rotationKDTree;
+    std::vector<std::vector<int> > lookupTableForCorrelations;
 };
 
 #endif //FSREGISTRATION_SOFTREGISTRATIONCLASS3D_H
