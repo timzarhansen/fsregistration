@@ -15,7 +15,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "cv_bridge/cv_bridge.h"
 #include "fsregistration/srv/detail/request_list_potential_solution3_d__struct.hpp"
-
+#include "tracetools/tracetools.h"
 //#define DEBUG_MODE false
 
 void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {

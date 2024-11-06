@@ -95,7 +95,6 @@ target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} $
 
 
 
-
 add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
 target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
 target_include_directories(registrationOfTwoImages PUBLIC ${OpenCV_INCLUDE_DIRS})
