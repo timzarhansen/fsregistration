@@ -1,0 +1,13 @@
+#! /bin/bash
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 32 1 4 28 0.01 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 32 1 4 28 0.01 0.01 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 32 1 4 28 0.001 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 32 1 4 28 0.001 0.01 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 64 1 8 48 0.01 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 64 1 8 48 0.01 0.01 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 64 1 8 48 0.001 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 64 1 8 48 0.001 0.01 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 1 16 96 0.01 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 1 16 96 0.01 0.01 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 1 16 96 0.001 0.1 &
+nohup python3 testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 1 16 96 0.001 0.01 &
