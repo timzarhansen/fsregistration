@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import os, torch, json, argparse, shutil
 
 from prompt_toolkit.utils import to_str
@@ -19,14 +20,15 @@ import transforms3d.quaternions as quat
 
 class MinimalClientAsync(Node):
 
-    def __init__(self):
-        super().__init__('minimal_client_async')
+    def __init__(self, node_name):
+        super().__init__('client_' + node_name)
         self.cli = self.create_client(RequestListPotentialSolution3D, 'fs3D/registration/all_solutions')
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
         self.req = RequestListPotentialSolution3D.Request()
 
-    def send_request(self, scan1, scan2, N, VoxelSize):
+    def send_request(self, scan1, scan2, N, VoxelSize, use_clahe, r_min, r_max, set_r_manual, level_potential_rotation,
+                     level_potential_translation):
         self.req.size_of_voxel = VoxelSize
         # self.req.potential_for_necessary_peak = 0.1
         self.req.debug = False
@@ -34,12 +36,12 @@ class MinimalClientAsync(Node):
         self.req.sonar_scan_1 = scan1.tolist()
         self.req.sonar_scan_2 = scan2.tolist()
         self.req.timing_computation_duration = False
-        self.req.use_clahe = True
-        self.req.r_min = N / 8
-        self.req.r_max = N / 2 - N / 8
-        self.req.level_potential_rotation = 0.01
-        self.req.level_potential_translation = 0.1
-        self.req.set_r_manual = True
+        self.req.use_clahe = use_clahe
+        self.req.r_min = int(r_min)
+        self.req.r_max = int(r_max)
+        self.req.level_potential_rotation = level_potential_rotation
+        self.req.level_potential_translation = level_potential_translation
+        self.req.set_r_manual = set_r_manual
 
         self.future = self.cli.call_async(self.req)
         rclpy.spin_until_future_complete(self, self.future)
@@ -137,7 +139,22 @@ if __name__ == '__main__':
     # load configs
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Path to the config file.')
+    parser.add_argument('N', type=int, help='Path to the config file.')
+    parser.add_argument('use_clahe', type=int)
+    parser.add_argument('r_min', type=int, help='Path to the config file.')
+    parser.add_argument('r_max', type=int, help='Path to the config file.')
+    parser.add_argument('level_potential_rotation', type=float, help='Path to the config file.')
+    parser.add_argument('level_potential_translation', type=float, help='Path to the config file.')
+
     args = parser.parse_args()
+    N = args.N  # 32 64 128
+    use_clahe = bool(args.use_clahe)  # True False
+    r_min = args.r_min  # N / 8 , N / 4
+    r_max = args.r_max  # N / 2 - N / 4 , N / 2 - N / 4
+    set_r_manual = True
+    level_potential_rotation = args.level_potential_rotation  # 0.01 , 0.001
+    level_potential_translation = args.level_potential_translation  # 0.1 , 0.01
+
     config = load_config(args.config)
     config['snapshot_dir'] = '%s' % config['exp_dir']
     config['tboard_dir'] = '%s/tensorboard' % config['exp_dir']
@@ -155,7 +172,9 @@ if __name__ == '__main__':
     # ROS2 Node
     rclpy.init()
 
-    minimal_client = MinimalClientAsync()
+    minimal_client = MinimalClientAsync(
+        to_str(N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
+            int(level_potential_rotation * 1000)) + '_' + to_str(int(level_potential_translation * 1000)))
 
     # config.val_loader, _ = get_dataloader(dataset=val_set,
     #                                        batch_size=config.batch_size,
@@ -168,6 +187,7 @@ if __name__ == '__main__':
     #                                        shuffle=False,
     #                                        num_workers=0,
     #                                        neighborhood_limits=neighborhood_limits)
+
     dataIter = iter(config.train_loader)
 
     for indexDataLoader in range(len(train_set)):
@@ -189,7 +209,7 @@ if __name__ == '__main__':
         mean1Transform[:3, 3] = np.squeeze(np.asarray(-mean1))
         mean2Transform[:3, 3] = np.squeeze(np.asarray(-mean2))
 
-        N = 128
+        # N = 128
         maxDistance = max(np.max(pcd1.points - mean1), np.max(pcd2.points - mean2))
         voxelSize = (2 * maxDistance * 1.5) / N
         # draw_registration_result(pcd1,pcd2,np.identity(4))
@@ -210,14 +230,21 @@ if __name__ == '__main__':
         voxelArray2 = pointToVoxel(pcd2, N, voxelSize, mean2).astype(np.float64)
 
         response = RequestListPotentialSolution3D.Response()
-        response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize)
+        response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize, use_clahe, r_min, r_max,
+                                               set_r_manual, level_potential_rotation, level_potential_translation)
         heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
         # find highest peak
         # save percentage overlap, angle difference, translation difference, 
 
         # save all solutions of estimation
         with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
-                N) + '_' + to_str(indexDataLoader) + '.txt', 'w') as f:
+                N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
+            level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
+            indexDataLoader) + '.txt', 'w') as f:
+            # with open('/home/tim-external/matlab/outfile' + to_str(
+            #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
+            #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
+            #     indexDataLoader) + '.txt', 'w') as f:
             # overlap Ratio:
             np.savetxt(f, np.matrix(compute_overlap_ratio(pcd1, pcd2, T, voxelSize)), fmt='%.10f')
             # N Size:
