@@ -302,7 +302,8 @@ private:
                 req->level_potential_translation,
                 req->set_r_manual);
 
-
+        free(voxelData1);
+        free(voxelData2);
         //calculate the registration
 
         double timeToCalculate = -1;
@@ -337,8 +338,7 @@ private:
         default:
             return false;
         }
-        free(voxelData1);
-        free(voxelData2);
+
 
         // std::cout << "req->potential_for_necessary_peak" << std::endl;
         // std::cout << req->potential_for_necessary_peak << std::endl;
