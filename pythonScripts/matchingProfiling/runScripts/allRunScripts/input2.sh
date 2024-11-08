@@ -22,4 +22,4 @@ pid7=$!
 pid8=$!
 
 
-wait $pid1 $pid2 $pid3 $pid4 $pid5 $pid6 $pid7 $pid8 pid9=$! pid10=$! pid11=$! pid12=$!
+wait $pid1 $pid2 $pid3 $pid4 $pid5 $pid6 $pid7 $pid8
