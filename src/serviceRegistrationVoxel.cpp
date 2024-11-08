@@ -15,31 +15,40 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "cv_bridge/cv_bridge.h"
 #include "fsregistration/srv/detail/request_list_potential_solution3_d__struct.hpp"
+// #include "rclcpp/callback_group.hpp"
 #include "tracetools/tracetools.h"
 //#define DEBUG_MODE false
 
-void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[]) {
+void convertMatToDoubleArray(cv::Mat inputImg, double voxelData[])
+{
     std::vector<uchar> array;
-    if (inputImg.isContinuous()) {
+    if (inputImg.isContinuous())
+    {
         // array.assign(mat.datastart, mat.dataend); // <- has problems for sub-matrix like mat = big_mat.row(i)
         array.assign(inputImg.data, inputImg.data + inputImg.total() * inputImg.channels());
-    } else {
-        for (int i = 0; i < inputImg.rows; ++i) {
+    }
+    else
+    {
+        for (int i = 0; i < inputImg.rows; ++i)
+        {
             array.insert(array.end(), inputImg.ptr<uchar>(i),
                          inputImg.ptr<uchar>(i) + inputImg.cols * inputImg.channels());
         }
     }
 
-    for (int i = 0; i < array.size(); i++) {
+    for (int i = 0; i < array.size(); i++)
+    {
         voxelData[i] = array[i];
         //        std::cout << voxelData[i] <<std::endl;
         //        std::cout << "i: "<< i <<std::endl;
     }
 }
 
-class ROSClassRegistrationNode : public rclcpp::Node {
+class ROSClassRegistrationNode : public rclcpp::Node
+{
 public:
-    ROSClassRegistrationNode() : Node("fs3dregistrationnode") {
+    ROSClassRegistrationNode() : Node("fs3dregistrationnode")
+    {
         // for now 256 could be 32/64/128/256/512 More gets complicated to compute
         this->potentialVoxelSizes = std::vector<int>{16, 32, 64, 128, 256};
         //        this->dimensionOfImages = sizeImage;
@@ -49,34 +58,42 @@ public:
         //                          this,
         //                          std::placeholders::_1,
         //                          std::placeholders::_2));
+
+        service_cbg = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         this->servicelistPotentialSolutions = this->create_service<fsregistration::srv::RequestListPotentialSolution3D>(
             "fs3D/registration/all_solutions",
             std::bind(&ROSClassRegistrationNode::sendAllSolutionsCallback,
                       this,
                       std::placeholders::_1,
-                      std::placeholders::_2));
+                      std::placeholders::_2),rmw_qos_profile_default,service_cbg);
     }
 
 private:
     //    rclcpp::Service<fsregistration::srv::RequestOnePotentialSolution3D>::SharedPtr serviceOnePotentialSolution;
     rclcpp::Service<fsregistration::srv::RequestListPotentialSolution3D>::SharedPtr servicelistPotentialSolutions;
     std::vector<int> potentialVoxelSizes;
-    std::mutex registrationMutex;
+    std::mutex registrationMutex16, registrationMutex32, registrationMutex64, registrationMutex128,
+               registrationMutex256;
     //    softRegistrationClass scanRegistrationObject;
     //    int dimensionOfImages;
-    std::vector<softRegistrationClass3D *> softRegistrationObjectList;
+    std::vector<softRegistrationClass3D*> softRegistrationObjectList;
     std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
+    rclcpp::CallbackGroup::SharedPtr service_cbg;
+    // rclcpp::CallbackGroup::SharedPtr callback_group_service_;
 
-    int getIndexOfRegistration(int sizeOfTheVoxel) {
+    int getIndexOfRegistration(int sizeOfTheVoxel)
+    {
         if (std::find(this->potentialVoxelSizes.begin(), this->potentialVoxelSizes.end(), sizeOfTheVoxel) ==
-            this->potentialVoxelSizes.end()) {
+            this->potentialVoxelSizes.end())
+        {
             std::cout << sizeOfTheVoxel << std::endl;
             std::cout << "Wrong size of Voxels " << std::endl;
             return -1;
         }
 
-        if (softRegistrationObjectList.empty()) {
+        if (softRegistrationObjectList.empty())
+        {
             //Create correct image size
             this->softRegistrationObjectList.push_back(
                 new softRegistrationClass3D(sizeOfTheVoxel, sizeOfTheVoxel / 2, sizeOfTheVoxel / 2,
@@ -84,15 +101,18 @@ private:
         }
         bool alreadyHaveCorrectRegistration = false;
         int positionOfCorrect = 0;
-        for (int i = 0; i < this->softRegistrationObjectList.size(); i++) {
-            if (this->softRegistrationObjectList[i]->getSizeOfRegistration() == sizeOfTheVoxel) {
+        for (int i = 0; i < this->softRegistrationObjectList.size(); i++)
+        {
+            if (this->softRegistrationObjectList[i]->getSizeOfRegistration() == sizeOfTheVoxel)
+            {
                 positionOfCorrect = i;
                 alreadyHaveCorrectRegistration = true;
                 break;
             }
         }
 
-        if (!alreadyHaveCorrectRegistration) {
+        if (!alreadyHaveCorrectRegistration)
+        {
             //Create correct image size
             this->softRegistrationObjectList.push_back(
                 new softRegistrationClass3D(sizeOfTheVoxel, sizeOfTheVoxel / 2, sizeOfTheVoxel / 2,
@@ -207,30 +227,59 @@ private:
 
     bool
     sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Request> req,
-                             std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Response> res) {
+                             std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Response> res)
+    {
         std::cout << "starting all solution callback" << std::endl;
         int dimensionSize = req->dimension_size;
 
         int positionOfCorrectRegistration = this->getIndexOfRegistration(dimensionSize);
-        if (positionOfCorrectRegistration < 0) {
+        if (positionOfCorrectRegistration < 0)
+        {
             return false;
         }
 
 
-        double *voxelData1;
-        double *voxelData2;
-        voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
-        voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
+        double* voxelData1;
+        double* voxelData2;
+        voxelData1 = (double*)malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
+        voxelData2 = (double*)malloc(sizeof(double) * dimensionSize * dimensionSize * dimensionSize);
 
         //        convertMatToDoubleArray(sonarImage1, voxelData1);
         //        convertMatToDoubleArray(sonarImage2, voxelData2);
-        for (int i = 0; i < dimensionSize * dimensionSize * dimensionSize; i++) {
+        for (int i = 0; i < dimensionSize * dimensionSize * dimensionSize; i++)
+        {
             voxelData1[i] = req->sonar_scan_1[i];
             voxelData2[i] = req->sonar_scan_2[i];
         }
         Eigen::Matrix3d covarianceMatrixResult;
-        this->registrationMutex.lock();
-        if (req->timing_computation_duration) {
+        switch (dimensionSize)
+        {
+        case 16:
+            // code block
+            this->registrationMutex16.lock();
+            break;
+        case 32:
+            // code block
+            this->registrationMutex32.lock();
+            break;
+        case 64:
+            // code block
+            this->registrationMutex64.lock();
+            break;
+        case 128:
+            // code block
+            this->registrationMutex128.lock();
+            break;
+        case 256:
+            // code block
+            this->registrationMutex256.lock();
+            break;
+        default:
+            return false;
+        }
+
+        if (req->timing_computation_duration)
+        {
             begin = std::chrono::steady_clock::now();
         }
 
@@ -243,32 +292,58 @@ private:
         // req->set_r_manual
 
         std::vector<transformationPeakfs3D> listPotentialSolutions = softRegistrationObjectList[
-                    positionOfCorrectRegistration]->
-                sofftRegistrationVoxel3DListOfPossibleTransformations(
-                    voxelData1,
-                    voxelData2, req->debug, req->use_clahe, req->timing_computation_duration, req->size_of_voxel,
-                    req->r_min,
-                    req->r_max,
-                    req->level_potential_rotation,
-                    req->level_potential_translation,
-                    req->set_r_manual);
+                positionOfCorrectRegistration]->
+            sofftRegistrationVoxel3DListOfPossibleTransformations(
+                voxelData1,
+                voxelData2, req->debug, req->use_clahe, req->timing_computation_duration, req->size_of_voxel,
+                req->r_min,
+                req->r_max,
+                req->level_potential_rotation,
+                req->level_potential_translation,
+                req->set_r_manual);
 
 
         //calculate the registration
 
         double timeToCalculate = -1;
-        if (req->timing_computation_duration) {
+        if (req->timing_computation_duration)
+        {
             end = std::chrono::steady_clock::now();
             timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
         }
 
-        this->registrationMutex.unlock();
+        switch (dimensionSize)
+        {
+        case 16:
+            // code block
+            this->registrationMutex16.unlock();
+            break;
+        case 32:
+            // code block
+            this->registrationMutex32.unlock();
+            break;
+        case 64:
+            // code block
+            this->registrationMutex64.unlock();
+            break;
+        case 128:
+            // code block
+            this->registrationMutex128.unlock();
+            break;
+        case 256:
+            // code block
+            this->registrationMutex256.unlock();
+            break;
+        default:
+            return false;
+        }
         free(voxelData1);
         free(voxelData2);
 
         // std::cout << "req->potential_for_necessary_peak" << std::endl;
         // std::cout << req->potential_for_necessary_peak << std::endl;
-        for (int i = 0; i < listPotentialSolutions.size(); i++) {
+        for (int i = 0; i < listPotentialSolutions.size(); i++)
+        {
             //            Eigen::Quaterniond orientationEigen();
             //            orientationEigen = generalHelpfulTools::getQuaternionFromRPY(0, 0,
             //                                                                         );
@@ -278,7 +353,8 @@ private:
                                         listPotentialSolutions[i].potentialRotation.w);
 
 
-            for (int j = 0; j < listPotentialSolutions[i].potentialTranslations.size(); j++) {
+            for (int j = 0; j < listPotentialSolutions[i].potentialTranslations.size(); j++)
+            {
                 tf2::Vector3 position(listPotentialSolutions[i].potentialTranslations[j].xTranslation,
                                       listPotentialSolutions[i].potentialTranslations[j].yTranslation,
                                       listPotentialSolutions[i].potentialTranslations[j].zTranslation);
@@ -304,11 +380,11 @@ private:
 
                 potentialSolutionMSG.resulting_transformation = resultingPose;
                 potentialSolutionMSG.transformation_peak_height = listPotentialSolutions[i].potentialTranslations[j].
-                        correlationHeight;
+                    correlationHeight;
                 potentialSolutionMSG.rotation_peak_height = listPotentialSolutions[i].potentialRotation.
-                        correlationHeight;
+                    correlationHeight;
                 potentialSolutionMSG.persistent_transformation_peak_value = listPotentialSolutions[i].
-                        potentialTranslations[j].persistence;
+                    potentialTranslations[j].persistence;
 
                 potentialSolutionMSG.translation_covariance; //2x2 matrix
                 potentialSolutionMSG.rotation_covariance[0] = 0.1; //currently missing
@@ -325,11 +401,15 @@ private:
 };
 
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv)
+{
     rclcpp::init(argc, argv);
     //For now we Assume that it is always a 256 image.
-    rclcpp::spin(std::make_shared<ROSClassRegistrationNode>());
-
+    //    rclcpp::spin(std::make_shared<ROSClassRegistrationNode>());
+    auto node = std::make_shared<ROSClassRegistrationNode>();
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
 
     rclcpp::shutdown();
 

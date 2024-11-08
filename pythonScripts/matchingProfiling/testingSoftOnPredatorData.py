@@ -190,7 +190,8 @@ if __name__ == '__main__':
 
     dataIter = iter(config.train_loader)
 
-    for indexDataLoader in range(len(train_set)):
+    # for indexDataLoader in range(len(train_set)):
+    for indexDataLoader in range(2):
         inputs = next(dataIter)
 
         # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
@@ -237,14 +238,14 @@ if __name__ == '__main__':
         # save percentage overlap, angle difference, translation difference, 
 
         # save all solutions of estimation
-        with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
+        # with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
+        #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
+        #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
+        #     indexDataLoader) + '.txt', 'w') as f:
+        with open('/home/tim-external/matlab/outfile' + to_str(
                 N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
             level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
             indexDataLoader) + '.txt', 'w') as f:
-            # with open('/home/tim-external/matlab/outfile' + to_str(
-            #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-            #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
-            #     indexDataLoader) + '.txt', 'w') as f:
             # overlap Ratio:
             np.savetxt(f, np.matrix(compute_overlap_ratio(pcd1, pcd2, T, voxelSize)), fmt='%.10f')
             # N Size:
