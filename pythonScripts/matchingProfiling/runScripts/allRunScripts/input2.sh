@@ -20,13 +20,6 @@ pid6=$!
 pid7=$!
 ./testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 64 0 8 56 0.001 0.01 &>/dev/null
 pid8=$!
-./testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 0 16 112 0.01 0.1 &>/dev/null
-pid9=$!
-./testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 0 16 112 0.01 0.01 &>/dev/null
-pid10=$!
-./testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 0 16 112 0.001 0.1 &>/dev/null
-pid11=$!
-./testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 0 16 112 0.001 0.01 &>/dev/null
-pid12=$!
+
 
 wait $pid1 $pid2 $pid3 $pid4 $pid5 $pid6 $pid7 $pid8 pid9=$! pid10=$! pid11=$! pid12=$!
