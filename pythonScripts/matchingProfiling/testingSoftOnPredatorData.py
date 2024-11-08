@@ -190,8 +190,8 @@ if __name__ == '__main__':
 
     dataIter = iter(config.train_loader)
 
-    # for indexDataLoader in range(len(train_set)):
-    for indexDataLoader in range(2):
+    for indexDataLoader in range(len(train_set)):
+    # for indexDataLoader in range(2):
         inputs = next(dataIter)
 
         # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
