@@ -65,7 +65,7 @@ dataset:
   dataset: indoor
   benchmark: 3DMatch
 #  root: /home/thansen/dataFolder/predatorData/data/indoor
-  root: /home/tim-external/dataFolder/3dmatch/models/predator/3dmatch
+  root: /home/tim-external/dataFolder/3dmatch/models/predator/data/indoor
   batch_size: 1
   num_workers: 0
   addedNoiseVal: False
