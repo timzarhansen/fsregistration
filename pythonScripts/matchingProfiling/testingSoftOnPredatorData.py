@@ -16,7 +16,7 @@ from fsregistration.srv import RequestListPotentialSolution3D
 import open3d as o3d
 import copy
 import transforms3d.quaternions as quat
-
+import gc
 
 class MinimalClientAsync(Node):
 
@@ -191,6 +191,7 @@ if __name__ == '__main__':
     dataIter = iter(config.train_loader)
 
     for indexDataLoader in range(len(train_set)):
+        gc.collect()
     # for indexDataLoader in range(2):
         inputs = next(dataIter)
 
