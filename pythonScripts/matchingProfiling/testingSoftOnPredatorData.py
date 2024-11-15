@@ -18,6 +18,7 @@ import copy
 import transforms3d.quaternions as quat
 import gc
 
+
 class MinimalClientAsync(Node):
 
     def __init__(self, node_name):
@@ -48,13 +49,17 @@ class MinimalClientAsync(Node):
         return self.future.result()
 
 
+# used to plot everything. now we save to file to look at it from the outside
 def draw_registration_result(source, target, transformation):
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     source_temp.paint_uniform_color([1, 0.706, 0])
     target_temp.paint_uniform_color([0, 0.651, 0.929])
     source_temp.transform(transformation)
-    o3d.visualization.draw_geometries([source_temp, target_temp])
+    source_temp += target_temp
+    o3d.io.write_point_cloud("resultingTransformation.ply", source_temp, format='ply')
+    # o3d.io.write_point_cloud("test2.ply", source_temp,format='ply')
+    # o3d.visualization.draw_geometries([source_temp, target_temp])
 
 
 def compute_overlap_ratio(pcd0, pcd1, trans, voxel_size):
@@ -192,7 +197,7 @@ if __name__ == '__main__':
 
     for indexDataLoader in range(len(train_set)):
         gc.collect()
-    # for indexDataLoader in range(2):
+        # for indexDataLoader in range(2):
         inputs = next(dataIter)
 
         # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
@@ -243,7 +248,7 @@ if __name__ == '__main__':
         #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
         #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
         #     indexDataLoader) + '.txt', 'w') as f:
-        with open('/home/tim-external/matlab/outfile' + to_str(
+        with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
                 N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
             level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
             indexDataLoader) + '.txt', 'w') as f:
@@ -312,7 +317,7 @@ if __name__ == '__main__':
         #     np.savetxt(f, line, fmt='%.10f')
 
         # print(response)
-        # draw_registration_result(pcd1Vox, pcd2Vox, T)#GT
+        # draw_registration_result(pcd1Vox, pcd2Vox, T)  # GT
         # draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
 
         # print("test2")
