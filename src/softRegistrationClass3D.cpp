@@ -26,7 +26,7 @@ double angleDifference3D(double angle1, double angle2) {
 }
 
 double
-softRegistrationClass3D::getSpectrumFromVoxelData3D(double voxelData[], double magnitude[], double phase[],
+softRegistrationClass3D::getSpectrumFromVoxelData3D(const double voxelData[], double magnitude[], double phase[],
                                                     bool gaussianBlur) {
     double *voxelDataTMP;
     voxelDataTMP = (double *) malloc(sizeof(double) * N * N * N);
@@ -69,7 +69,8 @@ softRegistrationClass3D::getSpectrumFromVoxelData3D(double voxelData[], double m
 }
 
 double
-softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(double voxelData[], double magnitude[], double phase[],
+softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(const double voxelData[], double magnitude[],
+                                                               double phase[],
                                                                bool gaussianBlur) {
     //    double *voxelDataTMP;
     //    voxelDataTMP = (double *) malloc(sizeof(double) * N * N * N);
@@ -130,11 +131,10 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                                                                                double r_max,
                                                                                double level_potential_rotation,
                                                                                double level_potential_translation,
-                                                                               bool set_r_manual) {
-
+                                                                               bool set_r_manual, int normalization) {
     std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
-    std::chrono::duration<double, std::milli> diff;
+    std::chrono::duration<double, std::milli> diff{};
 
     if (timeStuff) {
         begin = std::chrono::steady_clock::now();
@@ -233,11 +233,11 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
     int bandwidth = N / 2;
     if (!set_r_manual) {
-        r_min = N / 8;
-        r_max = N / 2 - N / 8;
+        r_min = N / 8.0;
+        r_max = N / 2.0 - N / 8.0;
     }
     // config -> r_min r_max
-    for (int r = r_min; r < r_max; r++) {
+    for (int r = int(r_min); r < r_max; r++) {
         // was N/16
 
         for (int i = 0; i < N * N; i++) {
@@ -252,9 +252,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                 double phi = phiIncrement3D((double) j, bandwidth);
                 double radius = r;
 
-                int xIndex = std::round(radius * std::sin(theta) * std::cos(phi) + N / 2 + 0.1);
-                int yIndex = std::round(radius * std::sin(theta) * std::sin(phi) + N / 2 + 0.1);
-                int zIndex = std::round(radius * std::cos(theta) + N / 2 + 0.1);
+                int xIndex = int(std::round(radius * std::sin(theta) * std::cos(phi) + N / 2.0 + 0.1));
+                int yIndex = int(std::round(radius * std::sin(theta) * std::sin(phi) + N / 2.0 + 0.1));
+                int zIndex = int(std::round(radius * std::cos(theta) + N / 2.0 + 0.1));
 
 
                 resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)] =
@@ -433,7 +433,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     }
     // config -> settings for peak detection
     std::vector<rotationPeak4D> potentialRotationsTMP = this->peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
-        listOfQuaternionCorrelation,level_potential_rotation);
+        listOfQuaternionCorrelation, level_potential_rotation);
     if (timeStuff) {
         end = std::chrono::steady_clock::now();
         diff = end - begin;
@@ -500,14 +500,14 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             }
         }
 
-        double maximumScan1CorrelationMagnitude = this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
-            this->magnitude1Correlation,
-            this->phase1Correlation,
-            false);
-        double maximumScan2CorrelationMagnitude = this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
-            this->magnitude2Correlation,
-            this->phase2Correlation,
-            false);
+        this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
+                                                    this->magnitude1Correlation,
+                                                    this->phase1Correlation,
+                                                    false);
+        this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
+                                                    this->magnitude2Correlation,
+                                                    this->phase2Correlation,
+                                                    false);
 
         if (debug) {
             std::ofstream myFile1, myFile2, myFile3;
@@ -591,8 +591,21 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                     //                    double normalizationFactorForCorrelation =
                     //                            1 / this->normalizationFactorCalculation(indexX, indexY, indexZ,this->correlationN);
                     //                    normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
-                    double normalizationFactorForCorrelation = 1;
-                    //            double normalizationFactorForCorrelation = 1/this->normalizationFactorCalculation(indexX, indexY);
+                    double normalizationFactorForCorrelation;
+                    switch (normalization) {
+                        case 0:
+                            // code block
+                            normalizationFactorForCorrelation = 1;
+                            break;
+                        case 1:
+                            normalizationFactorForCorrelation =
+                                    1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
+                        // normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                            break;
+                        default:
+                            std::cout << "normalization has to be 0,1 but was: " << normalization << std::endl;
+                            exit(-1);
+                    }
 
 
                     resultingCorrelationDouble[indexShifted] =
@@ -632,14 +645,17 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         }
         // config -> settings for peak detection
         std::vector<translationPeak3D> resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
-            resultingCorrelationDouble, this->correlationN, sizeVoxel,level_potential_translation);
+            resultingCorrelationDouble, this->correlationN, sizeVoxel, level_potential_translation);
         transformationPeakfs3D tmpSolution;
         tmpSolution.potentialRotation = potentialRotationsTMP[p];
         for (int i = 0; i < resulting3DPeakList.size(); i++) {
+            // sub Pixel Computation Here:
+
+
+
             resulting3DPeakList[i].correlationHeight = resulting3DPeakList[i].correlationHeight *
                                                        (maximumCorrelationTranslation - minimumCorrelationTranslation) +
                                                        minimumCorrelationTranslation;
-
 
             std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
                     << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
@@ -706,7 +722,8 @@ double softRegistrationClass3D::normalizationFactorCalculation(int x, int y, int
 }
 
 double
-softRegistrationClass3D::getPixelValueInterpolated(Eigen::Vector3d positionVector, double *volumeData, int dimensionN) {
+softRegistrationClass3D::getPixelValueInterpolated(Eigen::Vector3d positionVector, const double *volumeData,
+                                                   int dimensionN) {
     //    int index = positionVector.x() + N * positionVector.y() + N * N * positionVector.z();
     //    std::cout << "test1" << std::endl;
     int xDown = floor(positionVector.x());
@@ -844,7 +861,7 @@ softRegistrationClass3D::getPixelValueInterpolated(Eigen::Vector3d positionVecto
 
 std::vector<translationPeak3D>
 softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_COMPLEX(fftw_complex *inputcorrelation,
-    double cellSize) {
+    double cellSize) const {
     double *current3DCorrelation;
     current3DCorrelation = (double *) malloc(
         sizeof(double) * this->N * this->N * this->N);
@@ -915,14 +932,15 @@ softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_CO
         std::cout << sqrt(p.birth_level) << std::endl;
 
 
-        translationPeak3D tmpTranslationPeak;
-        tmpTranslationPeak.xTranslation = p.birth_position.x;
-        tmpTranslationPeak.yTranslation = p.birth_position.y;
-        tmpTranslationPeak.zTranslation = p.birth_position.z;
-        tmpTranslationPeak.persistence = p.persistence;
-        tmpTranslationPeak.correlationHeight = current3DCorrelation[generalHelpfulTools::index3D(p.birth_position.x,
-            p.birth_position.y,
-            p.birth_position.z,
+        translationPeak3D tmpTranslationPeak{};
+        tmpTranslationPeak.xTranslation = double(p.birth_position.x);
+        tmpTranslationPeak.yTranslation = double(p.birth_position.y);
+        tmpTranslationPeak.zTranslation = double(p.birth_position.z);
+        tmpTranslationPeak.persistence = double(p.persistence);
+        tmpTranslationPeak.correlationHeight = current3DCorrelation[generalHelpfulTools::index3D(
+            int(p.birth_position.x),
+            int(p.birth_position.y),
+            int(p.birth_position.z),
             this->N)];
         tmpTranslationPeak.levelPotential = levelPotential;
         if (levelPotential > 0.1) {
@@ -936,8 +954,9 @@ softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_CO
 }
 
 std::vector<translationPeak3D>
-softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibrary(double *inputcorrelation, int dimensionN,
-                                                                      double cellSize,double level_potential_translation) {
+softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibrary(const double *inputcorrelation, int dimensionN,
+                                                                      double cellSize,
+                                                                      double level_potential_translation) const {
     double *current3DCorrelation;
     current3DCorrelation = (double *) malloc(
         sizeof(double) * dimensionN * dimensionN * dimensionN);
@@ -981,17 +1000,33 @@ softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibrary(double *in
                              this->N;
         }
 
-        translationPeak3D tmpTranslationPeak;
+
+        Eigen::Vector3d subPixelPeak = subPixelComputation(inputcorrelation, dimensionN,
+                                                     p.birth_position.x,
+                                                     p.birth_position.y,
+                                                     p.birth_position.z);
+
+
+
+
+        translationPeak3D tmpTranslationPeak{};
         tmpTranslationPeak.xTranslation =
-                -(double) ((double) p.birth_position.x - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+        -(double) ((double) subPixelPeak[0] - (double) (dimensionN - 1.0) / 2.0) * cellSize;
         tmpTranslationPeak.yTranslation =
-                -(double) ((double) p.birth_position.y - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+                -(double) ((double) subPixelPeak[1] - (double) (dimensionN - 1.0) / 2.0) * cellSize;
         tmpTranslationPeak.zTranslation =
-                -(double) ((double) p.birth_position.z - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+                -(double) ((double) subPixelPeak[2] - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+        // tmpTranslationPeak.xTranslation =
+        //         -(double) ((double) p.birth_position.x - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+        // tmpTranslationPeak.yTranslation =
+        //         -(double) ((double) p.birth_position.y - (double) (dimensionN - 1.0) / 2.0) * cellSize;
+        // tmpTranslationPeak.zTranslation =
+        //         -(double) ((double) p.birth_position.z - (double) (dimensionN - 1.0) / 2.0) * cellSize;
         tmpTranslationPeak.persistence = currentPersistence;
-        tmpTranslationPeak.correlationHeight = current3DCorrelation[generalHelpfulTools::index3D(p.birth_position.x,
-            p.birth_position.y,
-            p.birth_position.z,
+        tmpTranslationPeak.correlationHeight = current3DCorrelation[generalHelpfulTools::index3D(
+            int(p.birth_position.x),
+            int(p.birth_position.y),
+            int(p.birth_position.z),
             dimensionN)];
         tmpTranslationPeak.levelPotential = levelPotential;
         if (levelPotential > level_potential_translation) {
@@ -1004,7 +1039,7 @@ softRegistrationClass3D::peakDetectionOf3DCorrelationFindPeaksLibrary(double *in
 }
 
 std::vector<rotationPeak4D>
-softRegistrationClass3D::peakDetectionOf4DCorrelationFindPeaksLibrary(double *inputcorrelation, long dimensionN,
+softRegistrationClass3D::peakDetectionOf4DCorrelationFindPeaksLibrary(const double *inputcorrelation, long dimensionN,
                                                                       double cellSize) {
     double *current4DCorrelation;
     current4DCorrelation = (double *) malloc(
@@ -1070,7 +1105,7 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationFindPeaksLibrary(double *in
                                                 (double) ((int) p.birth_position.y - (int) p.death_position.y),
                                                 (double) ((int) p.birth_position.z - (int) p.death_position.z),
                                                 (double) ((int) p.birth_position.w - (int) p.death_position.w)).norm() /
-                                dimensionN / 1.73205080757;
+                                double(dimensionN) / 1.73205080757;
 
         //        std::cout << p.persistence << std::endl;
         //        std::cout << Eigen::Vector4d((double) ((int) p.birth_position.x - (int) p.death_position.x),
@@ -1081,11 +1116,11 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationFindPeaksLibrary(double *in
         //        std::cout << sqrt(p.birth_level) << std::endl;
 
 
-        rotationPeak4D tmpTranslationPeak;
-        tmpTranslationPeak.x = p.birth_position.x;
-        tmpTranslationPeak.y = p.birth_position.y;
-        tmpTranslationPeak.z = p.birth_position.z;
-        tmpTranslationPeak.w = p.birth_position.w;
+        rotationPeak4D tmpTranslationPeak{};
+        tmpTranslationPeak.x = double(p.birth_position.x);
+        tmpTranslationPeak.y = double(p.birth_position.y);
+        tmpTranslationPeak.z = double(p.birth_position.z);
+        tmpTranslationPeak.w = double(p.birth_position.w);
         tmpTranslationPeak.persistence = p.persistence;
         tmpTranslationPeak.correlationHeight = current4DCorrelation[p.birth_position.w +
                                                                     dimensionN * p.birth_position.z +
@@ -1106,7 +1141,7 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationFindPeaksLibrary(double *in
 
 std::vector<rotationPeak4D>
 softRegistrationClass3D::peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
-    std::vector<My4DPoint> listOfQuaternionCorrelation,double level_potential_rotation) {
+    std::vector<My4DPoint> listOfQuaternionCorrelation, double level_potential_rotation) {
     double *current1DCorrelation;
     current1DCorrelation = (double *) malloc(
         sizeof(double) * listOfQuaternionCorrelation.size());
@@ -1129,7 +1164,7 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
     int numberOfPeaks = 0;
     for (const auto &p: peaks) {
         My4DPoint birthPositionPoint = listOfQuaternionCorrelation[p.birth_position.x];
-        My4DPoint deathPositionPoint = listOfQuaternionCorrelation[p.death_position.x];
+        // My4DPoint deathPositionPoint = listOfQuaternionCorrelation[p.death_position.x];
         double currentPersistence;
         if (p.persistence == INFINITY) {
             currentPersistence = 1;
@@ -1138,7 +1173,7 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
         }
         double levelPotential = currentPersistence * currentPersistence * p.birth_level * p.birth_level;
 
-        rotationPeak4D tmpTranslationPeak;
+        rotationPeak4D tmpTranslationPeak{};
         tmpTranslationPeak.x = birthPositionPoint[1];
         tmpTranslationPeak.y = birthPositionPoint[2];
         tmpTranslationPeak.z = birthPositionPoint[3];
@@ -1156,6 +1191,52 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
     return (tmpRotations);
 }
 
-int softRegistrationClass3D::getSizeOfRegistration() {
+int softRegistrationClass3D::getSizeOfRegistration() const {
     return this->N;
+}
+
+
+
+
+Eigen::Vector3d softRegistrationClass3D::subPixelComputation(const double *inputcorrelation, int dimensionN,
+                                                               double xPosition, double yPosition, double zPosition) const{
+
+    int nSubPixel = 3;
+    std::vector<Eigen::Vector3d> listOfPoints;
+    // listOfPoints.push_back(Eigen::Vector3d(xPosition, yPosition, zPosition));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition + nSubPixel, yPosition, zPosition));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition - nSubPixel, yPosition, zPosition));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition, yPosition + nSubPixel, zPosition));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition, yPosition - nSubPixel, zPosition));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition, yPosition, zPosition + nSubPixel));
+    listOfPoints.push_back(Eigen::Vector3d(xPosition, yPosition, zPosition - nSubPixel));
+    for (int xPos = -(nSubPixel-1); xPos <= (nSubPixel-1); ++xPos) {
+        for (int yPos = -(nSubPixel-1); yPos <= (nSubPixel-1); ++yPos) {
+            for (int zPos = -(nSubPixel-1); zPos <=(nSubPixel-1); ++zPos) {
+                listOfPoints.push_back(Eigen::Vector3d(xPosition+xPos, yPosition+yPos, zPosition+zPos));
+            }
+        }
+    }
+
+    double totalWeight = 0;
+    double totalXPos = 0;
+    double totalYPos = 0;
+    double totalZPos = 0;
+    for (const Eigen::Vector3d &point: listOfPoints) {
+        double weight = inputcorrelation[generalHelpfulTools::index3D(int(point[0]), int(point[1]), int(point[2]),
+                                                                      dimensionN)];
+        totalWeight += weight;
+        totalXPos += point[0] * weight;
+        totalYPos += point[1] * weight;
+        totalZPos += point[2] * weight;
+    }
+
+    double centerX = totalXPos / totalWeight;
+    double centerY = totalYPos / totalWeight;
+    double centerZ = totalZPos / totalWeight;
+
+
+    // translationPeak3D tmpTranslationPeak{};
+
+    return Eigen::Vector3d(centerX, centerY, centerZ);
 }

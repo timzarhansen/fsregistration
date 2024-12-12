@@ -248,10 +248,10 @@ public:
 
 
     double
-    getSpectrumFromVoxelData3D(double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
+    getSpectrumFromVoxelData3D(const double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
 
     double
-    getSpectrumFromVoxelData3DCorrelation(double voxelData[], double magnitude[], double phase[],
+    getSpectrumFromVoxelData3DCorrelation(const double voxelData[], double magnitude[], double phase[],
                                           bool gaussianBlur = false);
 
     double
@@ -267,35 +267,35 @@ public:
                                                           double r_max = 0.0,
                                                           double level_potential_rotation = 0.01,
                                                           double level_potential_translation = 0.1,
-                                                          bool set_r_manual = false);
+                                                          bool set_r_manual = false, int normalization = 0);
 
 
     bool isPeak(cv::Mat mx[], std::vector<cv::Point> &conn_points);
 
     cv::Mat imregionalmax(cv::Mat &src);
 
-    double normalizationFactorCalculation(int x, int y, int z, int currentN);
+    static double normalizationFactorCalculation(int x, int y, int z, int currentN);
 
     cv::Mat opencv_imextendedmax(cv::Mat &inputMatrix, double hParam);
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
     std::vector<translationPeak3D>
-    peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_COMPLEX(fftw_complex *inputcorrelation, double cellSize);
+    peakDetectionOf3DCorrelationFindPeaksLibraryFromFFTW_COMPLEX(fftw_complex *inputcorrelation, double cellSize) const;
 
     std::vector<translationPeak3D>
-    peakDetectionOf3DCorrelationFindPeaksLibrary(double *inputcorrelation, int dimensionN, double cellSize,double level_potential_translation=0.01);
+    peakDetectionOf3DCorrelationFindPeaksLibrary(const double *inputcorrelation, int dimensionN, double cellSize,double level_potential_translation=0.01) const;
 
-    std::vector<rotationPeak4D>
-    peakDetectionOf4DCorrelationFindPeaksLibrary(double *inputcorrelation, long dimensionN, double cellSize);
+    static std::vector<rotationPeak4D>
+    peakDetectionOf4DCorrelationFindPeaksLibrary(const double *inputcorrelation, long dimensionN, double cellSize);
 
     std::vector<rotationPeak4D>
     peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation,double level_potential_rotation=0.01);
 
-    double getPixelValueInterpolated(Eigen::Vector3d positionVector, double *volumeData, int dimensionN);
+    static double getPixelValueInterpolated(Eigen::Vector3d positionVector, const double *volumeData, int dimensionN);
 
-    int getSizeOfRegistration();
-
+    int getSizeOfRegistration() const;
+    Eigen::Vector3d subPixelComputation(const double *inputcorrelation, int dimensionN,double xPosition,double yPosition,double zPosition) const;
     //    int index3D(int x, int y, int z,int NInput);
 private: //here everything is created. malloc is done in the constructor
 
