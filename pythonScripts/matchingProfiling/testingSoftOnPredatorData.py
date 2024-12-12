@@ -29,10 +29,10 @@ class MinimalClientAsync(Node):
         self.req = RequestListPotentialSolution3D.Request()
 
     def send_request(self, scan1, scan2, N, VoxelSize, use_clahe, r_min, r_max, set_r_manual, level_potential_rotation,
-                     level_potential_translation):
+                     level_potential_translation,normalization_factor):
         self.req.size_of_voxel = VoxelSize
         # self.req.potential_for_necessary_peak = 0.1
-        self.req.debug = False
+        self.req.debug = True
         self.req.dimension_size = N
         self.req.sonar_scan_1 = scan1.tolist()
         self.req.sonar_scan_2 = scan2.tolist()
@@ -42,6 +42,7 @@ class MinimalClientAsync(Node):
         self.req.r_max = int(r_max)
         self.req.level_potential_rotation = level_potential_rotation
         self.req.level_potential_translation = level_potential_translation
+        self.req.set_normalization = normalization_factor
         self.req.set_r_manual = set_r_manual
 
         self.future = self.cli.call_async(self.req)
@@ -150,6 +151,9 @@ if __name__ == '__main__':
     parser.add_argument('r_max', type=int, help='Path to the config file.')
     parser.add_argument('level_potential_rotation', type=float, help='Path to the config file.')
     parser.add_argument('level_potential_translation', type=float, help='Path to the config file.')
+    parser.add_argument('normalization_factor', type=int, help='Path to the config file.')
+
+
 
     args = parser.parse_args()
     N = args.N  # 32 64 128
@@ -159,7 +163,7 @@ if __name__ == '__main__':
     set_r_manual = True
     level_potential_rotation = args.level_potential_rotation  # 0.01 , 0.001
     level_potential_translation = args.level_potential_translation  # 0.1 , 0.01
-
+    normalization_factor = args.normalization_factor # 0 , 1
     config = load_config(args.config)
     config['snapshot_dir'] = '%s' % config['exp_dir']
     config['tboard_dir'] = '%s/tensorboard' % config['exp_dir']
@@ -194,8 +198,8 @@ if __name__ == '__main__':
     #                                        neighborhood_limits=neighborhood_limits)
 
     dataIter = iter(config.train_loader)
-
-    for indexDataLoader in range(len(train_set)):
+    for indexDataLoader in range(200):
+    # for indexDataLoader in range(len(train_set)):
         gc.collect()
         # for indexDataLoader in range(2):
         inputs = next(dataIter)
@@ -238,20 +242,20 @@ if __name__ == '__main__':
 
         response = RequestListPotentialSolution3D.Response()
         response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize, use_clahe, r_min, r_max,
-                                               set_r_manual, level_potential_rotation, level_potential_translation)
+                                               set_r_manual, level_potential_rotation, level_potential_translation,normalization_factor)
         heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
         # find highest peak
         # save percentage overlap, angle difference, translation difference, 
 
         # save all solutions of estimation
+        with open('/home/tim-external/matlab/registrationFourier/3D/testFiles/outfile' + to_str(
+                N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
+            level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
+            indexDataLoader)+ '_' + to_str(normalization_factor) + '.txt', 'w') as f:
         # with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
         #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
         #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
         #     indexDataLoader) + '.txt', 'w') as f:
-        with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
-                N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-            level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
-            indexDataLoader) + '.txt', 'w') as f:
             # overlap Ratio:
             np.savetxt(f, np.matrix(compute_overlap_ratio(pcd1, pcd2, T, voxelSize)), fmt='%.10f')
             # N Size:
@@ -317,7 +321,7 @@ if __name__ == '__main__':
         #     np.savetxt(f, line, fmt='%.10f')
 
         # print(response)
-        # draw_registration_result(pcd1Vox, pcd2Vox, T)  # GT
-        # draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
+        draw_registration_result(pcd1Vox, pcd2Vox, T)  # GT
+        draw_registration_result(pcd1Vox, pcd2Vox, estimatedActualRotation1)#Estimation
 
         # print("test2")
