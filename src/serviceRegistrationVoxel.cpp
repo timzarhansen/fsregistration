@@ -300,7 +300,7 @@ private:
                 req->r_max,
                 req->level_potential_rotation,
                 req->level_potential_translation,
-                req->set_r_manual);
+                req->set_r_manual,req->set_normalization);
 
         free(voxelData1);
         free(voxelData2);

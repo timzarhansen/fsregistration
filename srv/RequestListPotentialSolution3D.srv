@@ -8,6 +8,7 @@ float64 level_potential_rotation 0.01 # Value to reduce(higher number) or increa
 float64 level_potential_translation 0.1 # Value to reduce(higher number) or increace(lower number) the size of potential translations V = [0,1]
 bool set_r_manual
 bool use_clahe
+int32 set_normalization # currently 0 or 1
 bool debug
 bool timing_computation_duration
 ---
