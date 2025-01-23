@@ -10,8 +10,6 @@ from fsregistration.srv import RequestListPotentialSolution3D
 import transforms3d.quaternions as quat
 
 
-
-
 # from src.fsregistration.pythonScripts.matchingProfiling.predator.common.misc import print_info
 
 
@@ -25,7 +23,7 @@ class MinimalClientAsync(Node):
         self.req = RequestListPotentialSolution3D.Request()
 
     def send_request(self, scan1, scan2, N, VoxelSize, use_clahe, r_min, r_max, set_r_manual, level_potential_rotation,
-                     level_potential_translation,normalization_factor):
+                     level_potential_translation, normalization_factor):
         self.req.size_of_voxel = VoxelSize
         # self.req.potential_for_necessary_peak = 0.1
         self.req.debug = False
@@ -46,7 +44,6 @@ class MinimalClientAsync(Node):
         return self.future.result()
 
 
-
 def getVoxelIndex(x, y, z, voxelSize, N):
     voxelX = int(x / voxelSize)
     voxelY = int(y / voxelSize)
@@ -54,7 +51,8 @@ def getVoxelIndex(x, y, z, voxelSize, N):
 
     return int(voxelZ + N / 2 + (voxelY + N / 2) * N + (voxelX + N / 2) * N * N)
 
-def getdiffVoxelIndex(x, y, z, voxelSizeX,voxelSizeY,voxelSizeZ, N):
+
+def getdiffVoxelIndex(x, y, z, voxelSizeX, voxelSizeY, voxelSizeZ, N):
     voxelX = int(x / voxelSizeX)
     voxelY = int(y / voxelSizeY)
     voxelZ = int(z / voxelSizeZ)
@@ -108,15 +106,18 @@ def pointToVoxel(pointcloud, N, voxelSize, shift):
     # getVoxelIndex(x, y, z, voxelSize, N);
     return voxelGrid
 
-def pointToVoxelXYZDifference(pointcloud, N, voxelSizeX,voxelSizeY,voxelSizeZ, shift):
+
+def pointToVoxelXYZDifference(pointcloud, N, voxelSizeX, voxelSizeY, voxelSizeZ, shift):
     voxelGrid = np.zeros(N * N * N)
     for point in pointcloud.points:
         pointShifted = point - shift
-        index = getdiffVoxelIndex(pointShifted[0], pointShifted[1], pointShifted[2], voxelSizeX,voxelSizeY,voxelSizeZ, N);
+        index = getdiffVoxelIndex(pointShifted[0], pointShifted[1], pointShifted[2], voxelSizeX, voxelSizeY, voxelSizeZ,
+                                  N);
         if index >= 0 and index < len(voxelGrid):
             voxelGrid[index] = 1
 
     return voxelGrid
+
 
 def draw_registration_result(source, target, transformation):
     source_temp = copy.deepcopy(source)
@@ -146,6 +147,7 @@ def draw_registration_result_no_color_change(source, target, transformation):
     source_temp += target_temp
     o3d.io.write_point_cloud("matchingProfiling/resultingTransformation.ply", source_temp, format='auto')
 
+
 def csv_to_pointcloud(file_path):
     # Read the CSV file into a DataFrame
     df = pd.read_csv(file_path, names=['x', 'y', 'z', 'r', 'g', 'b'])
@@ -160,6 +162,7 @@ def csv_to_pointcloud(file_path):
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
     return pcd
+
 
 def euler_to_rotation_matrix(roll, pitch, yaw):
     # Convert angles to radians
@@ -185,8 +188,8 @@ def euler_to_rotation_matrix(roll, pitch, yaw):
 
     return R
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
 
     rclpy.init()
 
@@ -203,12 +206,14 @@ if __name__ == "__main__":
     # pcd2 = o3d.io.read_point_cloud(ply_point_cloud.path)
     for i in range(20):
 
-        pcd1 = o3d.io.read_point_cloud(f"/home/tim-external/dataFolder/pointclouds/PointcloudAlpha_{whichScan1:05d}.ply")
-        pcd2 = o3d.io.read_point_cloud(f"/home/tim-external/dataFolder/pointclouds/PointcloudAlpha_{whichScan2:05d}.ply")
+        pcd1 = o3d.io.read_point_cloud(
+            f"/home/tim-external/dataFolder/pointclouds/PointcloudAlpha_{whichScan1:05d}.ply")
+        pcd2 = o3d.io.read_point_cloud(
+            f"/home/tim-external/dataFolder/pointclouds/PointcloudAlpha_{whichScan2:05d}.ply")
 
         T = np.eye(4)
         T[:3, 3] = [1.1, 0, 0]
-        T[0:3,0:3] = euler_to_rotation_matrix(0,0,i*0.2)
+        T[0:3, 0:3] = euler_to_rotation_matrix(0, 0, i * 0.2)
         # T[:3, 3] = [voxelSize * 2 * 1.1, voxelSize * 1, voxelSize * 4]
         # T[:3, 3] = np.squeeze(np.asarray(inputs["trans"]))
         pcd2.transform(T)
@@ -216,7 +221,6 @@ if __name__ == "__main__":
         print(T)
         # print("rotation Quat GT: ")
         # print(quat.mat2quat(T[0:3, 0:3]))
-
 
         # print(mesh)
         # mesh.compute_vertex_normals()
@@ -238,7 +242,7 @@ if __name__ == "__main__":
 
         # print("voxelSizeXY: ",voxelSizeXY)
 
-        mean1 = np.asarray([0,0,0])
+        mean1 = np.asarray([0, 0, 0])
         # o3d.geometry.PointCloud.compute_point_cloud_distance
         # mean1 = mean1
         # print(mean1)
@@ -249,8 +253,6 @@ if __name__ == "__main__":
         mean1Transform[:3, 3] = np.squeeze(np.asarray(-mean1))
         mean2Transform[:3, 3] = np.squeeze(np.asarray(-mean2))
 
-
-
         # print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
         # pcd1Vox = pcd1.voxel_down_sample(voxel_size=voxelSize)
         # pcd2Vox = pcd2.voxel_down_sample(voxel_size=voxelSize)
@@ -259,10 +261,8 @@ if __name__ == "__main__":
         # voxelArray2 = pointToVoxelWithColor(pcd2, N, voxelSize, mean2).astype(np.float64)
         # voxelArray1 = pointToVoxel(pcd1, N, voxelSize, mean1 + [0 ,0, 0]).astype(np.float64)
         # voxelArray2 = pointToVoxel(pcd2, N, voxelSize, mean2).astype(np.float64)
-        voxelArray1 = pointToVoxelXYZDifference(pcd1, N, voxelSizeXY,voxelSizeXY,voxelSizeZ, mean1).astype(np.float64)
-        voxelArray2 = pointToVoxelXYZDifference(pcd2, N, voxelSizeXY,voxelSizeXY,voxelSizeZ, mean2).astype(np.float64)
-
-
+        voxelArray1 = pointToVoxelXYZDifference(pcd1, N, voxelSizeXY, voxelSizeXY, voxelSizeZ, mean1).astype(np.float64)
+        voxelArray2 = pointToVoxelXYZDifference(pcd2, N, voxelSizeXY, voxelSizeXY, voxelSizeZ, mean2).astype(np.float64)
 
         # N = 64  # 32 64 128
         use_clahe = True  # True False
@@ -274,10 +274,10 @@ if __name__ == "__main__":
         normalization_factor = 1  # 0,1
         # ROS2 Node
 
-
         response = RequestListPotentialSolution3D.Response()
         response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize, use_clahe, r_min, r_max,
-                                               set_r_manual, level_potential_rotation, level_potential_translation,normalization_factor)
+                                               set_r_manual, level_potential_rotation, level_potential_translation,
+                                               normalization_factor)
         heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
         # find highest peak
         # save percentage overlap, angle difference, translation difference,
@@ -301,7 +301,7 @@ if __name__ == "__main__":
         np.set_printoptions(suppress=True)
         # print("peak: ", peak.transformation_peak_height / heightFirstPotentialSolution)
         # print("x,y,z: ", peak.resulting_transformation.position)
-        print("transformationBefore: ")
+        # print("transformationBefore: ")
 
         resultingTransformation = np.eye(4)
         resultingTransformation[:3, :3] = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
@@ -309,14 +309,27 @@ if __name__ == "__main__":
             [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
              peak.resulting_transformation.position.z]))
 
-        print(resultingTransformation)
-        resultingTransformation[:3, 3] = np.matmul(resultingTransformation[:3, :3],resultingTransformation[:3, 3])
+        # print(resultingTransformation)
+        resultingTransformation[:3, 3] = np.matmul(resultingTransformation[:3, :3], resultingTransformation[:3, 3])
         print("transformationAfter: ")
         print(resultingTransformation)
         # print(currentQuaternion)
-        estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform),
-                                             np.matmul(resultingTransformation, mean1Transform))
+        # estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform),
+        #                                      np.matmul(resultingTransformation, mean1Transform))
 
+        print("ICP transformation: ")
+
+        # pcd1.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxelSize * 2, max_nn=30))
+        # pcd2.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxelSize * 2, max_nn=30))
+        # pcd1.estimate_covariances(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxelSize * 2, max_nn=30))
+        # pcd2.estimate_covariances(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=voxelSize * 2, max_nn=30))
+        reg_p2p = o3d.pipelines.registration.registration_icp(
+            pcd1, pcd2, voxelSize*2*3, resultingTransformation,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint())
+        # reg_p2p = o3d.pipelines.registration.registration_generalized_icp(pcd1, pcd2, voxelSize * 2 * 3,
+        #                                                                   resultingTransformation,
+        #                                                                   o3d.pipelines.registration.TransformationEstimationForGeneralizedICP())
+        print(reg_p2p.transformation)
         # print(T)
         # print(estimatedActualRotation1)
 
@@ -324,4 +337,4 @@ if __name__ == "__main__":
         # draw_registration_result(pcd1, pcd2, T)  # GT
         # draw_registration_result(pcd1, pcd2, estimatedActualRotation1)  # Estimation
 
-        print("test2")
+        print("next")
