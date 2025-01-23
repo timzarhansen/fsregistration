@@ -12,6 +12,8 @@ import transforms3d.quaternions as quat
 
 # from src.fsregistration.pythonScripts.matchingProfiling.predator.common.misc import print_info
 
+# thsi is a comment for tesdting
+
 
 class MinimalClientAsync(Node):
 
