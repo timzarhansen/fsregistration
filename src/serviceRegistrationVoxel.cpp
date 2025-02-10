@@ -290,7 +290,7 @@ private:
         // req->level_potential_rotation
         // req->level_potential_translation
         // req->set_r_manual
-
+        std::cout << "starting List Potential Solution callback" << std::endl;
         std::vector<transformationPeakfs3D> listPotentialSolutions = softRegistrationObjectList[
                 positionOfCorrectRegistration]->
             sofftRegistrationVoxel3DListOfPossibleTransformations(
@@ -301,7 +301,7 @@ private:
                 req->level_potential_rotation,
                 req->level_potential_translation,
                 req->set_r_manual,req->set_normalization);
-
+        std::cout << "ending List Potential Solution callback" << std::endl;
         free(voxelData1);
         free(voxelData2);
         //calculate the registration
@@ -395,7 +395,7 @@ private:
             }
         }
 
-
+        std::cout << "sending back solutions" << std::endl;
         return true;
     }
 };
