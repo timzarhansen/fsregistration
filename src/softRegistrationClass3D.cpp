@@ -122,6 +122,579 @@ softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(const double voxe
     //    free(voxelDataTMP);
     return maximumMagnitude;
 }
+transformationPeakfs3D
+softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1Input[], double voxelData2Input[], tf2::Quaternion initGuessOrientation,
+    tf2::Vector3 initGuessPosition,
+                                                      bool debug, bool useClahe,
+                                                      bool timeStuff , double sizeVoxel ,
+                                                      double r_min ,
+                                                      double r_max,
+                                                      double level_potential_rotation,
+                                                      double level_potential_translation,
+                                                      bool set_r_manual, int normalization) {
+std::chrono::steady_clock::time_point begin;
+    std::chrono::steady_clock::time_point end;
+    std::chrono::duration<double, std::milli> diff{};
+
+    if (timeStuff) {
+        begin = std::chrono::steady_clock::now();
+    }
+
+
+    double maximumScan1Magnitude = this->getSpectrumFromVoxelData3D(voxelData1Input, this->magnitude1,
+                                                                    this->phase1, false);
+    double maximumScan2Magnitude = this->getSpectrumFromVoxelData3D(voxelData2Input, this->magnitude2,
+                                                                    this->phase2, false);
+
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "computation 3D Spectrum: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+
+
+    if (debug) {
+        std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
+        myFile1.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW1.csv");
+        myFile2.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW1.csv");
+        myFile3.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW1.csv");
+        myFile4.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2.csv");
+        myFile5.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2.csv");
+        myFile6.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2.csv");
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                for (int k = 0; k < N; k++) {
+                    int index = generalHelpfulTools::index3D(i, j, k, N);
+                    myFile1 << this->magnitude1[index];
+                    myFile1 << "\n";
+                    myFile2 << this->phase1[index];
+                    myFile2 << "\n";
+                    myFile3 << voxelData1Input[index];
+                    myFile3 << "\n";
+                    myFile4 << this->magnitude2[index];
+                    myFile4 << "\n";
+                    myFile5 << this->phase2[index];
+                    myFile5 << "\n";
+                    myFile6 << voxelData2Input[index];
+                    myFile6 << "\n";
+                }
+            }
+        }
+
+        myFile1.close();
+        myFile2.close();
+        myFile3.close();
+        myFile4.close();
+        myFile5.close();
+        myFile6.close();
+    }
+
+    // get global maximum for normalization
+    double globalMaximumMagnitude;
+    if (maximumScan2Magnitude < maximumScan1Magnitude) {
+        globalMaximumMagnitude = maximumScan1Magnitude;
+    } else {
+        globalMaximumMagnitude = maximumScan2Magnitude;
+    }
+
+    //normalize and shift both spectrums
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                int index = generalHelpfulTools::index3D(i, j, k, N);
+
+                int indexX = (N / 2 + i) % N;
+                int indexY = (N / 2 + j) % N;
+                int indexZ = (N / 2 + k) % N;
+
+                int indexshift = generalHelpfulTools::index3D(indexX, indexY, indexZ, N);
+                magnitude1Shifted[indexshift] =
+                        magnitude1[index] / globalMaximumMagnitude;
+                magnitude2Shifted[indexshift] =
+                        magnitude2[index] / globalMaximumMagnitude;
+            }
+        }
+    }
+
+
+    for (int i = 0; i < N * N; i++) {
+        resampledMagnitudeSO3_1[i] = 0;
+        resampledMagnitudeSO3_2[i] = 0;
+        resampledMagnitudeSO3_1TMP[i] = 0;
+        resampledMagnitudeSO3_2TMP[i] = 0;
+    }
+
+    int bandwidth = N / 2;
+    if (!set_r_manual) {
+        r_min = N / 8.0;
+        r_max = N / 2.0 - N / 8.0;
+    }
+    // config -> r_min r_max
+    for (int r = int(r_min); r < r_max; r++) {
+        // was N/16
+
+        for (int i = 0; i < N * N; i++) {
+            resampledMagnitudeSO3_1TMP[i] = 0;
+            resampledMagnitudeSO3_2TMP[i] = 0;
+        }
+        double minValue = INFINITY;
+        double maxValue = 0;
+        for (int i = 0; i < 2 * bandwidth; i++) {
+            for (int j = 0; j < 2 * bandwidth; j++) {
+                double theta = thetaIncrement3D((double) i, bandwidth);
+                double phi = phiIncrement3D((double) j, bandwidth);
+                double radius = r;
+
+                int xIndex = int(std::round(radius * std::sin(theta) * std::cos(phi) + N / 2.0 + 0.1));
+                int yIndex = int(std::round(radius * std::sin(theta) * std::sin(phi) + N / 2.0 + 0.1));
+                int zIndex = int(std::round(radius * std::cos(theta) + N / 2.0 + 0.1));
+
+
+                resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)] =
+                        magnitude1Shifted[generalHelpfulTools::index3D(xIndex, yIndex, zIndex, bandwidth * 2)];
+                resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)] =
+                        magnitude2Shifted[generalHelpfulTools::index3D(xIndex, yIndex, zIndex, bandwidth * 2)];
+                if (minValue > resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) {
+                    minValue = resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)];
+                }
+                if (maxValue < resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) {
+                    maxValue = resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)];
+                }
+                if (minValue > resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) {
+                    minValue = resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)];
+                }
+                if (maxValue < resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) {
+                    maxValue = resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)];
+                }
+            }
+        }
+        // make signal between 0 and 255 for Clahe
+        for (int i = 0; i < 2 * bandwidth; i++) {
+            for (int j = 0; j < 2 * bandwidth; j++) {
+                this->resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, 2 * bandwidth)] =
+                        255.0 * ((this->resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, 2 * bandwidth)] -
+                                  minValue) /
+                                 (maxValue - minValue));
+                this->resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, 2 * bandwidth)] =
+                        255.0 * ((this->resampledMagnitudeSO3_2TMP[generalHelpfulTools::index2D(i, j, 2 * bandwidth)] -
+                                  minValue) /
+                                 (maxValue - minValue));
+            }
+        }
+
+        cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
+        cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
+        magTMP1.convertTo(magTMP1, CV_8UC1);
+        magTMP2.convertTo(magTMP2, CV_8UC1);
+
+        //        cv::imshow("b1", magTMP1);
+        //        cv::imshow("b2", magTMP2);
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+        //        clahe->setClipLimit(1);
+        if (useClahe) {
+            clahe->apply(magTMP1, magTMP1);
+            clahe->apply(magTMP2, magTMP2);
+        }
+        //        cv::imshow("a1", magTMP1);
+        //        cv::imshow("a2", magTMP2);
+        //        int k = cv::waitKey(0); // Wait for a keystroke in the window
+        //transform signal back to 0-1
+        for (int i = 0; i < 2 * bandwidth; i++) {
+            for (int j = 0; j < 2 * bandwidth; j++) {
+                resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
+                        ((double) magTMP1.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        255.0;
+                resampledMagnitudeSO3_2[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
+                        ((double) magTMP2.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        255.0;
+            }
+        }
+    }
+    if (debug) {
+        std::ofstream myFile1, myFile2;
+        myFile1.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_1.csv");
+        myFile2.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_2.csv");
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                myFile1 << this->resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j,
+                    bandwidth * 2)]; // real part
+                myFile1 << "\n";
+                myFile2 << this->resampledMagnitudeSO3_2[generalHelpfulTools::index2D(i, j,
+                    bandwidth * 2)]; // imaginary part
+                myFile2 << "\n";
+            }
+        }
+        myFile1.close();
+        myFile2.close();
+    }
+
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "computation from 3D Spectrum to SOFT descriptor: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+
+
+    this->sofftCorrelationObject3D.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
+                                                                resultingCorrelationComplex);
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "rotationCorrelation: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+
+    if (debug) {
+        std::ofstream myFile1, myFile2;
+        myFile1.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationReal.csv");
+        myFile2.open(
+            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationComplex.csv");
+        for (int i = 0; i < bwOut * 2; i++) {
+            for (int j = 0; j < bwOut * 2; j++) {
+                for (int k = 0; k < bwOut * 2; k++) {
+                    int index = generalHelpfulTools::index3D(i, j, k, bwOut * 2);
+                    myFile1 << this->resultingCorrelationComplex[index][0]; // real part
+                    myFile1 << "\n";
+                    myFile2 << this->resultingCorrelationComplex[index][1]; // imaginary part
+                    myFile2 << "\n";
+                }
+            }
+        }
+        myFile1.close();
+        myFile2.close();
+    }
+
+    double minimumCorrelation = INFINITY;
+    double maximumCorrelation = 0;
+    for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
+        if (minimumCorrelation > NORM(resultingCorrelationComplex[i])) {
+            minimumCorrelation = NORM(resultingCorrelationComplex[i]);
+        }
+        if (maximumCorrelation < NORM(resultingCorrelationComplex[i])) {
+            maximumCorrelation = NORM(resultingCorrelationComplex[i]);
+        }
+    }
+
+
+    double correlationCurrent;
+    std::vector<My4DPoint> listOfQuaternionCorrelation;
+    for (int i = 0; i < bwOut * 2; i++) {
+        for (int j = 0; j < bwOut * 2; j++) {
+            for (int k = 0; k < bwOut * 2; k++) {
+                correlationCurrent =
+                        (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
+                         minimumCorrelation) /
+                        (maximumCorrelation - minimumCorrelation);
+                Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+                Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
+                Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+
+                Eigen::Matrix3d tmpMatrix3d =
+                        rotation_vectorz1.toRotationMatrix().inverse() *
+                        rotation_vectory.toRotationMatrix().inverse() *
+                        rotation_vectorz2.toRotationMatrix().inverse();
+                Eigen::Quaterniond quaternionResult(tmpMatrix3d);
+                quaternionResult.normalize();
+
+                if (quaternionResult.w() < 0) {
+                    Eigen::Quaterniond tmpQuad = quaternionResult;
+                    quaternionResult.w() = -tmpQuad.w();
+                    quaternionResult.x() = -tmpQuad.x();
+                    quaternionResult.y() = -tmpQuad.y();
+                    quaternionResult.z() = -tmpQuad.z();
+                }
+                My4DPoint currentPoint;
+                currentPoint.correlation = correlationCurrent;
+                currentPoint[0] = quaternionResult.w();
+                currentPoint[1] = quaternionResult.x();
+                currentPoint[2] = quaternionResult.y();
+                currentPoint[3] = quaternionResult.z();
+
+                listOfQuaternionCorrelation.push_back(currentPoint);
+            }
+        }
+    }
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "overhead until peak detection: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+    // config -> settings for peak detection
+    std::vector<rotationPeak4D> potentialRotationsTMP = this->peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
+        listOfQuaternionCorrelation, level_potential_rotation);
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "peak detection: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+
+
+    //TODO find fitting Rotation compared to initial guess
+    int index= 0;
+    double bestFit = INFINITY;
+    for (int i = 0; i < potentialRotationsTMP.size(); i++) {
+        Eigen::Quaterniond rotationQuat(potentialRotationsTMP[i].w, potentialRotationsTMP[i].x,
+                                        potentialRotationsTMP[i].y, potentialRotationsTMP[i].z);
+        Eigen::Vector3d rpyCurrentRot = generalHelpfulTools::getRollPitchYaw(rotationQuat);
+
+        Eigen::Quaterniond initRotationQuat(initGuessOrientation.w(), initGuessOrientation.x(),initGuessOrientation.y(), initGuessOrientation.z());
+        // rotTMP.slerp(t, Eigen::Quaterniond(1,0,0,0));
+        double distance = abs(generalHelpfulTools::angleDifferenceQuaternion(rotationQuat,initRotationQuat));
+        if (bestFit>distance) {
+            bestFit = distance;
+            index = i;
+        }
+    }
+
+
+    if (timeStuff) {
+        end = std::chrono::steady_clock::now();
+        diff = end - begin;
+        std::cout << "plotting Solutions: " << diff.count() << std::endl;
+        begin = std::chrono::steady_clock::now();
+    }
+
+    std::vector<transformationPeakfs3D> allSolutions;
+    for (int p = 0; p < potentialRotationsTMP.size(); p++) {
+        //    for (int p = 0; p < 1; p++) {
+
+        double *voxelData2Rotated;
+        voxelData2Rotated = (double *) malloc(sizeof(double) * this->N * this->N * this->N);
+        for (int i = 0; i < this->N * this->N * this->N; i++) {
+            voxelData2Rotated[i] = 0;
+        }
+        Eigen::Quaterniond currentRotation(potentialRotationsTMP[p].w, potentialRotationsTMP[p].x,
+                                           potentialRotationsTMP[p].y, potentialRotationsTMP[p].z);
+        //        Eigen::Quaterniond currentRotation(0.99999, 0.022,
+        //                                           0, 0);
+        //        currentRotation.normalize();
+
+        std::cout << currentRotation << std::endl;
+
+        for (int i = 0; i < this->N; i++) {
+            for (int j = 0; j < this->N; j++) {
+                for (int k = 0; k < this->N; k++) {
+                    int index = generalHelpfulTools::index3D(i, j, k, this->N);
+                    //                    if(index<0){
+                    //                        std::cout << "huhu2" << std::endl;
+                    //                    }
+                    int xCoordinate = i - this->N / 2;
+                    int yCoordinate = j - this->N / 2;
+                    int zCoordinate = k - this->N / 2;
+
+
+                    Eigen::Vector3d newCoordinate(xCoordinate, yCoordinate, zCoordinate);
+                    //                    std::cout << newCoordinate << std::endl;
+                    Eigen::Vector3d lookUpVector = currentRotation * newCoordinate;
+                    //                    std::cout << lookUpVector << std::endl;
+                    //                    if(index> this->N*this->N*this->N/2){
+                    //                        std::cout << "lookUpVector" << std::endl;
+                    //                    }
+                    double occupancyValue = getPixelValueInterpolated(lookUpVector, voxelData2Input, this->N);
+                    voxelData2Rotated[index] = occupancyValue;
+                }
+            }
+        }
+
+        this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
+                                                    this->magnitude1Correlation,
+                                                    this->phase1Correlation,
+                                                    false);
+        this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
+                                                    this->magnitude2Correlation,
+                                                    this->phase2Correlation,
+                                                    false);
+
+        if (debug) {
+            std::ofstream myFile1, myFile2, myFile3;
+            myFile1.open(
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2Rotated" +
+                std::to_string(p) + ".csv");
+            myFile2.open(
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2Rotated" +
+                std::to_string(p) + ".csv");
+
+            for (int i = 0; i < this->correlationN; i++) {
+                for (int j = 0; j < this->correlationN; j++) {
+                    for (int k = 0; k < this->correlationN; k++) {
+                        int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
+                        myFile1 << this->magnitude2Correlation[index];
+                        myFile1 << "\n";
+                        myFile2 << this->phase2Correlation[index];
+                        myFile2 << "\n";
+                    }
+                }
+            }
+            myFile1.close();
+            myFile2.close();
+
+            myFile3.open(
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2Rotated" +
+                std::to_string(p) + ".csv");
+            for (int i = 0; i < this->N; i++) {
+                for (int j = 0; j < this->N; j++) {
+                    for (int k = 0; k < this->N; k++) {
+                        int index = generalHelpfulTools::index3D(i, j, k, this->N);
+                        myFile3 << voxelData2Rotated[index];
+                        myFile3 << "\n";
+                    }
+                }
+            }
+            myFile3.close();
+        }
+
+        //calculate correlation of spectrums
+        for (int i = 0; i < this->correlationN; i++) {
+            for (int j = 0; j < this->correlationN; j++) {
+                for (int k = 0; k < this->correlationN; k++) {
+                    int indexX = i;
+                    int indexY = j;
+                    int indexZ = k;
+                    int index = generalHelpfulTools::index3D(indexX, indexY, indexZ, this->correlationN);
+
+                    //                    if(index<0){
+                    //                        std::cout << "thats a problem" << std::endl;
+                    //                    }
+                    //calculate the spectrum back
+                    std::complex<double> tmpComplex1 =
+                            magnitude1Correlation[index] *
+                            std::exp(std::complex<double>(0, phase1Correlation[index]));
+                    std::complex<double> tmpComplex2 =
+                            magnitude2Correlation[index] *
+                            std::exp(std::complex<double>(0, phase2Correlation[index]));
+                    std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2)); // cross correlation
+                    resultingPhaseDiff3DCorrelation[index][0] = resultComplex.real();
+                    resultingPhaseDiff3DCorrelation[index][1] = resultComplex.imag();
+                }
+            }
+        }
+        // back fft
+        fftw_execute(planFourierToVoxel3DCorrelation);
+        // fftshift and calc magnitude
+        double maximumCorrelationTranslation = 0;
+        double minimumCorrelationTranslation = INFINITY;
+
+        for (int i = 0; i < this->correlationN; i++) {
+            for (int j = 0; j < this->correlationN; j++) {
+                for (int k = 0; k < this->correlationN; k++) {
+                    int indexX = ((this->correlationN / 2) + i + this->correlationN) % this->correlationN;
+                    // changed j and i here
+                    int indexY = ((this->correlationN / 2) + j + this->correlationN) % this->correlationN;
+                    int indexZ = ((this->correlationN / 2) + k + this->correlationN) % this->correlationN;
+                    int indexShifted = generalHelpfulTools::index3D(indexX, indexY, indexZ, this->correlationN);
+                    int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
+                    //maybe without sqrt, but for now thats fine
+                    //                    double normalizationFactorForCorrelation =
+                    //                            1 / this->normalizationFactorCalculation(indexX, indexY, indexZ,this->correlationN);
+                    //                    normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                    double normalizationFactorForCorrelation;
+                    switch (normalization) {
+                        case 0:
+                            // code block
+                            normalizationFactorForCorrelation = 1;
+                            break;
+                        case 1:
+                            normalizationFactorForCorrelation =
+                                    1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
+                        // normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                            break;
+                        default:
+                            std::cout << "normalization has to be 0,1 but was: " << normalization << std::endl;
+                            exit(-1);
+                    }
+
+
+                    resultingCorrelationDouble[indexShifted] =
+                            normalizationFactorForCorrelation *
+                            NORM(resultingShiftPeaks3DCorrelation[index]); // magnitude;
+
+                    if (maximumCorrelationTranslation < resultingCorrelationDouble[indexShifted]) {
+                        maximumCorrelationTranslation = resultingCorrelationDouble[indexShifted];
+                    }
+                    if (minimumCorrelationTranslation > resultingCorrelationDouble[indexShifted]) {
+                        minimumCorrelationTranslation = resultingCorrelationDouble[indexShifted];
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < this->correlationN * this->correlationN * this->correlationN; i++) {
+            resultingCorrelationDouble[i] = (resultingCorrelationDouble[i] - minimumCorrelationTranslation) /
+                                            (maximumCorrelationTranslation - minimumCorrelationTranslation);
+        }
+
+        if (debug) {
+            std::ofstream myFile10;
+            myFile10.open(
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationShift" +
+                std::to_string(p) + ".csv");
+            for (int i = 0; i < this->correlationN; i++) {
+                for (int j = 0; j < this->correlationN; j++) {
+                    for (int k = 0; k < this->correlationN; k++) {
+                        myFile10 << resultingCorrelationDouble[
+                            generalHelpfulTools::index3D(i, j, k, this->correlationN)];
+                        myFile10 << "\n";
+                    }
+                }
+            }
+            myFile10.close();
+        }
+        // config -> settings for peak detection
+        std::vector<translationPeak3D> resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
+            resultingCorrelationDouble, this->correlationN, sizeVoxel, level_potential_translation);
+        transformationPeakfs3D tmpSolution;
+        tmpSolution.potentialRotation = potentialRotationsTMP[p];
+        for (int i = 0; i < resulting3DPeakList.size(); i++) {
+            // sub Pixel Computation Here:
+
+
+
+            resulting3DPeakList[i].correlationHeight = resulting3DPeakList[i].correlationHeight *
+                                                       (maximumCorrelationTranslation - minimumCorrelationTranslation) +
+                                                       minimumCorrelationTranslation;
+
+            std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
+                    << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
+                    << " , " << resulting3DPeakList[i].xTranslation << " , "
+                    << resulting3DPeakList[i].yTranslation
+                    << " , " << resulting3DPeakList[i].zTranslation << std::endl;
+
+            tmpSolution.potentialTranslations.push_back(resulting3DPeakList[i]);
+        }
+
+
+        free(voxelData2Rotated);
+
+
+        allSolutions.push_back(tmpSolution);
+
+        if (timeStuff) {
+            end = std::chrono::steady_clock::now();
+            diff = end - begin;
+            std::cout << "computing one Solution " << p << " :" << diff.count() << std::endl;
+            begin = std::chrono::steady_clock::now();
+        }
+    }
+
+
+    transformationPeakfs3D returnTransformation;
+
+    return returnTransformation;
+}
+
 
 std::vector<transformationPeakfs3D>
 softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[],

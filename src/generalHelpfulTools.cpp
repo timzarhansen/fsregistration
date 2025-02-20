@@ -210,3 +210,8 @@ int generalHelpfulTools::index2D(int x, int y,int NInput){
     }
     return  y + x * NInput;
 }
+
+double generalHelpfulTools::angleDifferenceQuaternion(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2) {
+    double dotProduct = q1.coeffs().dot(q2.coeffs());
+    return 2 * std::acos(std::abs(dotProduct));
+}

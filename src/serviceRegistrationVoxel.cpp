@@ -52,12 +52,12 @@ public:
         // for now 256 could be 32/64/128/256/512 More gets complicated to compute
         this->potentialVoxelSizes = std::vector<int>{16, 32, 64, 128, 256};
         //        this->dimensionOfImages = sizeImage;
-        //        this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution3D>(
-        //                "fsregistration/registration/one_solution",
-        //                std::bind(&ROSClassRegistrationNode::sendSingleSolutionCallback,
-        //                          this,
-        //                          std::placeholders::_1,
-        //                          std::placeholders::_2));
+        this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution3D>(
+                "fsregistration/registration/one_solution",
+                std::bind(&ROSClassRegistrationNode::sendSingleSolutionCallback,
+                          this,
+                          std::placeholders::_1,
+                          std::placeholders::_2));
 
         service_cbg = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
         this->servicelistPotentialSolutions = this->create_service<fsregistration::srv::RequestListPotentialSolution3D>(
@@ -69,7 +69,7 @@ public:
     }
 
 private:
-    //    rclcpp::Service<fsregistration::srv::RequestOnePotentialSolution3D>::SharedPtr serviceOnePotentialSolution;
+    rclcpp::Service<fsregistration::srv::RequestOnePotentialSolution3D>::SharedPtr serviceOnePotentialSolution;
     rclcpp::Service<fsregistration::srv::RequestListPotentialSolution3D>::SharedPtr servicelistPotentialSolutions;
     std::vector<int> potentialVoxelSizes;
     std::mutex registrationMutex16, registrationMutex32, registrationMutex64, registrationMutex128,
@@ -123,107 +123,161 @@ private:
         return positionOfCorrect;
     }
 
-    //    bool
-    //    sendSingleSolutionCallback(const std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution3D::Request> req,
-    //                               std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution3D::Response> res) {
-    //
-    //        int sizeOfTheVoxel = req->size_voxel;
-    //
-    //        int positionOfCorrectRegistration = this->getIndexOfRegistration(sizeOfTheVoxel);
-    //        if (positionOfCorrectRegistration < 0) {
-    //            return false;
-    //        }
-    //
-    //
-    //        std::cout << "getting registration for image: " << std::endl;
-    //
-    //        tf2::Quaternion orientation;
-    //        tf2::Vector3 position;
-    //        tf2::convert(req->initial_guess.orientation, orientation);
-    //        tf2::convert(req->initial_guess.position, position);
-    //
-    //
-    //        Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(position, orientation);
-    //        double *voxelData1;
-    //        double *voxelData2;
-    //        voxelData1 = (double *) malloc(sizeof(double) * sizeOfTheVoxel * sizeOfTheVoxel);
-    //        voxelData2 = (double *) malloc(sizeof(double) * sizeOfTheVoxel * sizeOfTheVoxel);
-    //
-    //        for (int i = 0; i < sizeOfTheVoxel * sizeOfTheVoxel; i++) {
-    //            voxelData1[i] = req->sonar_scan_1[i];
-    //            voxelData2[i] = req->sonar_scan_2[i];
-    //        }
-    //
-    ////        cv::Mat magTMP1(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData1);
-    ////        cv::Mat magTMP2(this->dimensionOfImages, this->dimensionOfImages, CV_64F, voxelData2);
-    ////        cv::imshow("sonar1", magTMP1);
-    ////        cv::imshow("sonar2", magTMP2);
-    ////        int k = cv::waitKey(0); // Wait for a keystroke in the window
-    //
-    //
-    //
-    ////        convertMatToDoubleArray(sonarImage1, voxelData1);
-    ////        convertMatToDoubleArray(sonarImage2, voxelData2);
-    //        // computation time measurement
-    //        Eigen::Matrix3d covarianceMatrixResult;
-    //        this->registrationMutex.lock();
-    //        std::chrono::steady_clock::time_point begin;
-    //
-    //        begin = std::chrono::steady_clock::now();
-    //
-    //
-    //
-    //
-    //        //calculate the registration
-    //        Eigen::Matrix4d resultingRegistrationTransformation = softRegistrationObjectList[positionOfCorrectRegistration]->registrationOfTwoVoxelsSOFFTFast(
-    //                voxelData1,
-    //                voxelData2,
-    //                initialGuess,
-    //                covarianceMatrixResult,
-    //                true, true,
-    //                req->size_of_voxel,
-    //                false,
-    //                DEBUG_MODE, req->potential_for_necessary_peak);
-    //        std::chrono::steady_clock::time_point end;
-    //        end = std::chrono::steady_clock::now();
-    //
-    //        double timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
-    //        this->registrationMutex.unlock();
-    //        free(voxelData1);
-    //        free(voxelData2);
-    //
-    //        generalHelpfulTools::getTF2FromTransformationMatrix(position, orientation, resultingRegistrationTransformation);
-    //        //set result in res
-    //        geometry_msgs::msg::Pose resultingPose;
-    //
-    ////        tf2::convert(orientation, resultingPose.orientation);
-    //        resultingPose.position.x = position.x();
-    //        resultingPose.position.y = position.y();
-    //        resultingPose.position.z = position.z();
-    //
-    //        resultingPose.orientation.x = orientation.x();
-    //        resultingPose.orientation.y = orientation.y();
-    //        resultingPose.orientation.z = orientation.z();
-    //        resultingPose.orientation.w = orientation.w();
-    //        Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2, 2>(0, 0);
-    //        //tf2::convert(position, resultingPose.position);
-    ////        res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
-    //        res->potential_solution.rotation_covariance[0] = 0.1;//currently missing
-    //        res->potential_solution.rotation_covariance[1] = 0.1;//currently missing
-    //        res->potential_solution.rotation_covariance[2] = 0.1;//currently missing
-    //        res->potential_solution.resulting_transformation = resultingPose;
-    //        res->potential_solution.translation_covariance[0] = covarianceTranslation(0);
-    //        res->potential_solution.translation_covariance[1] = covarianceTranslation(1);
-    //        res->potential_solution.translation_covariance[2] = covarianceTranslation(2);
-    //        res->potential_solution.translation_covariance[3] = covarianceTranslation(3);
-    //        res->potential_solution.time_to_calculate = timeToCalculate;
-    //        //printing the results
-    //        std::cout << initialGuess << std::endl;
-    //        std::cout << resultingRegistrationTransformation << std::endl;
-    //        std::cout << "done registration for image:" << std::endl;
-    //
-    //        return true;
-    //    }
+        bool
+        sendSingleSolutionCallback(const std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution3D::Request> req,
+                                   std::shared_ptr<fsregistration::srv::RequestOnePotentialSolution3D::Response> res) {
+
+            int dimensionSize = req->dimension_size;
+
+            int positionOfCorrectRegistration = this->getIndexOfRegistration(dimensionSize);
+            if (positionOfCorrectRegistration < 0) {
+                return false;
+            }
+
+
+            std::cout << "getting registration for image: " << std::endl;
+
+            tf2::Quaternion initOrientation;
+            tf2::Vector3 initPosition;
+            tf2::convert(req->initial_guess.orientation, initOrientation);
+            tf2::convert(req->initial_guess.position, initPosition);
+
+
+            Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(position, orientation);
+            double *voxelData1;
+            double *voxelData2;
+            voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize);
+            voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize);
+
+            for (int i = 0; i < dimensionSize * dimensionSize; i++) {
+                voxelData1[i] = req->sonar_scan_1[i];
+                voxelData2[i] = req->sonar_scan_2[i];
+            }
+        switch (dimensionSize)
+        {
+            case 16:
+                // code block
+                    this->registrationMutex16.lock();
+            break;
+            case 32:
+                // code block
+                    this->registrationMutex32.lock();
+            break;
+            case 64:
+                // code block
+                    this->registrationMutex64.lock();
+            break;
+            case 128:
+                // code block
+                    this->registrationMutex128.lock();
+            break;
+            case 256:
+                // code block
+                    this->registrationMutex256.lock();
+            break;
+            default:
+                return false;
+        }
+
+        if (req->timing_computation_duration)
+        {
+            begin = std::chrono::steady_clock::now();
+        }
+
+    //        convertMatToDoubleArray(sonarImage1, voxelData1);
+    // /        convertMatToDoubleArray(sonarImage2, voxelData2);
+            // computation time measurement
+            Eigen::Matrix3d covarianceMatrixResult;
+            // this->registrationMutex.lock();
+            std::chrono::steady_clock::time_point begin;
+
+            begin = std::chrono::steady_clock::now();
+
+
+        // tf2::Quaternion initOrientation;
+        // tf2::Vector3 initPosition;
+
+        std::cout << "starting One Potential Solution callback" << std::endl;
+            //calculate the registration
+        Eigen::Matrix4d resultingRegistrationTransformation = softRegistrationObjectList[positionOfCorrectRegistration]->sofftRegistrationVoxel3DOneSolution(
+            voxelData1,
+            voxelData2,initOrientation,initPosition, req->debug, req->use_clahe, req->timing_computation_duration, req->size_of_voxel,
+            req->r_min,
+            req->r_max,
+            req->level_potential_rotation,
+            req->level_potential_translation,
+            req->set_r_manual,req->set_normalization);
+            std::chrono::steady_clock::time_point end;
+            end = std::chrono::steady_clock::now();
+        free(voxelData1);
+        free(voxelData2);
+        double timeToCalculate = -1;
+        if (req->timing_computation_duration)
+        {
+            end = std::chrono::steady_clock::now();
+            timeToCalculate = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+        }
+
+        switch (dimensionSize)
+        {
+            case 16:
+                // code block
+                    this->registrationMutex16.unlock();
+            break;
+            case 32:
+                // code block
+                    this->registrationMutex32.unlock();
+            break;
+            case 64:
+                // code block
+                    this->registrationMutex64.unlock();
+            break;
+            case 128:
+                // code block
+                    this->registrationMutex128.unlock();
+            break;
+            case 256:
+                // code block
+                    this->registrationMutex256.unlock();
+            break;
+            default:
+                return false;
+        }
+
+            //Return one solution:
+
+            generalHelpfulTools::getTF2FromTransformationMatrix(position, orientation, resultingRegistrationTransformation);
+            //set result in res
+            geometry_msgs::msg::Pose resultingPose;
+
+    //        tf2::convert(orientation, resultingPose.orientation);
+            resultingPose.position.x = position.x();
+            resultingPose.position.y = position.y();
+            resultingPose.position.z = position.z();
+
+            resultingPose.orientation.x = orientation.x();
+            resultingPose.orientation.y = orientation.y();
+            resultingPose.orientation.z = orientation.z();
+            resultingPose.orientation.w = orientation.w();
+            Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2, 2>(0, 0);
+            //tf2::convert(position, resultingPose.position);
+    //        res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
+            res->potential_solution.rotation_covariance[0] = 0.1;//currently missing
+            res->potential_solution.rotation_covariance[1] = 0.1;//currently missing
+            res->potential_solution.rotation_covariance[2] = 0.1;//currently missing
+            res->potential_solution.resulting_transformation = resultingPose;
+            res->potential_solution.translation_covariance[0] = covarianceTranslation(0);
+            res->potential_solution.translation_covariance[1] = covarianceTranslation(1);
+            res->potential_solution.translation_covariance[2] = covarianceTranslation(2);
+            res->potential_solution.translation_covariance[3] = covarianceTranslation(3);
+            res->potential_solution.time_to_calculate = timeToCalculate;
+            //printing the results
+            std::cout << initialGuess << std::endl;
+            std::cout << resultingRegistrationTransformation << std::endl;
+            std::cout << "done registration for image:" << std::endl;
+
+            return true;
+        }
 
     bool
     sendAllSolutionsCallback(const std::shared_ptr<fsregistration::srv::RequestListPotentialSolution3D::Request> req,
