@@ -41,7 +41,7 @@ public:
     static std::vector<std::string> getNextLineAndSplitIntoTokens(std::istream &str);
     static int index3D(int x, int y, int z,int NInput);
     static int index2D(int x, int y,int NInput);
-    double angleDifferenceQuaternion(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2);
+    static double angleDifferenceQuaternion(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2);
 
 };
 
