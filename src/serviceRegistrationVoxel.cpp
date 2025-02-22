@@ -53,7 +53,7 @@ public:
         this->potentialVoxelSizes = std::vector<int>{16, 32, 64, 128, 256};
         //        this->dimensionOfImages = sizeImage;
         this->serviceOnePotentialSolution = this->create_service<fsregistration::srv::RequestOnePotentialSolution3D>(
-                "fsregistration/registration/one_solution",
+                "fs3D/registration/one_solution",
                 std::bind(&ROSClassRegistrationNode::sendSingleSolutionCallback,
                           this,
                           std::placeholders::_1,
@@ -143,7 +143,7 @@ private:
             tf2::convert(req->initial_guess.position, initPosition);
 
 
-            Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(position, orientation);
+            Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(initPosition, initOrientation);
             double *voxelData1;
             double *voxelData2;
             voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize);
@@ -199,7 +199,7 @@ private:
 
         std::cout << "starting One Potential Solution callback" << std::endl;
             //calculate the registration
-        Eigen::Matrix4d resultingRegistrationTransformation = softRegistrationObjectList[positionOfCorrectRegistration]->sofftRegistrationVoxel3DOneSolution(
+        transformationPeakfs3D resultingRegistrationTransformationPeak = softRegistrationObjectList[positionOfCorrectRegistration]->sofftRegistrationVoxel3DOneSolution(
             voxelData1,
             voxelData2,initOrientation,initPosition, req->debug, req->use_clahe, req->timing_computation_duration, req->size_of_voxel,
             req->r_min,
@@ -207,8 +207,8 @@ private:
             req->level_potential_rotation,
             req->level_potential_translation,
             req->set_r_manual,req->set_normalization);
-            std::chrono::steady_clock::time_point end;
-            end = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point end;
+        end = std::chrono::steady_clock::now();
         free(voxelData1);
         free(voxelData2);
         double timeToCalculate = -1;
@@ -245,20 +245,21 @@ private:
         }
 
             //Return one solution:
-
-            generalHelpfulTools::getTF2FromTransformationMatrix(position, orientation, resultingRegistrationTransformation);
+            // tf2::Quaternion estimatedOrientation;
+            // tf2::Vector3 estimatedPosition;
+            // generalHelpfulTools::getTF2FromTransformationMatrix(estimatedPosition, estimatedOrientation, resultingRegistrationTransformationPeak.potentialRotation.);
             //set result in res
             geometry_msgs::msg::Pose resultingPose;
 
     //        tf2::convert(orientation, resultingPose.orientation);
-            resultingPose.position.x = position.x();
-            resultingPose.position.y = position.y();
-            resultingPose.position.z = position.z();
+            resultingPose.position.x = resultingRegistrationTransformationPeak.potentialTranslations[0].xTranslation;
+            resultingPose.position.y = resultingRegistrationTransformationPeak.potentialTranslations[0].yTranslation;
+            resultingPose.position.z = resultingRegistrationTransformationPeak.potentialTranslations[0].zTranslation;
 
-            resultingPose.orientation.x = orientation.x();
-            resultingPose.orientation.y = orientation.y();
-            resultingPose.orientation.z = orientation.z();
-            resultingPose.orientation.w = orientation.w();
+            resultingPose.orientation.x = resultingRegistrationTransformationPeak.potentialRotation.x;
+            resultingPose.orientation.y = resultingRegistrationTransformationPeak.potentialRotation.y;
+            resultingPose.orientation.z = resultingRegistrationTransformationPeak.potentialRotation.z;
+            resultingPose.orientation.w = resultingRegistrationTransformationPeak.potentialRotation.w;
             Eigen::Matrix2d covarianceTranslation = covarianceMatrixResult.block<2, 2>(0, 0);
             //tf2::convert(position, resultingPose.position);
     //        res->potential_solution.rotation_covariance = covarianceMatrixResult(2, 2);
@@ -271,6 +272,9 @@ private:
             res->potential_solution.translation_covariance[2] = covarianceTranslation(2);
             res->potential_solution.translation_covariance[3] = covarianceTranslation(3);
             res->potential_solution.time_to_calculate = timeToCalculate;
+            Eigen::Vector3d resultingTranslation(resultingPose.position.x,resultingPose.position.y,resultingPose.position.z);
+            Eigen::Quaterniond resultingRotation(resultingPose.orientation.w,resultingPose.orientation.x,resultingPose.orientation.y,resultingPose.orientation.z);
+            Eigen::Matrix4d resultingRegistrationTransformation = generalHelpfulTools::getTransformationMatrix(resultingTranslation,resultingRotation);
             //printing the results
             std::cout << initialGuess << std::endl;
             std::cout << resultingRegistrationTransformation << std::endl;

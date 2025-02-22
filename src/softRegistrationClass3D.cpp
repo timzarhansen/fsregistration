@@ -442,8 +442,8 @@ std::chrono::steady_clock::time_point begin;
     }
 
 
-    //TODO find fitting Rotation compared to initial guess
-    int index= 0;
+
+    int indexOfInterest= 0;
     double bestFit = INFINITY;
     for (int i = 0; i < potentialRotationsTMP.size(); i++) {
         Eigen::Quaterniond rotationQuat(potentialRotationsTMP[i].w, potentialRotationsTMP[i].x,
@@ -451,14 +451,13 @@ std::chrono::steady_clock::time_point begin;
         Eigen::Vector3d rpyCurrentRot = generalHelpfulTools::getRollPitchYaw(rotationQuat);
 
         Eigen::Quaterniond initRotationQuat(initGuessOrientation.w(), initGuessOrientation.x(),initGuessOrientation.y(), initGuessOrientation.z());
-        // rotTMP.slerp(t, Eigen::Quaterniond(1,0,0,0));
         double distance = abs(generalHelpfulTools::angleDifferenceQuaternion(rotationQuat,initRotationQuat));
         if (bestFit>distance) {
             bestFit = distance;
-            index = i;
+            indexOfInterest = i;
         }
     }
-
+    rotationPeak4D bestFittingPeak = potentialRotationsTMP[indexOfInterest];
 
     if (timeStuff) {
         end = std::chrono::steady_clock::now();
@@ -467,8 +466,8 @@ std::chrono::steady_clock::time_point begin;
         begin = std::chrono::steady_clock::now();
     }
 
-    std::vector<transformationPeakfs3D> allSolutions;
-    for (int p = 0; p < potentialRotationsTMP.size(); p++) {
+    transformationPeakfs3D bestFittingSolution;
+    // for (int p = 0; p < potentialRotationsTMP.size(); p++) {
         //    for (int p = 0; p < 1; p++) {
 
         double *voxelData2Rotated;
@@ -476,8 +475,8 @@ std::chrono::steady_clock::time_point begin;
         for (int i = 0; i < this->N * this->N * this->N; i++) {
             voxelData2Rotated[i] = 0;
         }
-        Eigen::Quaterniond currentRotation(potentialRotationsTMP[p].w, potentialRotationsTMP[p].x,
-                                           potentialRotationsTMP[p].y, potentialRotationsTMP[p].z);
+        Eigen::Quaterniond currentRotation(bestFittingPeak.w, bestFittingPeak.x,
+                                           bestFittingPeak.y, bestFittingPeak.z);
         //        Eigen::Quaterniond currentRotation(0.99999, 0.022,
         //                                           0, 0);
         //        currentRotation.normalize();
@@ -521,11 +520,9 @@ std::chrono::steady_clock::time_point begin;
         if (debug) {
             std::ofstream myFile1, myFile2, myFile3;
             myFile1.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2Rotated" +
-                std::to_string(p) + ".csv");
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2Rotated.csv");
             myFile2.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2Rotated" +
-                std::to_string(p) + ".csv");
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2Rotated.csv");
 
             for (int i = 0; i < this->correlationN; i++) {
                 for (int j = 0; j < this->correlationN; j++) {
@@ -542,8 +539,7 @@ std::chrono::steady_clock::time_point begin;
             myFile2.close();
 
             myFile3.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2Rotated" +
-                std::to_string(p) + ".csv");
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2Rotated.csv");
             for (int i = 0; i < this->N; i++) {
                 for (int j = 0; j < this->N; j++) {
                     for (int k = 0; k < this->N; k++) {
@@ -639,8 +635,7 @@ std::chrono::steady_clock::time_point begin;
         if (debug) {
             std::ofstream myFile10;
             myFile10.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationShift" +
-                std::to_string(p) + ".csv");
+                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationShift.csv");
             for (int i = 0; i < this->correlationN; i++) {
                 for (int j = 0; j < this->correlationN; j++) {
                     for (int k = 0; k < this->correlationN; k++) {
@@ -656,43 +651,43 @@ std::chrono::steady_clock::time_point begin;
         std::vector<translationPeak3D> resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
             resultingCorrelationDouble, this->correlationN, sizeVoxel, level_potential_translation);
         transformationPeakfs3D tmpSolution;
-        tmpSolution.potentialRotation = potentialRotationsTMP[p];
+        tmpSolution.potentialRotation = bestFittingPeak;
+    // @TODO compute best FIT based on estimation
+        int indexBestFittingSolution= 0;
+        double score=INFINITY;
+        Eigen::Vector3d initGuessPositionEigen(initGuessPosition.x(), initGuessPosition.y(), initGuessPosition.z());
+
         for (int i = 0; i < resulting3DPeakList.size(); i++) {
             // sub Pixel Computation Here:
 
-
-
             resulting3DPeakList[i].correlationHeight = resulting3DPeakList[i].correlationHeight *
-                                                       (maximumCorrelationTranslation - minimumCorrelationTranslation) +
-                                                       minimumCorrelationTranslation;
+                                           (maximumCorrelationTranslation - minimumCorrelationTranslation) +
+                                           minimumCorrelationTranslation;
 
-            std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
-                    << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
-                    << " , " << resulting3DPeakList[i].xTranslation << " , "
-                    << resulting3DPeakList[i].yTranslation
-                    << " , " << resulting3DPeakList[i].zTranslation << std::endl;
+            Eigen::Vector3d peakEstimationPosition(resulting3DPeakList[i].xTranslation,resulting3DPeakList[i].yTranslation,resulting3DPeakList[i].zTranslation);
 
-            tmpSolution.potentialTranslations.push_back(resulting3DPeakList[i]);
+            double distanceInitVsEst = (peakEstimationPosition-initGuessPositionEigen).norm();
+
+            if (distanceInitVsEst < score) {
+                indexBestFittingSolution = i;
+                score = distanceInitVsEst;
+
+            }
         }
 
+        tmpSolution.potentialTranslations.push_back(resulting3DPeakList[indexBestFittingSolution]);
 
         free(voxelData2Rotated);
 
 
-        allSolutions.push_back(tmpSolution);
-
         if (timeStuff) {
             end = std::chrono::steady_clock::now();
             diff = end - begin;
-            std::cout << "computing one Solution " << p << " :" << diff.count() << std::endl;
+            std::cout << "computing one Solution: " << diff.count() << std::endl;
             begin = std::chrono::steady_clock::now();
         }
-    }
 
-
-    transformationPeakfs3D returnTransformation;
-
-    return returnTransformation;
+    return tmpSolution;
 }
 
 

@@ -101,7 +101,34 @@ createAllPotentialSolutionRequest(double* sonar1, double* sonar2, double sizeOfV
 
     return request;
 }
+fsregistration::srv::RequestOnePotentialSolution3D::Request createOnePotentialSolutionRequest(double* sonar1, double* sonar2, double sizeOfVoxel,
+                                  double potentialForNecessaryPeak,int N) {
 
+    fsregistration::srv::RequestOnePotentialSolution3D::Request request;
+    for(int i  = 0  ; i<N*N*N;i++){
+        request.sonar_scan_1.push_back(sonar1[i]);
+        request.sonar_scan_2.push_back(sonar2[i]);
+    }
+    request.timing_computation_duration = true;
+    request.debug=true;
+    request.use_clahe=true;
+    request.dimension_size=N;
+    request.size_of_voxel=sizeOfVoxel;
+    request.set_normalization = 1;
+    geometry_msgs::msg::Pose initPose;
+    initPose.position.x = 0;
+    initPose.position.y = 0;
+    initPose.position.z = 0;
+    initPose.orientation.x = 0;
+    initPose.orientation.y = 0;
+    initPose.orientation.z = 0;
+    initPose.orientation.w = 1;
+
+    request.initial_guess = initPose;
+    // request.potential_for_necessary_peak = potentialForNecessaryPeak;
+
+    return request;
+}
 int main(int argc, char **argv) {
     // input needs to be two scans as voxelData
     rclcpp::init(argc, argv);
@@ -121,7 +148,7 @@ int main(int argc, char **argv) {
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud <pcl::PointXYZ>);
     pcl::PLYReader Reader;
-    Reader.read("exampleData/dragon_recon/dragon_vrip.ply", *cloud);
+    Reader.read("/home/tim-external/ros_ws/src/fsregistration/exampleData/dragon_recon/dragon_vrip.ply", *cloud);
 
     pcl::ConvexHull <pcl::PointXYZ> cHull;
     pcl::PointCloud <pcl::PointXYZ> cHull_points;
@@ -174,7 +201,7 @@ int main(int argc, char **argv) {
 //                        generalHelpfulTools::getTransformationMatrixFromRPY(10.0 / 180.0 * M_PI, -0.0 / 180.0 * M_PI,
 //                                                                            0.0 / 180.0 * M_PI) * currentVector;
                 currentVector =
-                        generalHelpfulTools::getTransformationMatrixFromRPY(40.0 / 180.0 * M_PI, -30.0 / 180.0 * M_PI,
+                        generalHelpfulTools::getTransformationMatrixFromRPY(10.0 / 180.0 * M_PI, -10.0 / 180.0 * M_PI,
                                                                             10.0 / 180.0 * M_PI) * currentVector;
 
                 int xIndex = N / 2 + currentVector.x() * N / sizeVoxelOneDirection;
@@ -275,8 +302,12 @@ int main(int argc, char **argv) {
     std::shared_ptr<rclcpp::Node> node = rclcpp::Node::make_shared("client_registration");
 
 
+
+
     rclcpp::Client<fsregistration::srv::RequestListPotentialSolution3D>::SharedPtr client2 =
-            node->create_client<fsregistration::srv::RequestListPotentialSolution3D>("fs3D/registration/all_solutions");
+        node->create_client<fsregistration::srv::RequestListPotentialSolution3D>("fs3D/registration/all_solutions");
+    rclcpp::Client<fsregistration::srv::RequestOnePotentialSolution3D>::SharedPtr client1 =
+        node->create_client<fsregistration::srv::RequestOnePotentialSolution3D>("fs3D/registration/one_solution");
 
 
     // waiting until clients are connecting
@@ -285,7 +316,15 @@ int main(int argc, char **argv) {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
             return 0;
         }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service2 not available, waiting again...");
+    }
+    // waiting until clients are connecting
+    while (!client1->wait_for_service(std::chrono::duration<float>(0.1))) {
+        if (!rclcpp::ok()) {
+            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+            return 0;
+        }
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service1 not available, waiting again...");
     }
 
 
@@ -324,6 +363,42 @@ int main(int argc, char **argv) {
         }
     }
     std::cout << "second call done" << std::endl;
+
+    auto request1 = std::make_shared<fsregistration::srv::RequestOnePotentialSolution3D::Request>(
+            createOnePotentialSolutionRequest(voxelData1, voxelData2, 1, 0.1,N));
+
+
+    auto future1 = client1->async_send_request(request1);
+
+    if (rclcpp::spin_until_future_complete(node, future1) ==
+        rclcpp::FutureReturnCode::SUCCESS) {
+        // Wait for the result.
+        try {
+            auto response1 = future1.get();
+            tf2::Quaternion orientation;
+            tf2::Vector3 position;
+
+            tf2::convert(response1->potential_solution.resulting_transformation.orientation, orientation);
+            tf2::convert(response1->potential_solution.resulting_transformation.position, position);
+            Eigen::Matrix4d resultingTransformation = generalHelpfulTools::getTransformationMatrixTF2(position,
+                                                                                                      orientation);
+            std::cout << resultingTransformation << std::endl;
+            std::cout << response1->potential_solution.persistent_transformation_peak_value << std::endl;
+            std::cout << response1->potential_solution.rotation_peak_height << std::endl;
+            std::cout << response1->potential_solution.transformation_peak_height << std::endl;
+
+        }
+        catch (const std::exception &e) {
+            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Service call failed.");
+        }
+        }
+
+
+
+
+
+
+
     free(voxelData1);
     free(voxelData2);
     exit(161);
