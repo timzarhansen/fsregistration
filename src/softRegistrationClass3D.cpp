@@ -480,7 +480,7 @@ std::chrono::steady_clock::time_point begin;
         //        Eigen::Quaterniond currentRotation(0.99999, 0.022,
         //                                           0, 0);
         //        currentRotation.normalize();
-
+        std::cout << "currentRotation" << std::endl;
         std::cout << currentRotation << std::endl;
 
         for (int i = 0; i < this->N; i++) {
@@ -650,9 +650,10 @@ std::chrono::steady_clock::time_point begin;
         // config -> settings for peak detection
         std::vector<translationPeak3D> resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
             resultingCorrelationDouble, this->correlationN, sizeVoxel, level_potential_translation);
+        std::cout << "number of solutions Translation: " << resulting3DPeakList.size()<< std::endl;
         transformationPeakfs3D tmpSolution;
         tmpSolution.potentialRotation = bestFittingPeak;
-    // @TODO compute best FIT based on estimation
+
         int indexBestFittingSolution= 0;
         double score=INFINITY;
         Eigen::Vector3d initGuessPositionEigen(initGuessPosition.x(), initGuessPosition.y(), initGuessPosition.z());
