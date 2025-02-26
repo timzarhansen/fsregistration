@@ -146,10 +146,10 @@ private:
             Eigen::Matrix4d initialGuess = generalHelpfulTools::getTransformationMatrixTF2(initPosition, initOrientation);
             double *voxelData1;
             double *voxelData2;
-            voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize);
-            voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize);
+            voxelData1 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize* dimensionSize);
+            voxelData2 = (double *) malloc(sizeof(double) * dimensionSize * dimensionSize* dimensionSize);
 
-            for (int i = 0; i < dimensionSize * dimensionSize; i++) {
+            for (int i = 0; i < dimensionSize * dimensionSize* dimensionSize; i++) {
                 voxelData1[i] = req->sonar_scan_1[i];
                 voxelData2[i] = req->sonar_scan_2[i];
             }
