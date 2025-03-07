@@ -212,6 +212,8 @@ int generalHelpfulTools::index2D(int x, int y,int NInput){
 }
 
 double generalHelpfulTools::angleDifferenceQuaternion(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2) {
-    double dotProduct = q1.coeffs().dot(q2.coeffs());
-    return 2 * std::acos(std::abs(dotProduct));
+    Eigen::Quaterniond q1n = q1.normalized();
+    Eigen::Quaterniond q2n = q2.normalized();
+    double dot = std::abs(q1n.dot(q2n));
+    return 2.0 * std::acos( std::min(dot, 1.0) ); // Clamp to avoid precision errors
 }
