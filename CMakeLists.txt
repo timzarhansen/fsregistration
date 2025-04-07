@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -76,9 +77,9 @@ target_include_directories(UNION_FIND PRIVATE
 target_link_libraries(findpeaks INTERFACE UNION_FIND)
 
 #include_directories(${PCL_INCLUDE_DIRS})
-#
+
 #link_directories(${PCL_LIBRARY_DIRS})
-#
+
 #add_definitions(${PCL_DEFINITIONS})
 
 ################################################################################
