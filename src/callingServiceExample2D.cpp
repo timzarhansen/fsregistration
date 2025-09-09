@@ -5,8 +5,8 @@
 #include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
-#include "fsregistration/srv/request_list_potential_solution.hpp"
-#include "fsregistration/srv/request_one_potential_solution.hpp"
+#include "fsregistration/srv/request_list_potential_solution2_d.hpp"
+#include "fsregistration/srv/request_one_potential_solution2_d.hpp"
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
 #include "cv_bridge/cv_bridge.h"
@@ -15,7 +15,7 @@
 #include "generalHelpfulTools.h"
 
 
-fsregistration::srv::RequestOnePotentialSolution::Request
+fsregistration::srv::RequestOnePotentialSolution2D::Request
 createOnePotentialSolutionRequest(cv::Mat sonar1, cv::Mat sonar2, Eigen::Matrix4d initialGuess, double sizeOfPixel,
                                   double potentialForNecessaryPeak) {
 
@@ -45,7 +45,7 @@ createOnePotentialSolutionRequest(cv::Mat sonar1, cv::Mat sonar2, Eigen::Matrix4
     poseMsg.orientation.w = quaternionInitGuess.w();
 
 
-    fsregistration::srv::RequestOnePotentialSolution::Request request;
+    fsregistration::srv::RequestOnePotentialSolution2D::Request request;
     request.sonar_scan_1 = *sonar_msg_1;
     request.sonar_scan_2 = *sonar_msg_2;
     request.size_of_pixel = 1;
@@ -54,22 +54,26 @@ createOnePotentialSolutionRequest(cv::Mat sonar1, cv::Mat sonar2, Eigen::Matrix4
     return request;
 }
 
-fsregistration::srv::RequestListPotentialSolution::Request
+fsregistration::srv::RequestListPotentialSolution2D::Request
 createAllPotentialSolutionRequest(cv::Mat sonar1, cv::Mat sonar2, double sizeOfPixel,
                                   double potentialForNecessaryPeak) {
 
 
-    cv_bridge::CvImagePtr cv_ptr;
+    // cv_bridge::CvImagePtr cv_ptr;
+    //
+    // sensor_msgs::msg::Image::SharedPtr sonar_msg_1 =
+    //         cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", sonar1)
+    //                 .toImageMsg();
+    // sensor_msgs::msg::Image::SharedPtr sonar_msg_2 =
+    //         cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", sonar2)
+    //                 .toImageMsg();
 
-    sensor_msgs::msg::Image::SharedPtr sonar_msg_1 =
-            cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", sonar1)
-                    .toImageMsg();
-    sensor_msgs::msg::Image::SharedPtr sonar_msg_2 =
-            cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", sonar2)
-                    .toImageMsg();
 
-
-    fsregistration::srv::RequestListPotentialSolution::Request request;
+    fsregistration::srv::RequestListPotentialSolution2D::Request request;
+    for(int i  = 0  ; i<N*N*N;i++){
+        request.sonar_scan_1.push_back(sonar1[i]);
+        request.sonar_scan_2.push_back(sonar2[i]);
+    }
     request.sonar_scan_1 = *sonar_msg_1;
     request.sonar_scan_2 = *sonar_msg_2;
     request.size_of_pixel = 1;
@@ -106,11 +110,11 @@ int main(int argc, char **argv) {
 
     std::shared_ptr<rclcpp::Node> node = rclcpp::Node::make_shared("client_registration");
 
-    rclcpp::Client<fsregistration::srv::RequestOnePotentialSolution>::SharedPtr onePotentialClient =
-            node->create_client<fsregistration::srv::RequestOnePotentialSolution>("fsregistration/registration/one_solution");
+    rclcpp::Client<fsregistration::srv::RequestOnePotentialSolution2D>::SharedPtr onePotentialClient =
+            node->create_client<fsregistration::srv::RequestOnePotentialSolution2D>("fsregistration/registration/one_solution");
 
-    rclcpp::Client<fsregistration::srv::RequestListPotentialSolution>::SharedPtr client2 =
-            node->create_client<fsregistration::srv::RequestListPotentialSolution>("fsregistration/registration/all_solutions");
+    rclcpp::Client<fsregistration::srv::RequestListPotentialSolution2D>::SharedPtr client2 =
+            node->create_client<fsregistration::srv::RequestListPotentialSolution2D>("fsregistration/registration/all_solutions");
 
 
     // waiting until clients are connecting
@@ -130,10 +134,10 @@ int main(int argc, char **argv) {
     }
 
 
-    auto request = std::make_shared<fsregistration::srv::RequestOnePotentialSolution::Request>(
+    auto request = std::make_shared<fsregistration::srv::RequestOnePotentialSolution2D::Request>(
             createOnePotentialSolutionRequest(img1, img2, Eigen::Matrix4d::Identity(), 1, 0.1));
 
-//    auto request = std::make_shared<fsregistration::srv::RequestOnePotentialSolution::Request>();
+//    auto request = std::make_shared<fsregistration::srv::RequestOnePotentialSolution2D::Request>();
 
 
 
@@ -165,7 +169,7 @@ int main(int argc, char **argv) {
 
 
 
-    auto request2 = std::make_shared<fsregistration::srv::RequestListPotentialSolution::Request>(
+    auto request2 = std::make_shared<fsregistration::srv::RequestListPotentialSolution2D::Request>(
             createAllPotentialSolutionRequest(img1, img2, 1, 0.1));
 
 

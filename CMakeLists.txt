@@ -124,7 +124,12 @@ target_include_directories(servicecall3D PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_IN
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 
-
+#add_executable(servicecall2D src/callingServiceExample2D.cpp )
+#ament_target_dependencies(servicecall2D rclcpp  cv_bridge tf2_geometry_msgs PCL)
+#target_link_libraries(servicecall2D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
+#target_include_directories(servicecall2D PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#target_link_libraries(servicecall2D "${cpp_typesupport_target}")
 
 
 install(TARGETS
