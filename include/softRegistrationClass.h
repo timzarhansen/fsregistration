@@ -119,30 +119,6 @@ public:
         ~softRegistrationClass() {
         sofftCorrelationObject.~softCorrelationClass();
 
-
-//        free(this->resultingCorrelationDouble);
-//        fftw_free(this->resultingCorrelationComplex);
-//        fftw_free(this->resultingPhaseDiff2D );
-//        fftw_free(this->resultingShiftPeaks2D);
-//        fftw_free(this->magnitude1Shifted );
-//        fftw_free(this->magnitude2Shifted );
-//        fftw_free(this->voxelData1 );
-//        fftw_free(this->voxelData2 );
-//        fftw_free(this->spectrumOut );
-//        fftw_free(this->phase1);
-//        fftw_free(this->phase2);
-//        fftw_free(this->magnitude1 );
-//        fftw_free(this->magnitude2 );
-//        fftw_free(resampledMagnitudeSO3_1 );
-//        fftw_free(resampledMagnitudeSO3_2);
-//        fftw_free(resampledMagnitudeSO3_1TMP);
-//        fftw_free(resampledMagnitudeSO3_2TMP );
-//        fftw_free(inputSpacialData);
-//        fftw_destroy_plan(planFourierToVoxel2D);
-//        fftw_destroy_plan(planVoxelToFourier3D);
-//        fftw_destroy_plan(planVoxelToFourier2D);
-
-
     }
 
 

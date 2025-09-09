@@ -247,6 +247,8 @@ private:
 
         std::cout << "req->potential_for_necessary_peak" << std::endl;
         std::cout << req->potential_for_necessary_peak << std::endl;
+        std::cout << "NumberOfSolutions Rotation:" << std::endl;
+        std::cout << listPotentialSolutions.size() << std::endl;
         for (int i = 0; i < listPotentialSolutions.size(); i++) {
             Eigen::Quaterniond orientationEigen;
             orientationEigen = generalHelpfulTools::getQuaternionFromRPY(0, 0,
@@ -254,7 +256,8 @@ private:
             tf2::Quaternion orientation(orientationEigen.x(), orientationEigen.y(), orientationEigen.z(),
                                         orientationEigen.w());
 
-
+            std::cout << "NumberOfSolutions Translation:" << std::endl;
+            std::cout << listPotentialSolutions[i].potentialTranslations.size() << std::endl;
             for (int j = 0; j < listPotentialSolutions[i].potentialTranslations.size(); j++) {
 
 
