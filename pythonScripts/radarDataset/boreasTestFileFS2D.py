@@ -281,6 +281,7 @@ if __name__ == '__main__':
     print(length_of_radar_scans)
 
     pathToSave = f"saveRandomImagesBoreas/{sequence_number:02d}_{N:03d}_{int(size_of_pixel*100)}_{matching_every_nth_image}/"
+    print(pathToSave)
     Path(pathToSave).mkdir(parents=True, exist_ok=True)
     # radar_timestamps = np.loadtxt(timestamps_path, delimiter=' ', usecols=[0], dtype=np.int64)
 
@@ -388,7 +389,7 @@ if __name__ == '__main__':
                 estPoseList.append(resultingTransformation)
                 rotationErrorList.append(rot_error)
                 translationErrorList.append(trans_error)
-
+                print(index)
                 print("next:")
                 # now we have to also compute the GT
     #here are
