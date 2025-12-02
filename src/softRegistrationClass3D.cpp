@@ -132,7 +132,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
                                                       double level_potential_rotation,
                                                       double level_potential_translation,
                                                       bool set_r_manual, int normalization) {
-std::chrono::steady_clock::time_point begin;
+    std::chrono::steady_clock::time_point begin;
     std::chrono::steady_clock::time_point end;
     std::chrono::duration<double, std::milli> diff{};
 
@@ -317,6 +317,7 @@ std::chrono::steady_clock::time_point begin;
             }
         }
     }
+
     if (debug) {
         std::ofstream myFile1, myFile2;
         myFile1.open(
@@ -606,6 +607,11 @@ std::chrono::steady_clock::time_point begin;
                             normalizationFactorForCorrelation =
                                     1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
                         // normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                            break;
+                        case 2:
+                            normalizationFactorForCorrelation =
+                                    1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
+                            normalizationFactorForCorrelation = normalizationFactorForCorrelation*normalizationFactorForCorrelation;
                             break;
                         default:
                             std::cout << "normalization has to be 0,1 but was: " << normalization << std::endl;
@@ -1170,6 +1176,11 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                             normalizationFactorForCorrelation =
                                     1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
                         // normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                            break;
+                        case 2:
+                            normalizationFactorForCorrelation =
+                                    1 / normalizationFactorCalculation(indexX, indexY, indexZ, this->correlationN);
+                            normalizationFactorForCorrelation = normalizationFactorForCorrelation*normalizationFactorForCorrelation;
                             break;
                         default:
                             std::cout << "normalization has to be 0,1 but was: " << normalization << std::endl;

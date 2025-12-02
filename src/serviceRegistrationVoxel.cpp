@@ -186,12 +186,12 @@ private:
 
     //        convertMatToDoubleArray(sonarImage1, voxelData1);
     // /        convertMatToDoubleArray(sonarImage2, voxelData2);
-            // computation time measurement
-            Eigen::Matrix3d covarianceMatrixResult;
-            // this->registrationMutex.lock();
-            std::chrono::steady_clock::time_point begin;
+        // computation time measurement
+        Eigen::Matrix3d covarianceMatrixResult;
+        // this->registrationMutex.lock();
+        std::chrono::steady_clock::time_point begin;
 
-            begin = std::chrono::steady_clock::now();
+        begin = std::chrono::steady_clock::now();
 
 
         // tf2::Quaternion initOrientation;
