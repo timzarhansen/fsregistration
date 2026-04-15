@@ -1,0 +1,31 @@
+# HybridPoint Conda Environment
+# CPU-only version for testing on Predator dataset
+# Usage: conda env create -f environment_hybridpoint.yml
+
+name: hybridpoint_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy<2
+  - scipy
+  - tqdm
+  - matplotlib
+  - ipython
+  - pip
+  - pip:
+    - numpy<2
+    - torch==2.0.0
+    - torchvision==0.15.0
+    - open3d>=0.16.0
+    - transforms3d
+    - easydict
+    - opencv-python
+    - ipdb
+    - einops
+    - scikit-learn
+    - nibabel
+    - h5py
+    - tensorboardX
+    - coloredlogs
