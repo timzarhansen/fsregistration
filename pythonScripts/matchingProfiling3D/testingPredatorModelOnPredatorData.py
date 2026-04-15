@@ -3,9 +3,7 @@ import os, torch, json, argparse, shutil, csv
 
 from prompt_toolkit.utils import to_str
 
-from predator.datasets.dataloader import get_dataloader, get_datasets
-from easydict import EasyDict as edict
-from predator.lib.utils import setup_seed, load_config
+from dataloader_utils import PredatorDataLoader
 # ros include stuff
 import rclpy
 from rclpy.node import Node
@@ -275,29 +273,10 @@ if __name__ == '__main__':
     # normalization_factor = args.normalization_factor # 0 , 1
     noise_level = args.type_of_noise # None low high
     type_data = args.type_of_data #train, val
-    config = load_config(args.config)
-    config['snapshot_dir'] = '%s' % config['exp_dir']
-    config['tboard_dir'] = '%s/tensorboard' % config['exp_dir']
-    config['save_dir'] = '%s/checkpoints' % config['exp_dir']
-    config = edict(config)
+    # Load configs
+    loader = PredatorDataLoader(args.config, split=type_data)
+    config = loader.config
 
-    config.architecture = architectures[config.dataset]
-    train_set, val_set, benchmark_set = get_datasets(config)
-    dataSetSize = 0
-    if type_data == "train":
-        config.train_loader, neighborhood_limits = get_dataloader(dataset=train_set,
-                                                                  batch_size=config.batch_size,
-                                                                  shuffle=False,
-                                                                  num_workers=config.num_workers,
-                                                                  )
-        dataSetSize = len(train_set)
-    if type_data == "val":
-        config.train_loader, neighborhood_limits = get_dataloader(dataset=val_set,
-                                                                  batch_size=config.batch_size,
-                                                                  shuffle=False,
-                                                                  num_workers=config.num_workers,
-                                                                  )
-        dataSetSize = len(val_set)
 
     # ROS2 Node
     rclpy.init()
@@ -316,12 +295,12 @@ if __name__ == '__main__':
     #                                        num_workers=0,
     #                                        neighborhood_limits=neighborhood_limits)
     interesting_MatchesList = {1, 2}
-    dataIter = iter(config.train_loader)
+    dataIter = loader.data_iter
     # for indexDataLoader in range(200):
-    for indexDataLoader in range(dataSetSize):
+    for indexDataLoader in range(len(loader)):
         gc.collect()
         # for indexDataLoader in range(2):
-        inputs = next(dataIter)
+        inputs = loader.get_next()
         # if indexDataLoader not in interesting_MatchesList:
         #     continue
         # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
