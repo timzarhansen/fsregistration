@@ -24,6 +24,10 @@ find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
 
+# GPU-accelerated correlation dependencies (optional)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -131,6 +135,52 @@ target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 #rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 #target_link_libraries(servicecall2D "${cpp_typesupport_target}")
 
+################################################################################
+# GPU-accelerated correlation class (s2fft backend)
+################################################################################
+
+# Copy Python backend to build directory
+configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/softCorrelation_gpu_backend.py
+        ${CMAKE_BINARY_DIR}/softCorrelation_gpu_backend.py
+        COPYONLY
+)
+
+# Create GPU correlation library using pybind11
+pybind11_add_module(softCorrelationGPUBackend
+        src/softCorrelationClassGPU.cpp
+)
+
+target_link_libraries(softCorrelationGPUBackend
+        PRIVATE
+        Python3::Python
+        pybind11::embed
+        fftw3
+)
+
+target_include_directories(softCorrelationGPUBackend
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# Inform user about PYTHONPATH setup
+add_custom_target(show_python_setup ALL
+        COMMAND ${CMAKE_COMMAND} -E echo ""
+        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
+        COMMAND ${CMAKE_COMMAND} -E echo "Before running GPU-enabled executables:"
+        COMMAND ${CMAKE_COMMAND} -E echo "  export PYTHONPATH=${CMAKE_BINARY_DIR}:$ENV{PYTHONPATH}"
+        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
+        COMMAND ${CMAKE_COMMAND} -E echo ""
+)
+
+# Test comparison executable
+add_executable(test_correlation_comparison src/test_correlation_comparison.cpp)
+target_link_libraries(test_correlation_comparison 
+    softCorrelationGPUBackend
+    fftw3 
+    soft20::soft20
+)
+target_include_directories(test_correlation_comparison PRIVATE include)
 
 install(TARGETS
         ros2ServiceRegistrationFS2D
