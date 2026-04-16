@@ -13,6 +13,7 @@ import os
 import sys
 import argparse
 import csv
+import gc
 import numpy as np
 import open3d as o3d
 import transforms3d.quaternions as quat
@@ -67,7 +68,8 @@ def get_matching_indices(source, target, trans, search_voxel_size, K=None):
     """Get matching indices between source and target point clouds."""
     source_points = np.asarray(source.points)
     target_points = np.asarray(target.points)
-    transformed_points = trans @ np.concatenate([source_points.T, np.ones((1, source_points.shape[0]))])[:3].T
+    points_homogeneous = np.concatenate([source_points, np.ones((source_points.shape[0], 1))], axis=1)
+    transformed_points = (points_homogeneous @ trans.T)[:, :3]
     pcd_tree = o3d.geometry.KDTreeFlann(o3d.geometry.PointCloud(o3d.utility.Vector3dVector(target_points)))
 
     match_inds = []
@@ -274,6 +276,9 @@ def main():
             writer.writerow(inputWriter)
 
         print(f"Processed: {indexDataLoader}")
+        
+        # Force garbage collection to prevent memory corruption on macOS
+        gc.collect()
 
     print("Completed!")
     print(f"FPFH+RANSAC registration test finished. Results saved to {csv_path}")
