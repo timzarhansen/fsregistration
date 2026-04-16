@@ -146,8 +146,8 @@ configure_file(
         COPYONLY
 )
 
-# Create GPU correlation library using pybind11
-pybind11_add_module(softCorrelationGPUBackend
+# Create GPU correlation library (SHARED, not MODULE)
+add_library(softCorrelationGPUBackend SHARED
         src/softCorrelationClassGPU.cpp
 )
 
