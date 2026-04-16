@@ -114,7 +114,7 @@ int softCorrelationClassGPU::correlationOfTwoSignalsInSO3(
         std::memcpy(arr2.mutable_data(), resampledMagnitude2, N * N * sizeof(double));
 
         // Call the correlate method
-        py::object result = correlator.attr("correlate")(arr1, arr2);
+        py::tuple result = correlator.attr("correlate")(arr1, arr2).cast<py::tuple>();
 
         // Extract the result tuple: (success: bool, output: ndarray, error_msg: str)
         bool success = result[0].cast<bool>();
@@ -125,7 +125,7 @@ int softCorrelationClassGPU::correlationOfTwoSignalsInSO3(
         }
 
         // Get the output array
-        py::array_t<double> output = result[1];
+        py::array_t<double> output = result[1].cast<py::array_t<double>>();
         py::buffer_info buf = output.request();
 
         // Verify output size matches expected (8 * bwOut^3 complex values = 2 * 8 * bwOut^3 doubles)
