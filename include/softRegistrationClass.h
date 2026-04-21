@@ -139,6 +139,11 @@ public:
                                                     bool debug = false, bool multipleRadii = false,
                                                     bool useClahe = true, bool useHamming = true);
 
+    std::vector<rotationPeakfs2D>
+    sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[], double voxelData2Input[],
+                                                          bool debug = false, bool multipleRadii = false,
+                                                          bool useClahe = true, bool useHamming = true);
+
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
 //                                                        double &fitnessX, double &fitnessY, double cellSize,

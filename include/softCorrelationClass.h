@@ -17,6 +17,8 @@
 
 #define NORM(x) ( (x[0])*(x[0]) + (x[1])*(x[1]) )
 
+class softRegistrationClass;
+
 class softCorrelationClass {
 public:
     softCorrelationClass(int N,int bwOut,int bwIn,int degLim){
@@ -152,6 +154,8 @@ public:
 
 
     void correlationOfTwoSignalsInSO3(double resampledMagnitude1[], double resampledMagnitude2[], fftw_complex so3SigReturn[]);
+
+    friend class softRegistrationClass;
 
 private:
     int N;//describes the size of the overall voxel system

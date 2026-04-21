@@ -182,6 +182,28 @@ target_link_libraries(test_correlation_comparison
 )
 target_include_directories(test_correlation_comparison PRIVATE include)
 
+# Test 1-angle correlation comparison executable
+add_executable(test_1angle_comparison src/test_1angle_comparison.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp)
+target_link_libraries(test_1angle_comparison fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
+target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
+
+# 1-angle correlation test executable
+add_executable(test_1angle_comparison 
+    src/test_1angle_comparison.cpp
+    src/softRegistrationClass.cpp
+    src/softCorrelationClass.cpp
+    src/PeakFinder.cpp
+    include/PeakFinder.h
+)
+target_link_libraries(test_1angle_comparison 
+    fftw3 
+    generalhelpfullib 
+    soft20::soft20 
+    findpeaks 
+    ${OpenCV_LIBS}
+)
+target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
+
 install(TARGETS
         ros2ServiceRegistrationFS2D
         ros2ServiceRegistrationFS3D
