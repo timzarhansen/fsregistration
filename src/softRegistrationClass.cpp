@@ -595,6 +595,248 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     return returnVectorWithPotentialAngles;
 }
 
+std::vector<rotationPeakfs2D>
+softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[],
+                                                                             double voxelData2Input[], bool debug,
+                                                                             bool multipleRadii, bool useClahe,
+                                                                             bool useHamming) {
+
+    double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
+                                                                     this->phase1, false);
+    double maximumScan2Magnitude = this->getSpectrumFromVoxelData2D(voxelData2Input, this->magnitude2,
+                                                                     this->phase2, false);
+
+
+    double globalMaximumMagnitude;
+    if (maximumScan2Magnitude < maximumScan1Magnitude) {
+        globalMaximumMagnitude = maximumScan1Magnitude;
+    } else {
+        globalMaximumMagnitude = maximumScan2Magnitude;
+    }
+
+    //normalize and fftshift
+    for (int j = 0; j < N; j++) {
+        for (int i = 0; i < N; i++) {
+            int indexX = (N / 2 + i) % N;
+            int indexY = (N / 2 + j) % N;
+
+            magnitude1Shifted[indexY + N * indexX] =
+                    magnitude1[j + N * i] / globalMaximumMagnitude;
+            magnitude2Shifted[indexY + N * indexX] =
+                    magnitude2[j + N * i] / globalMaximumMagnitude;
+        }
+    }
+
+
+    //re-initialize to zero
+    for (int i = 0; i < N * N; i++) {
+        resampledMagnitudeSO3_1[i] = 0;
+        resampledMagnitudeSO3_2[i] = 0;
+        resampledMagnitudeSO3_1TMP[i] = 0;
+        resampledMagnitudeSO3_2TMP[i] = 0;
+    }
+
+    int minRNumber = 1 + floor(N * 0.05);
+    int maxRNumber = N / 2 - floor(N * 0.05);
+    int bandwidth = N / 2;
+
+    if (multipleRadii) {
+        minRNumber = maxRNumber - 1;
+    }
+
+    for (int r = minRNumber; r < maxRNumber; r++) {
+        for (int j = 0; j < 2 * bandwidth; j++) {
+            for (int k = 0; k < 2 * bandwidth; k++) {
+                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
+                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
+                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
+                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
+                double hammingCoeff = 1;
+                resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
+                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
+                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+            }
+        }
+
+        cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
+        cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
+        magTMP1.convertTo(magTMP1, CV_8UC1);
+        magTMP2.convertTo(magTMP2, CV_8UC1);
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+        clahe->setClipLimit(3);
+        if (useClahe) {
+            clahe->apply(magTMP1, magTMP1);
+            clahe->apply(magTMP2, magTMP2);
+        }
+
+
+        for (int j = 0; j < 2 * bandwidth; j++) {
+            for (int k = 0; k < 2 * bandwidth; k++) {
+                double hammingCoeff = 1;
+                if (useHamming) {
+                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
+                }
+
+                resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
+                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
+                                                                 255.0 * hammingCoeff;
+                resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
+                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
+                                                                 255.0 * hammingCoeff;
+            }
+        }
+    }
+
+
+    // NEW: Compute 1-angle correlation using spherical harmonic coefficients
+    // Step 1: Compute alm coefficients for both signals using FST_semi_memo
+    double *alm1R = (double *) malloc(sizeof(double) * bwIn * bwIn);
+    double *alm1I = (double *) malloc(sizeof(double) * bwIn * bwIn);
+    double *alm2R = (double *) malloc(sizeof(double) * bwIn * bwIn);
+    double *alm2I = (double *) malloc(sizeof(double) * bwIn * bwIn);
+    
+    // Initialize signal arrays for FST_semi_memo
+    for (int i = 0; i < N * N; i++) {
+        this->sofftCorrelationObject.sigR[i] = resampledMagnitudeSO3_1[i];
+        this->sofftCorrelationObject.sigI[i] = 0;
+    }
+    
+    // Compute spherical harmonic coefficients for signal 1
+    FST_semi_memo(this->sofftCorrelationObject.sigR, this->sofftCorrelationObject.sigI,
+                  alm1R, alm1I,
+                  bwIn, this->sofftCorrelationObject.seminaive_naive_table,
+                  (double *) this->sofftCorrelationObject.workspace2, 0, bwIn,
+                  &this->sofftCorrelationObject.dctPlan, &this->sofftCorrelationObject.fftPlan,
+                  this->sofftCorrelationObject.weights);
+    
+    // Initialize signal arrays for signal 2
+    for (int i = 0; i < N * N; i++) {
+        this->sofftCorrelationObject.sigR[i] = resampledMagnitudeSO3_2[i];
+        this->sofftCorrelationObject.sigI[i] = 0;
+    }
+    
+    // Compute spherical harmonic coefficients for signal 2
+    FST_semi_memo(this->sofftCorrelationObject.sigR, this->sofftCorrelationObject.sigI,
+                  alm2R, alm2I,
+                  bwIn, this->sofftCorrelationObject.seminaive_naive_table,
+                  (double *) this->sofftCorrelationObject.workspace2, 0, bwIn,
+                  &this->sofftCorrelationObject.dctPlan, &this->sofftCorrelationObject.fftPlan,
+                  this->sofftCorrelationObject.weights);
+    
+    // Step 2: Compute 1D correlation as function of alpha (z-axis rotation)
+    // C(alpha) = sum_{l,m} alm1*_lm * alm2_lm * exp(-i*m*alpha)
+    // This can be computed efficiently using 1D IFFT
+    
+    int nAlpha = N; // Number of alpha samples
+    double *correlation1D = (double *) malloc(sizeof(double) * nAlpha);
+    
+    // For each m, compute sum over l: P_m = sum_l alm1*_lm * alm2_lm
+    double *PmR = (double *) malloc(sizeof(double) * (2 * bwIn));
+    double *PmI = (double *) malloc(sizeof(double) * (2 * bwIn));
+    
+    for (int m = 0; m < 2 * bwIn; m++) {
+        PmR[m] = 0;
+        PmI[m] = 0;
+    }
+    
+    // Compute power spectrum for each m
+    // alm indexing: index = l * (2*bwIn) + m, where l=0..bwIn-1, m=0..2*bwIn-1
+    // But m should be interpreted as -l..l, so we need to handle negative m
+    for (int l = 0; l < bwIn; l++) {
+        for (int mIdx = 0; mIdx <= l * 2; mIdx++) {
+            int almIdx = l * (2 * bwIn) + mIdx;
+            
+            // m ranges from -l to l, so m = mIdx - l
+            int m = mIdx - l;
+            
+            // Map m to positive index for Pm array (m ranges from -(bwIn-1) to +(bwIn-1))
+            int mPos = m + bwIn;
+            
+            if (mPos >= 0 && mPos < 2 * bwIn) {
+                // alm1*_lm * alm2_lm = (alm1R + i*alm1I)* * (alm2R + i*alm2I)
+                // = (alm1R - i*alm1I) * (alm2R + i*alm2I)
+                // = (alm1R*alm2R + alm1I*alm2I) + i*(alm1I*alm2R - alm1R*alm2I)
+                PmR[mPos] += alm1R[almIdx] * alm2R[almIdx] + alm1I[almIdx] * alm2I[almIdx];
+                PmI[mPos] += alm1I[almIdx] * alm2R[almIdx] - alm1R[almIdx] * alm2I[almIdx];
+            }
+        }
+    }
+    
+    // Now compute C(alpha) = sum_m P_m * exp(-i*m*alpha)
+    // This is essentially an inverse FFT
+    // alpha_k = 2*pi*k/nAlpha for k=0..nAlpha-1
+    // m ranges from -(bwIn-1) to +(bwIn-1), mapped to 0..2*bwIn-1
+    
+    for (int k = 0; k < nAlpha; k++) {
+        double alpha = 2.0 * M_PI * k / nAlpha;
+        double corrR = 0;
+        
+        for (int mPos = 0; mPos < 2 * bwIn; mPos++) {
+            int m = mPos - bwIn; // Convert back to actual m value
+            double phase = -m * alpha;
+            corrR += PmR[mPos] * cos(phase) - PmI[mPos] * sin(phase);
+        }
+        
+        correlation1D[k] = corrR;
+    }
+    
+    // Save correlation for debugging
+    if (debug) {
+        std::ofstream myFileCorr;
+        myFileCorr.open("/workspaces/opencodeTestProject/fsregistration/exampleData/correlation_1angle_new.csv");
+        for (int k = 0; k < nAlpha; k++) {
+            myFileCorr << correlation1D[k] << "\n";
+        }
+        myFileCorr.close();
+    }
+    
+    // Step 3: Peak detection on 1D correlation
+    std::vector<float> correlationAveraged;
+    std::vector<float> angleList;
+    
+    for (int k = 0; k < nAlpha; k++) {
+        correlationAveraged.push_back((float) correlation1D[k]);
+        angleList.push_back((float) (2.0 * M_PI * k / nAlpha));
+    }
+    
+    // Normalize correlation
+    float maxCorr = 0, minCorr = INFINITY;
+    for (size_t i = 0; i < correlationAveraged.size(); i++) {
+        if (correlationAveraged[i] > maxCorr) maxCorr = correlationAveraged[i];
+        if (correlationAveraged[i] < minCorr) minCorr = correlationAveraged[i];
+    }
+    
+    for (size_t i = 0; i < correlationAveraged.size(); i++) {
+        correlationAveraged[i] = (correlationAveraged[i] - minCorr) / (maxCorr - minCorr);
+    }
+    
+    // Find peaks
+    std::vector<int> out;
+    PeakFinder::findPeaks(correlationAveraged, out, true, 8.0);
+    
+    // Build result vector
+    std::vector<rotationPeakfs2D> returnVectorWithPotentialAngles;
+    for (size_t i = 0; i < out.size(); i++) {
+        rotationPeakfs2D tmpPeak{};
+        tmpPeak.angle = angleList[out[i]];
+        tmpPeak.peakCorrelation = correlationAveraged[out[i]];
+        tmpPeak.covariance = 0.05;
+        returnVectorWithPotentialAngles.push_back(tmpPeak);
+    }
+    
+    // Cleanup
+    free(alm1R);
+    free(alm1I);
+    free(alm2R);
+    free(alm2I);
+    free(correlation1D);
+    free(PmR);
+    free(PmI);
+    
+    return returnVectorWithPotentialAngles;
+}
+
 
 //Eigen::Vector2d softRegistrationClass::sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                                                double voxelData2Input[],
