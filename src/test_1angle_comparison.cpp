@@ -9,14 +9,24 @@
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
+#include <fstream>
+#include <random>
+#include <algorithm>
 
-double angleDifference(double angle1, double angle2) {
-    return atan2(sin(angle1 - angle2), cos(angle1 - angle2));
+// Forward declaration - defined in softRegistrationClass.cpp
+extern double angleDifference(double angle1, double angle2);
+
+void saveCorrelationToCSV(const std::vector<float>& correlation, const std::vector<float>& angles, const std::string& filename) {
+    std::ofstream file(filename);
+    for (size_t i = 0; i < correlation.size(); i++) {
+        file << angles[i] * 180.0 / M_PI << "," << correlation[i] << "\n";
+    }
+    file.close();
 }
 
 int main(int argc, char** argv) {
-    std::string img1Path = "/workspaces/opencodeTestProject/fsregistration/exampleData/voxelScan1.jpg";
-    std::string img2Path = "/workspaces/opencodeTestProject/fsregistration/exampleData/voxelScan2.jpg";
+    std::string img1Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan1.jpg";
+    std::string img2Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan2.jpg";
     
     if (argc > 2) {
         img1Path = argv[1];
@@ -39,7 +49,7 @@ int main(int argc, char** argv) {
     std::cout << "  Image 1 size: " << img1.cols << "x" << img1.rows << std::endl;
     std::cout << "  Image 2 size: " << img2.cols << "x" << img2.rows << std::endl;
     
-    int N = 128;
+    int N = 512;
     int bwOut = N / 2;
     int bwIn = N / 2;
     int degLim = bwOut - 1;
@@ -61,72 +71,77 @@ int main(int argc, char** argv) {
     
     std::cout << "\nCreating softRegistrationClass..." << std::endl;
     softRegistrationClass registrar(N, bwOut, bwIn, degLim);
-    
-    std::cout << "\n1. Testing OLD method (full SO(3) correlation)..." << std::endl;
+
+    std::cout << "\n1. Computing OLD method correlation array (full SO(3))..." << std::endl;
     auto startOld = std::chrono::steady_clock::now();
-    std::vector<rotationPeakfs2D> peaksOld = registrar.sofftRegistrationVoxel2DListOfPossibleRotations(
-        voxelData1, voxelData2, false, false, true, true);
+    auto [corrOld, anglesOld] = registrar.compute1AngleCorrelationArray(
+        voxelData1, voxelData2, false, false, true, true, false);
     auto endOld = std::chrono::steady_clock::now();
     double timeOld = std::chrono::duration<double>(endOld - startOld).count();
-    
+
     std::cout << "   OLD method completed in " << (timeOld * 1000) << " ms" << std::endl;
-    std::cout << "   Found " << peaksOld.size() << " peaks" << std::endl;
-    
-    if (peaksOld.size() > 0) {
-        std::cout << "   Top 3 peaks (OLD):" << std::endl;
-        for (size_t i = 0; i < std::min(peaksOld.size(), (size_t)3); i++) {
-            std::cout << "     [" << i << "] angle=" << peaksOld[i].angle * 180.0 / M_PI << "°"
-                      << ", correlation=" << peaksOld[i].peakCorrelation << std::endl;
-        }
-    }
-    
-    std::cout << "\n2. Testing NEW method (1-angle correlation)..." << std::endl;
+    std::cout << "   Correlation array size: " << corrOld.size() << " points" << std::endl;
+
+    std::cout << "\n2. Computing NEW method correlation array (1-angle direct)..." << std::endl;
     auto startNew = std::chrono::steady_clock::now();
-    std::vector<rotationPeakfs2D> peaksNew = registrar.sofftRegistrationVoxel2DListOfPossibleRotations1Angle(
-        voxelData1, voxelData2, false, false, true, true);
+    auto [corrNew, anglesNew] = registrar.compute1AngleCorrelationArray(
+        voxelData1, voxelData2, true, false, true, true, false);
     auto endNew = std::chrono::steady_clock::now();
     double timeNew = std::chrono::duration<double>(endNew - startNew).count();
-    
+
     std::cout << "   NEW method completed in " << (timeNew * 1000) << " ms" << std::endl;
-    std::cout << "   Found " << peaksNew.size() << " peaks" << std::endl;
-    
-    if (peaksNew.size() > 0) {
-        std::cout << "   Top 3 peaks (NEW):" << std::endl;
-        for (size_t i = 0; i < std::min(peaksNew.size(), (size_t)3); i++) {
-            std::cout << "     [" << i << "] angle=" << peaksNew[i].angle * 180.0 / M_PI << "°"
-                      << ", correlation=" << peaksNew[i].peakCorrelation << std::endl;
-        }
-    }
-    
-    std::cout << "\n=== Results ===" << std::endl;
+    std::cout << "   Correlation array size: " << corrNew.size() << " points" << std::endl;
+
+    // Save correlation arrays to CSV for plotting
+    saveCorrelationToCSV(corrOld, anglesOld, "/home/tim-external/matlab/registrationFourier/csvFiles/correlation_OLD.csv");
+    saveCorrelationToCSV(corrNew, anglesNew, "/home/tim-external/matlab/registrationFourier/csvFiles/correlation_NEW.csv");
+    std::cout << "\n   Saved correlation arrays to CSV files for plotting" << std::endl;
+
+    std::cout << "\n=== Correlation Array Comparison ===" << std::endl;
     std::cout << "Speedup: " << (timeOld / timeNew) << "x" << std::endl;
-    
-    if (peaksOld.size() > 0 && peaksNew.size() > 0) {
-        double bestAngleOld = peaksOld[0].angle;
-        double bestAngleNew = peaksNew[0].angle;
-        double angleDiff = std::abs(angleDifference(bestAngleOld, bestAngleNew));
-        double angleDiffDeg = angleDiff * 180.0 / M_PI;
-        
-        std::cout << "Best angle (OLD): " << bestAngleOld * 180.0 / M_PI << "°" << std::endl;
-        std::cout << "Best angle (NEW): " << bestAngleNew * 180.0 / M_PI << "°" << std::endl;
-        std::cout << "Angle difference: " << angleDiffDeg << "°" << std::endl;
-        
-        double toleranceDeg = 2.8;
-        if (angleDiffDeg < toleranceDeg) {
-            std::cout << "\n✓ TEST PASSED (angle difference < " << toleranceDeg << "°)" << std::endl;
-        } else {
-            std::cout << "\n✗ TEST FAILED (angle difference >= " << toleranceDeg << "°)" << std::endl;
-            std::cout << "\nNote: This may indicate:" << std::endl;
-            std::cout << "  - Different correlation computation" << std::endl;
-            std::cout << "  - Peak detection differences" << std::endl;
-            std::cout << "  - Need to review the new method implementation" << std::endl;
-        }
-    } else {
-        std::cout << "\n⚠ WARNING: Could not compare angles (missing peaks)" << std::endl;
+
+    // Compare 10 random points with fixed seed for reproducibility
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<> distrib(0, static_cast<int>(corrOld.size()) - 1);
+
+    std::cout << "\nComparing 10 random points:" << std::endl;
+
+    double maxDiff = 0;
+    double sumDiff = 0;
+    double sumSqDiff = 0;
+
+    for (int trial = 0; trial < 10; trial++) {
+        int idx = distrib(rng);
+        double diff = std::abs(corrOld[idx] - corrNew[idx]);
+        maxDiff = std::max(maxDiff, diff);
+        sumDiff += diff;
+        sumSqDiff += diff * diff;
+
+        std::cout << "  Point " << (trial + 1) << " (angle="
+                  << anglesOld[idx] * 180.0 / M_PI << "°): "
+                  << "OLD=" << corrOld[idx] << ", NEW=" << corrNew[idx]
+                  << ", diff=" << diff << std::endl;
     }
-    
+
+    double meanDiff = sumDiff / 10;
+    double rmseDiff = std::sqrt(sumSqDiff / 10);
+
+    std::cout << "\n=== Statistics ===" << std::endl;
+    std::cout << "Maximum difference: " << maxDiff << std::endl;
+    std::cout << "Mean absolute difference: " << meanDiff << std::endl;
+    std::cout << "RMSE: " << rmseDiff << std::endl;
+
+    // Test pass/fail based on maximum difference
+    double tolerance = 0.01;
+    std::cout << "\n=== Test Result ===" << std::endl;
+    if (maxDiff < tolerance) {
+        std::cout << "✓ TEST PASSED (max diff < " << tolerance << ")" << std::endl;
+    } else {
+        std::cout << "✗ TEST FAILED (max diff >= " << tolerance << ")" << std::endl;
+    }
+
     free(voxelData1);
     free(voxelData2);
-    
+
     return 0;
 }

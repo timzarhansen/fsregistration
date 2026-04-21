@@ -111,9 +111,12 @@ public:
                                                 spectrumOut, FFTW_FORWARD, FFTW_ESTIMATE);
         planVoxelToFourier2D = fftw_plan_dft_2d(N, N, inputSpacialData,
                                                 spectrumOut, FFTW_FORWARD, FFTW_ESTIMATE);
-        planVoxelToFourier2DCorrelation = fftw_plan_dft_2d(this->correlationN, this->correlationN,
-                                                           inputSpacialDataCorrelation,
-                                                           spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
+       planVoxelToFourier2DCorrelation = fftw_plan_dft_2d(this->correlationN, this->correlationN,
+                                                            inputSpacialDataCorrelation,
+                                                            spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
+        this->correlation1D = (double *) malloc(sizeof(double) * N);
+        this->PmR = (double *) malloc(sizeof(double) * (2 * bwIn));
+        this->PmI = (double *) malloc(sizeof(double) * (2 * bwIn));
     }
 
         ~softRegistrationClass() {
@@ -143,6 +146,12 @@ public:
     sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[], double voxelData2Input[],
                                                           bool debug = false, bool multipleRadii = false,
                                                           bool useClahe = true, bool useHamming = true);
+
+    std::pair<std::vector<float>, std::vector<float>>
+    compute1AngleCorrelationArray(double voxelData1Input[], double voxelData2Input[],
+                                   bool useNewMethod, bool multipleRadii = false,
+                                   bool useClahe = true, bool useHamming = true,
+                                   bool debug = false);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -249,6 +258,9 @@ private://here everything is created. malloc is done in the constructor
     fftw_plan planVoxelToFourier2DCorrelation;
     fftw_plan planFourierToVoxel2D;
     fftw_plan planFourierToVoxel2DCorrelation;
+    double *correlation1D;
+    double *PmR;
+    double *PmI;
 };
 
 

@@ -24,10 +24,6 @@ find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
 
-# GPU-accelerated correlation dependencies (mandatory for build, runtime check for Python libs)
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-find_package(pybind11 CONFIG REQUIRED)
-
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -136,63 +132,19 @@ target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 #target_link_libraries(servicecall2D "${cpp_typesupport_target}")
 
 ################################################################################
-# GPU-accelerated correlation class (s2fft backend)
+# GPU-accelerated correlation class (cuFFT backend via soft20)
 ################################################################################
 
-message(STATUS "Building with GPU backend support (s2fft/JAX)")
+# Note: GPU acceleration is now provided by soft20's native cuFFT backend.
+# Build soft20 with -DUSE_CUFFT=ON to enable GPU acceleration.
+# The s2fft Python backend has been removed in favor of native CUDA implementation.
 
-# Copy Python backend to build directory
-configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/softCorrelation_gpu_backend.py
-        ${CMAKE_BINARY_DIR}/softCorrelation_gpu_backend.py
-        COPYONLY
-)
-
-# Create GPU correlation library (SHARED, not MODULE)
-add_library(softCorrelationGPUBackend SHARED
-        src/softCorrelationClassGPU.cpp
-)
-
-target_link_libraries(softCorrelationGPUBackend
-        PRIVATE
-        Python3::Python
-        pybind11::embed
-        fftw3
-)
-
-target_include_directories(softCorrelationGPUBackend
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# Inform user about PYTHONPATH setup
-add_custom_target(show_python_setup ALL
-        COMMAND ${CMAKE_COMMAND} -E echo ""
-        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
-        COMMAND ${CMAKE_COMMAND} -E echo "Before running GPU-enabled executables:"
-        COMMAND ${CMAKE_COMMAND} -E echo "  export PYTHONPATH=${CMAKE_BINARY_DIR}:$ENV{PYTHONPATH}"
-        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
-        COMMAND ${CMAKE_COMMAND} -E echo ""
-)
-
-# Test comparison executable
-add_executable(test_correlation_comparison
-    src/test_correlation_comparison.cpp
-    src/softCorrelationClass.cpp
-)
-target_link_libraries(test_correlation_comparison 
-    softCorrelationGPUBackend
-    fftw3 
-    soft20::soft20
-)
-target_include_directories(test_correlation_comparison PRIVATE include)
-
-message(STATUS "test_correlation_comparison built - tests both CPU (FFTW) and GPU (s2fft) backends")
+message(STATUS "GPU acceleration available via soft20 cuFFT backend (build soft20 with -DUSE_CUFFT=ON)")
 
 # Test 1-angle correlation comparison executable
-add_executable(test_1angle_comparison src/test_1angle_comparison.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp)
-target_link_libraries(test_1angle_comparison fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
-target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
+#add_executable(test_1angle_comparison src/test_1angle_comparison.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp)
+#target_link_libraries(test_1angle_comparison fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
+#target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 # 1-angle correlation test executable
 add_executable(test_1angle_comparison

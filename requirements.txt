@@ -1,0 +1,8 @@
+# GPU backend dependencies (s2fft/JAX)
+# Install with: pip3 install -r requirements.txt
+
+jax>=0.4.0
+jaxlib>=0.4.0
+s2fft>=1.0.0
+numpy>=1.22.0
+scipy>=1.10.0
