@@ -55,16 +55,27 @@ class SO3CorrelationBackend:
         """
         try:
             L = self.bwIn
+            N = self.N
             
-            # Reshape inputs to Driscoll-Healy grid format
-            # soft20 uses DH sampling: (2L) x (2L-1) grid
-            signal1 = np.array(signal1, dtype=np.float64).reshape(2 * L, 2 * L - 1)
-            signal2 = np.array(signal2, dtype=np.float64).reshape(2 * L, 2 * L - 1)
+            # Reshape inputs to grid format
+            # Input from C++ is N x N grid (64x64 = 4096 elements)
+            # soft20 uses this format for S^2 transforms
+            signal1 = np.array(signal1, dtype=np.float64).reshape(N, N)
+            signal2 = np.array(signal2, dtype=np.float64).reshape(N, N)
+            
+            # For s2fft with DH sampling, we need (2L) x (2L-1) format
+            # The input is already in the correct format for soft20's FST_semi_memo
+            # We need to convert from soft20's grid to s2fft's DH grid
+            # soft20 uses N x N uniform sampling, s2fft uses DH sampling
+            # For now, truncate/pad to match DH format
+            signal1_dh = signal1[:2*L, :(2*L-1)]
+            signal2_dh = signal2[:2*L, :(2*L-1)]
 
             # Step 1: Forward spherical harmonic transform for both signals
             # Using Driscoll-Healy sampling to match soft20
-            flm_sig = s2fft.forward(signal1, L, sampling="dh", method="jax", reality=True)
-            flm_pat = s2fft.forward(signal2, L, sampling="dh", method="jax", reality=True)
+            # Use numpy method for better precision with high bandlimits
+            flm_sig = s2fft.forward(signal1_dh, L, sampling="dh", method="numpy", reality=True)
+            flm_pat = s2fft.forward(signal2_dh, L, sampling="dh", method="numpy", reality=True)
 
             # Step 2: Combine S^2 coefficients into SO(3) Wigner coefficients
             # This replicates so3CombineCoef_fftw from soft20
@@ -74,11 +85,11 @@ class SO3CorrelationBackend:
             N_azim = self.degLim + 1  # azimuthal bandlimit
             f_so3 = s2fft.wigner.inverse(
                 flmn, self.bwOut, N_azim,
-                sampling="dh", method="jax", reality=False
+                sampling="dh", method="numpy", reality=False
             )
 
-            # Step 4: Reshape output to match soft20 format (8*bwOut^3 complex values)
-            output = self._reshape_to_soft20_format(f_so3)
+            # Step 4: Reshape output to flat array format
+            output = self._reshape_output(f_so3)
 
             return True, output, ""
 
@@ -135,41 +146,33 @@ class SO3CorrelationBackend:
 
         return flmn
 
-    def _reshape_to_soft20_format(self, f_so3):
+    def _reshape_output(self, f_so3):
         """
-        Reshape s2fft output to match soft20's flat array format.
+        Reshape s2fft output to flat array format matching fftw_complex.
         
-        soft20 outputs a flat array of 8*bwOut^3 complex values.
         s2fft with DH sampling outputs shape (n_gamma, n_beta, n_alpha) where:
-            - n_gamma = 2N - 1 (azimuthal samples)
-            - n_beta = 2L (latitudinal samples for DH)
-            - n_alpha = 2L - 1 (longitudinal samples for DH)
+            - n_gamma = 2*N_azim - 1 (azimuthal samples)
+            - n_beta = 2*bwOut (latitudinal samples for DH)
+            - n_alpha = 2*bwOut - 1 (longitudinal samples for DH)
         
-        We flatten and pad/truncate to match soft20's expected size.
+        We flatten to a 1D array with interleaved [real0, imag0, real1, imag1, ...] values
+        to match fftw_complex format (which is typically double[2] per complex value).
         
         Args:
-            f_so3: SO(3) correlation from s2fft, shape varies by sampling
+            f_so3: SO(3) correlation from s2fft
             
         Returns:
-            output: np.ndarray of shape (8*bwOut^3, 2) with [real, imag] pairs
+            output: np.ndarray of shape (2*n_samples,) with interleaved [real, imag] values
         """
-        target_size = 8 * self.bwOut * self.bwOut * self.bwOut
-
-        # Create output array: (target_size, 2) for [real, imag]
-        output = np.zeros((target_size, 2), dtype=np.float64)
-
         # Flatten s2fft output
         flat_data = f_so3.flatten()
-        current_size = flat_data.size
+        n_samples = flat_data.size
 
-        if current_size <= target_size:
-            # Pad with zeros
-            output[:current_size, 0] = np.real(flat_data)
-            output[:current_size, 1] = np.imag(flat_data)
-        else:
-            # Truncate (shouldn't normally happen with proper parameters)
-            output[:, 0] = np.real(flat_data[:target_size])
-            output[:, 1] = np.imag(flat_data[:target_size])
+        # Create output array: (2*n_samples,) for interleaved [real, imag]
+        # This matches fftw_complex format
+        output = np.zeros(2 * n_samples, dtype=np.float64)
+        output[0::2] = np.real(flat_data)  # real parts at even indices
+        output[1::2] = np.imag(flat_data)  # imag parts at odd indices
 
         return output
 

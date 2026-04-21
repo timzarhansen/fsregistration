@@ -125,19 +125,29 @@ int softCorrelationClassGPU::correlationOfTwoSignalsInSO3(
         }
 
         // Get the output array
-        py::array_t<double> output = result[1].cast<py::array_t<double>>();
+        py::object output_obj = result[1];
+        py::array_t<double> output = output_obj.cast<py::array_t<double>>();
         py::buffer_info buf = output.request();
 
-        // Verify output size matches expected (8 * bwOut^3 complex values = 2 * 8 * bwOut^3 doubles)
-        size_t expectedSize = 8 * bwOut * bwOut * bwOut * 2 * sizeof(double);
-        if (buf.size != expectedSize) {
+        // Verify output size
+        // s2fft with DH sampling produces: (2*N_azim-1) * (2*bwOut) * (2*bwOut-1) complex values
+        // where N_azim = degLim + 1
+        // Python returns interleaved [real, imag] as 1D array of doubles
+        size_t n_azim = degLim + 1;
+        size_t s2fft_output_size = (2 * n_azim - 1) * (2 * bwOut) * (2 * bwOut - 1);
+        size_t expectedNumDoubles = s2fft_output_size * 2;  // 2 doubles per complex
+        
+        // buf.size is the number of elements (not bytes) in pybind11
+        if (buf.size != expectedNumDoubles) {
             std::cerr << "[softCorrelationClassGPU] Output size mismatch: expected " 
-                      << expectedSize << " bytes, got " << buf.size << " bytes" << std::endl;
+                      << expectedNumDoubles << " doubles (" << s2fft_output_size << " complex), "
+                      << "got " << buf.size << " doubles" << std::endl;
             return ERROR_OUTPUT_MISMATCH;
         }
 
         // Copy output to so3SigReturn (fftw_complex is typically double[2])
-        std::memcpy(so3SigReturn, buf.ptr, buf.size);
+        // buf.size is number of elements, buf.itemsize is bytes per element
+        std::memcpy(so3SigReturn, buf.ptr, buf.size * buf.itemsize);
 
         return ERROR_NONE;
 

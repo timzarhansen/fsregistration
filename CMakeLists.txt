@@ -24,7 +24,7 @@ find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
 
-# GPU-accelerated correlation dependencies (optional)
+# GPU-accelerated correlation dependencies (mandatory for build, runtime check for Python libs)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 
@@ -139,6 +139,8 @@ target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 # GPU-accelerated correlation class (s2fft backend)
 ################################################################################
 
+message(STATUS "Building with GPU backend support (s2fft/JAX)")
+
 # Copy Python backend to build directory
 configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/src/softCorrelation_gpu_backend.py
@@ -174,13 +176,18 @@ add_custom_target(show_python_setup ALL
 )
 
 # Test comparison executable
-add_executable(test_correlation_comparison src/test_correlation_comparison.cpp)
+add_executable(test_correlation_comparison 
+    src/test_correlation_comparison.cpp
+    src/softCorrelationClass.cpp
+)
 target_link_libraries(test_correlation_comparison 
     softCorrelationGPUBackend
     fftw3 
     soft20::soft20
 )
 target_include_directories(test_correlation_comparison PRIVATE include)
+
+message(STATUS "test_correlation_comparison built - tests both CPU (FFTW) and GPU (s2fft) backends")
 
 install(TARGETS
         ros2ServiceRegistrationFS2D
