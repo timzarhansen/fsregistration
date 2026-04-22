@@ -72,20 +72,20 @@ int main(int argc, char** argv) {
     std::cout << "\nCreating softRegistrationClass..." << std::endl;
     softRegistrationClass registrar(N, bwOut, bwIn, degLim);
 
-    std::cout << "\n1. Computing OLD method correlation array (full SO(3))..." << std::endl;
+    std::cout << "\n1. Computing SO3 method correlation array (full SO(3))..." << std::endl;
     auto startOld = std::chrono::steady_clock::now();
-    auto [corrOld, anglesOld] = registrar.compute1AngleCorrelationArray(
-        voxelData1, voxelData2, false, false, true, true, false);
+    auto [corrOld, anglesOld] = registrar.compute1AngleCorrelationArraySO3(
+        voxelData1, voxelData2, false, true, true, false);
     auto endOld = std::chrono::steady_clock::now();
     double timeOld = std::chrono::duration<double>(endOld - startOld).count();
 
-    std::cout << "   OLD method completed in " << (timeOld * 1000) << " ms" << std::endl;
+    std::cout << "   SO3 method completed in " << (timeOld * 1000) << " ms" << std::endl;
     std::cout << "   Correlation array size: " << corrOld.size() << " points" << std::endl;
 
-    std::cout << "\n2. Computing NEW method correlation array (1-angle direct)..." << std::endl;
+    std::cout << "\n2. Computing Direct method correlation array (1-angle direct)..." << std::endl;
     auto startNew = std::chrono::steady_clock::now();
-    auto [corrNew, anglesNew] = registrar.compute1AngleCorrelationArray(
-        voxelData1, voxelData2, true, false, true, true, false);
+    auto [corrNew, anglesNew] = registrar.compute1AngleCorrelationArrayDirect(
+        voxelData1, voxelData2, false, true, true, false);
     auto endNew = std::chrono::steady_clock::now();
     double timeNew = std::chrono::duration<double>(endNew - startNew).count();
 

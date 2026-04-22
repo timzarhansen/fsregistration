@@ -171,12 +171,12 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
 
 
 double
-softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[],
-                                                             double goodGuessAlpha, double &covariance, bool debug) {
+softRegistrationClass::sofftRegistrationVoxel2DRotationOnlySO3(double voxelData1Input[], double voxelData2Input[],
+                                                              double goodGuessAlpha, double &covariance, bool debug) {
 
     std::vector<rotationPeakfs2D> allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input,
-                                                                                                         voxelData2Input,
-                                                                                                         debug);
+                                                                                                          voxelData2Input,
+                                                                                                          debug);
 
     int indexCorrectAngle = 0;
     for (int i = 1; i < allAnglesList.size(); i++) {
@@ -186,20 +186,14 @@ softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Inp
         }
     }
     covariance = allAnglesList[indexCorrectAngle].covariance;
-    return allAnglesList[indexCorrectAngle].angle;//this angle is from Pos1 to Pos 2
+    return allAnglesList[indexCorrectAngle].angle;
 }
 
-double softRegistrationClass::sofftRegistrationVoxel2DRotationOnlyWithMethod(double voxelData1Input[], double voxelData2Input[],
-                                                                             double goodGuessAlpha, double &covariance,
-                                                                             bool useNewMethod, bool debug) {
+double softRegistrationClass::sofftRegistrationVoxel2DRotationOnlyDirect(double voxelData1Input[], double voxelData2Input[],
+                                                                          double goodGuessAlpha, double &covariance,
+                                                                          bool debug) {
 
-    std::vector<rotationPeakfs2D> allAnglesList;
-    
-    if (useNewMethod) {
-        allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input, debug);
-    } else {
-        allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input, debug);
-    }
+    std::vector<rotationPeakfs2D> allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input, debug);
 
     int indexCorrectAngle = 0;
     for (int i = 1; i < allAnglesList.size(); i++) {
@@ -880,14 +874,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
 }
 
 std::pair<std::vector<float>, std::vector<float>>
-softRegistrationClass::compute1AngleCorrelationArray(double voxelData1Input[], double voxelData2Input[],
-                                                     bool useNewMethod, bool multipleRadii, bool useClahe,
-                                                     bool useHamming, bool debug) {
+softRegistrationClass::compute1AngleCorrelationArraySO3(double voxelData1Input[], double voxelData2Input[],
+                                                         bool multipleRadii, bool useClahe, bool useHamming, bool debug) {
 
+    // Precompute spherical harmonic coefficients (common to both methods)
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
-                                                                    this->phase1, false);
+                                                                     this->phase1, false);
     double maximumScan2Magnitude = this->getSpectrumFromVoxelData2D(voxelData2Input, this->magnitude2,
-                                                                    this->phase2, false);
+                                                                     this->phase2, false);
 
     double globalMaximumMagnitude;
     if (maximumScan2Magnitude < maximumScan1Magnitude) {
@@ -967,7 +961,156 @@ softRegistrationClass::compute1AngleCorrelationArray(double voxelData1Input[], d
         }
     }
 
-    // Compute spherical harmonic coefficients (same for both methods)
+    // Compute full SO(3) correlation
+    this->sofftCorrelationObject.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
+                                                              resultingCorrelationComplex);
+
+    std::vector<rotationPeakfs2D> correlationOfAngle;
+    double z1, z2;
+    for (int j = 0; j < N; j++) {
+        for (int i = 0; i < N; i++) {
+            z1 = j * 2.0 * M_PI / N;
+            z2 = i * 2.0 * M_PI / N;
+            rotationPeakfs2D tmpHolding;
+            tmpHolding.peakCorrelation = resultingCorrelationComplex[j + N * (i + N * 0)][0];
+            tmpHolding.angle = std::fmod(-(z1 + z2) + 6 * M_PI, 2 * M_PI);
+            correlationOfAngle.push_back(tmpHolding);
+        }
+    }
+
+    // Sort by angle
+    std::sort(correlationOfAngle.begin(), correlationOfAngle.end(), compareTwoAngleCorrelation);
+
+    // Average nearby angles
+    std::vector<float> correlationAveraged, angleList;
+    double currentAverageAngle = correlationOfAngle[0].angle;
+    int numberOfAngles = 1;
+    double averageCorrelation = correlationOfAngle[0].peakCorrelation;
+
+    for (size_t i = 1; i < correlationOfAngle.size(); i++) {
+        if (std::abs(currentAverageAngle - correlationOfAngle[i].angle) < 1.0 / N / 4.0) {
+            numberOfAngles++;
+            averageCorrelation += correlationOfAngle[i].peakCorrelation;
+        } else {
+            correlationAveraged.push_back((float) (averageCorrelation / numberOfAngles));
+            angleList.push_back((float) currentAverageAngle);
+            numberOfAngles = 1;
+            averageCorrelation = correlationOfAngle[i].peakCorrelation;
+            currentAverageAngle = correlationOfAngle[i].angle;
+        }
+    }
+    correlationAveraged.push_back((float) (averageCorrelation / numberOfAngles));
+
+    // Normalize to [0, 1]
+    float maximumCorrelation = *std::max_element(correlationAveraged.begin(), correlationAveraged.end());
+    float minimumCorrelation = *std::min_element(correlationAveraged.begin(), correlationAveraged.end());
+
+    for (size_t i = 0; i < correlationAveraged.size(); i++) {
+        correlationAveraged[i] = (correlationAveraged[i] - minimumCorrelation) / (maximumCorrelation - minimumCorrelation);
+    }
+
+    // Save debug output
+    if (debug) {
+        std::ofstream myFile;
+        myFile.open("/home/tim-external/matlab/registrationFourier/csvFiles/correlation1D_SO3.csv");
+        for (size_t i = 0; i < correlationAveraged.size(); i++) {
+            myFile << correlationAveraged[i] << "\n";
+        }
+        myFile.close();
+    }
+
+    return {correlationAveraged, angleList};
+}
+
+std::pair<std::vector<float>, std::vector<float>>
+softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Input[], double voxelData2Input[],
+                                                            bool multipleRadii, bool useClahe, bool useHamming, bool debug) {
+
+    // Precompute spherical harmonic coefficients (common to both methods)
+    double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
+                                                                     this->phase1, false);
+    double maximumScan2Magnitude = this->getSpectrumFromVoxelData2D(voxelData2Input, this->magnitude2,
+                                                                     this->phase2, false);
+
+    double globalMaximumMagnitude;
+    if (maximumScan2Magnitude < maximumScan1Magnitude) {
+        globalMaximumMagnitude = maximumScan1Magnitude;
+    } else {
+        globalMaximumMagnitude = maximumScan2Magnitude;
+    }
+
+    // Normalize and fftshift
+    for (int j = 0; j < N; j++) {
+        for (int i = 0; i < N; i++) {
+            int indexX = (N / 2 + i) % N;
+            int indexY = (N / 2 + j) % N;
+            magnitude1Shifted[indexY + N * indexX] =
+                    magnitude1[j + N * i] / globalMaximumMagnitude;
+            magnitude2Shifted[indexY + N * indexX] =
+                    magnitude2[j + N * i] / globalMaximumMagnitude;
+        }
+    }
+
+    // Re-initialize to zero
+    for (int i = 0; i < N * N; i++) {
+        resampledMagnitudeSO3_1[i] = 0;
+        resampledMagnitudeSO3_2[i] = 0;
+        resampledMagnitudeSO3_1TMP[i] = 0;
+        resampledMagnitudeSO3_2TMP[i] = 0;
+    }
+
+    int minRNumber = 1 + floor(N * 0.05);
+    int maxRNumber = N / 2 - floor(N * 0.05);
+    int bandwidth = N / 2;
+
+    if (multipleRadii) {
+        minRNumber = maxRNumber - 1;
+    }
+
+    for (int r = minRNumber; r < maxRNumber; r++) {
+        for (int j = 0; j < 2 * bandwidth; j++) {
+            for (int k = 0; k < 2 * bandwidth; k++) {
+                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
+                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
+                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
+                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
+                double hammingCoeff = 1;
+                resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
+                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
+                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+            }
+        }
+
+        cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
+        cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
+        magTMP1.convertTo(magTMP1, CV_8UC1);
+        magTMP2.convertTo(magTMP2, CV_8UC1);
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+        clahe->setClipLimit(3);
+        if (useClahe) {
+            clahe->apply(magTMP1, magTMP1);
+            clahe->apply(magTMP2, magTMP2);
+        }
+
+        for (int j = 0; j < 2 * bandwidth; j++) {
+            for (int k = 0; k < 2 * bandwidth; k++) {
+                double hammingCoeff = 1;
+                if (useHamming) {
+                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
+                }
+
+                resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
+                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
+                                                                 255.0 * hammingCoeff;
+                resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
+                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
+                                                                 255.0 * hammingCoeff;
+            }
+        }
+    }
+
+    // Compute spherical harmonic coefficients
     for (int i = 0; i < N * N; i++) {
         this->sofftCorrelationObject.sigR[i] = resampledMagnitudeSO3_1[i];
         this->sofftCorrelationObject.sigI[i] = 0;
@@ -990,144 +1133,80 @@ softRegistrationClass::compute1AngleCorrelationArray(double voxelData1Input[], d
                   &this->sofftCorrelationObject.dctPlan, &this->sofftCorrelationObject.fftPlan,
                   this->sofftCorrelationObject.weights);
 
-    std::vector<rotationPeakfs2D> correlationOfAngle;
+    // Direct 1-angle correlation computation
     int nAlpha = N;
 
-    if (useNewMethod) {
-        // NEW method: direct 1-angle correlation
-        for (int m = 0; m < 2 * bwIn; m++) {
-            this->PmR[m] = 0;
-            this->PmI[m] = 0;
-        }
-
-       for (int l = 0; l < bwIn; l++) {
-            for (int m = -l; m <= l; m++) {
-                int bigL = bwIn - 1;
-                int almIdx;
-                if (m >= 0) {
-                    almIdx = m * (bigL + 1) - (m * (m - 1) / 2) + (l - m);
-                } else {
-                    almIdx = (bigL * (bigL + 3) / 2) + 1 +
-                             ((bigL + m) * (bigL + m + 1) / 2) + (l - abs(m));
-                }
-
-                this->PmR[m + bwIn] += this->sofftCorrelationObject.sigCoefR[almIdx] *
-                                  this->sofftCorrelationObject.patCoefR[almIdx] +
-                                  this->sofftCorrelationObject.sigCoefI[almIdx] *
-                                  this->sofftCorrelationObject.patCoefI[almIdx];
-                this->PmI[m + bwIn] += this->sofftCorrelationObject.sigCoefI[almIdx] *
-                                  this->sofftCorrelationObject.patCoefR[almIdx] -
-                                  this->sofftCorrelationObject.sigCoefR[almIdx] *
-                                  this->sofftCorrelationObject.patCoefI[almIdx];
-            }
-        }
-
-        for (int k = 0; k < nAlpha; k++) {
-            double alpha = 2.0 * M_PI * k / nAlpha;
-            double corrR = 0;
-
-            for (int mPos = 0; mPos < 2 * bwIn; mPos++) {
-                int m = mPos - bwIn;
-                if (m == 0) continue;
-                double phase = -m * alpha;
-                corrR += this->PmR[mPos] * cos(phase) - this->PmI[mPos] * sin(phase);
-            }
-
-            this->correlation1D[k] = corrR;
-        }
+    // Compute P_m for each m
+    for (int m = 0; m < 2 * bwIn; m++) {
+        this->PmR[m] = 0;
+        this->PmI[m] = 0;
     }
 
-    // NEW method path: already sorted, no averaging needed
-    if (useNewMethod) {
-        std::vector<float> correlationAveraged(nAlpha);
-        std::vector<float> angleList(nAlpha);
-        
-        // Copy correlation values and angles
-        for (int k = 0; k < nAlpha; k++) {
-            correlationAveraged[k] = (float)this->correlation1D[k];
-            angleList[k] = (float)(2.0 * M_PI * k / nAlpha);
-        }
-        
-        // Normalize to [0, 1]
-        float maximumCorrelation = *std::max_element(correlationAveraged.begin(), correlationAveraged.end());
-        float minimumCorrelation = *std::min_element(correlationAveraged.begin(), correlationAveraged.end());
-        
-        for (size_t i = 0; i < correlationAveraged.size(); i++) {
-            correlationAveraged[i] = (correlationAveraged[i] - minimumCorrelation) / (maximumCorrelation - minimumCorrelation);
-        }
-        
-        // Save debug output
-        if (debug) {
-            std::ofstream myFile;
-            myFile.open("/home/tim-external/matlab/registrationFourier/csvFiles/correlation1D_NEW.csv");
-            for (size_t i = 0; i < correlationAveraged.size(); i++) {
-                myFile << correlationAveraged[i] << "\n";
-            }
-            myFile.close();
-        }
-        
-        return {correlationAveraged, angleList};
-    } else {
-        // OLD method: full SO(3) correlation
-        this->sofftCorrelationObject.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
-                                                                  resultingCorrelationComplex);
-
-        double z1, z2;
-        for (int j = 0; j < N; j++) {
-            for (int i = 0; i < N; i++) {
-                z1 = j * 2.0 * M_PI / N;
-                z2 = i * 2.0 * M_PI / N;
-                rotationPeakfs2D tmpHolding;
-                tmpHolding.peakCorrelation = resultingCorrelationComplex[j + N * (i + N * 0)][0];
-                tmpHolding.angle = std::fmod(-(z1 + z2) + 6 * M_PI, 2 * M_PI);
-                correlationOfAngle.push_back(tmpHolding);
-            }
-        }
-        
-        // OLD method path: sort, average, normalize
-        // Sort by angle
-        std::sort(correlationOfAngle.begin(), correlationOfAngle.end(), compareTwoAngleCorrelation);
-        
-        // Average nearby angles
-        std::vector<float> correlationAveraged, angleList;
-        double currentAverageAngle = correlationOfAngle[0].angle;
-        int numberOfAngles = 1;
-        double averageCorrelation = correlationOfAngle[0].peakCorrelation;
-        
-        for (size_t i = 1; i < correlationOfAngle.size(); i++) {
-            if (std::abs(currentAverageAngle - correlationOfAngle[i].angle) < 1.0 / N / 4.0) {
-                numberOfAngles++;
-                averageCorrelation += correlationOfAngle[i].peakCorrelation;
+    for (int l = 0; l < bwIn; l++) {
+        for (int m = -l; m <= l; m++) {
+            int bigL = bwIn - 1;
+            int almIdx;
+            if (m >= 0) {
+                almIdx = m * (bigL + 1) - (m * (m - 1) / 2) + (l - m);
             } else {
-                correlationAveraged.push_back((float) (averageCorrelation / numberOfAngles));
-                angleList.push_back((float) currentAverageAngle);
-                numberOfAngles = 1;
-                averageCorrelation = correlationOfAngle[i].peakCorrelation;
-                currentAverageAngle = correlationOfAngle[i].angle;
+                almIdx = (bigL * (bigL + 3) / 2) + 1 +
+                         ((bigL + m) * (bigL + m + 1) / 2) + (l - abs(m));
             }
+
+            this->PmR[m + bwIn] += this->sofftCorrelationObject.sigCoefR[almIdx] *
+                              this->sofftCorrelationObject.patCoefR[almIdx] +
+                              this->sofftCorrelationObject.sigCoefI[almIdx] *
+                              this->sofftCorrelationObject.patCoefI[almIdx];
+            this->PmI[m + bwIn] += this->sofftCorrelationObject.sigCoefI[almIdx] *
+                              this->sofftCorrelationObject.patCoefR[almIdx] -
+                              this->sofftCorrelationObject.sigCoefR[almIdx] *
+                              this->sofftCorrelationObject.patCoefI[almIdx];
         }
-        correlationAveraged.push_back((float) (averageCorrelation / numberOfAngles));
-        
-        // Normalize to [0, 1]
-        float maximumCorrelation = *std::max_element(correlationAveraged.begin(), correlationAveraged.end());
-        float minimumCorrelation = *std::min_element(correlationAveraged.begin(), correlationAveraged.end());
-        
-        for (size_t i = 0; i < correlationAveraged.size(); i++) {
-            correlationAveraged[i] = (correlationAveraged[i] - minimumCorrelation) / (maximumCorrelation - minimumCorrelation);
-        }
-        
-        // Save debug output
-        if (debug) {
-            std::ofstream myFile;
-            myFile.open("/home/tim-external/matlab/registrationFourier/csvFiles/correlation1D_OLD.csv");
-            for (size_t i = 0; i < correlationAveraged.size(); i++) {
-                myFile << correlationAveraged[i] << "\n";
-            }
-            myFile.close();
-        }
-        
-        return {correlationAveraged, angleList};
     }
+
+    // Compute C(alpha) for each alpha
+    for (int k = 0; k < nAlpha; k++) {
+        double alpha = 2.0 * M_PI * k / nAlpha;
+        double corrR = 0;
+
+        for (int mPos = 0; mPos < 2 * bwIn; mPos++) {
+            int m = mPos - bwIn;
+            if (m == 0) continue;
+            double phase = -m * alpha;
+            corrR += this->PmR[mPos] * cos(phase) - this->PmI[mPos] * sin(phase);
+        }
+
+        this->correlation1D[k] = corrR;
+    }
+
+    // Build correlation array and angle list
+    std::vector<float> correlationAveraged(nAlpha);
+    std::vector<float> angleList(nAlpha);
+
+    for (int k = 0; k < nAlpha; k++) {
+        correlationAveraged[k] = (float)this->correlation1D[k];
+        angleList[k] = (float)(2.0 * M_PI * k / nAlpha);
+    }
+
+    // Normalize to [0, 1]
+    float maximumCorrelation = *std::max_element(correlationAveraged.begin(), correlationAveraged.end());
+    float minimumCorrelation = *std::min_element(correlationAveraged.begin(), correlationAveraged.end());
+
+    for (size_t i = 0; i < correlationAveraged.size(); i++) {
+        correlationAveraged[i] = (correlationAveraged[i] - minimumCorrelation) / (maximumCorrelation - minimumCorrelation);
+    }
+
+    // Save debug output
+    if (debug) {
+        std::ofstream myFile;
+        myFile.open("/home/tim-external/matlab/registrationFourier/csvFiles/correlation1D_Direct.csv");
+        for (size_t i = 0; i < correlationAveraged.size(); i++) {
+            myFile << correlationAveraged[i] << "\n";
+        }
+        myFile.close();
+    }
+
+   return {correlationAveraged, angleList};
 }
 
 //Eigen::Vector2d softRegistrationClass::sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
@@ -1694,10 +1773,10 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
     std::vector<Eigen::Matrix4d> listOfTransformations;
 
 //   std::vector<double> maximumHeightPeakList;
-    std::vector<rotationPeakfs2D> estimatedAngles;
+  std::vector<rotationPeakfs2D> estimatedAngles;
     double angleCovariance;
-    double angleTMP = this->sofftRegistrationVoxel2DRotationOnly(voxelData1Input, voxelData2Input, goodGuessAlpha,
-                                                                 angleCovariance, debug);
+    double angleTMP = this->sofftRegistrationVoxel2DRotationOnlySO3(voxelData1Input, voxelData2Input, goodGuessAlpha,
+                                                                  angleCovariance, debug);
 
     rotationPeakfs2D rotationPeakTMP;
     rotationPeakTMP.angle = angleTMP;

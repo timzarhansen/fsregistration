@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
     double angleCovarianceOld;
     
     auto startRotationOld = std::chrono::steady_clock::now();
-    double rotationAngleOld = registrar.sofftRegistrationVoxel2DRotationOnly(
+    double rotationAngleOld = registrar.sofftRegistrationVoxel2DRotationOnlySO3(
         voxelData1, voxelData2, goodGuessAlpha, angleCovarianceOld, false);
     auto endRotationOld = std::chrono::steady_clock::now();
     double rotationTimeOld = std::chrono::duration<double, std::milli>(endRotationOld - startRotationOld).count();
@@ -174,8 +174,8 @@ int main(int argc, char** argv) {
     double angleCovarianceNew;
     
     auto startRotationNew = std::chrono::steady_clock::now();
-    double rotationAngleNew = registrar.sofftRegistrationVoxel2DRotationOnlyWithMethod(
-        voxelData1, voxelData2, goodGuessAlpha, angleCovarianceNew, true, false);
+    double rotationAngleNew = registrar.sofftRegistrationVoxel2DRotationOnlyDirect(
+        voxelData1, voxelData2, goodGuessAlpha, angleCovarianceNew, false);
     auto endRotationNew = std::chrono::steady_clock::now();
     double rotationTimeNew = std::chrono::duration<double, std::milli>(endRotationNew - startRotationNew).count();
     

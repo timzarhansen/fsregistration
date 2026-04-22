@@ -134,9 +134,9 @@ public:
 //                             double goodGuessAlpha, bool debug);
 
 
-    double
-    sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,double &covariance,
-                                         bool debug = false);
+   double
+    sofftRegistrationVoxel2DRotationOnlySO3(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,double &covariance,
+                                          bool debug = false);
 
     std::vector<rotationPeakfs2D>
     sofftRegistrationVoxel2DListOfPossibleRotations(double voxelData1Input[], double voxelData2Input[],
@@ -148,15 +148,21 @@ public:
                                                            bool debug = false, bool multipleRadii = false,
                                                            bool useClahe = true, bool useHamming = true);
 
-    double sofftRegistrationVoxel2DRotationOnlyWithMethod(double voxelData1Input[], double voxelData2Input[],
-                                                           double goodGuessAlpha, double &covariance,
-                                                           bool useNewMethod, bool debug = false);
+    double sofftRegistrationVoxel2DRotationOnlyDirect(double voxelData1Input[], double voxelData2Input[],
+                                                       double goodGuessAlpha, double &covariance,
+                                                       bool debug = false);
 
     std::pair<std::vector<float>, std::vector<float>>
-    compute1AngleCorrelationArray(double voxelData1Input[], double voxelData2Input[],
-                                    bool useNewMethod, bool multipleRadii = false,
-                                    bool useClahe = true, bool useHamming = true,
-                                    bool debug = false);
+    compute1AngleCorrelationArraySO3(double voxelData1Input[], double voxelData2Input[],
+                                      bool multipleRadii = false,
+                                      bool useClahe = true, bool useHamming = true,
+                                      bool debug = false);
+
+    std::pair<std::vector<float>, std::vector<float>>
+    compute1AngleCorrelationArrayDirect(double voxelData1Input[], double voxelData2Input[],
+                                         bool multipleRadii = false,
+                                         bool useClahe = true, bool useHamming = true,
+                                         bool debug = false);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
