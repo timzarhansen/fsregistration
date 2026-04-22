@@ -620,9 +620,9 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 std::vector<rotationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[],
-                                                                             double voxelData2Input[], bool debug,
-                                                                             bool multipleRadii, bool useClahe,
-                                                                             bool useHamming) {
+                                                                               double voxelData2Input[], bool debug,
+                                                                               bool multipleRadii, bool useClahe,
+                                                                               bool useHamming) {
 
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
                                                                      this->phase1, false);
@@ -845,9 +845,26 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
         correlationAveraged[i] = (correlationAveraged[i] - minCorr) / (maxCorr - minCorr);
     }
     
-    // Find peaks
+    // Find minimum element and rotate array so minimum is at index 0
+    auto minmax = std::min_element(correlationAveraged.begin(), correlationAveraged.end());
+    long distanceToMinElement = std::distance(correlationAveraged.begin(), minmax);
+    std::rotate(correlationAveraged.begin(), correlationAveraged.begin() + distanceToMinElement,
+                correlationAveraged.end());
+    
+    // Find peaks on rotated array
     std::vector<int> out;
     PeakFinder::findPeaks(correlationAveraged, out, true, 8.0);
+    
+    // Rotate back and adjust peak indices
+    std::rotate(correlationAveraged.begin(),
+                correlationAveraged.begin() + correlationAveraged.size() - distanceToMinElement,
+                correlationAveraged.end());
+    for (int i = 0; i < out.size(); ++i) {
+        out[i] = out[i] + (int) distanceToMinElement;
+        if (out[i] >= correlationAveraged.size()) {
+            out[i] = out[i] - correlationAveraged.size();
+        }
+    }
     
     // Build result vector
     std::vector<rotationPeakfs2D> returnVectorWithPotentialAngles;
