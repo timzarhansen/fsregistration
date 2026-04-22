@@ -90,78 +90,39 @@ int main(int argc, char** argv) {
     
     auto startTotalOld = std::chrono::steady_clock::now();
     
-    // Rotation detection
-    double goodGuessAlpha = std::atan2(initialGuess(1, 0), initialGuess(0, 0));
-    double angleCovarianceOld;
-    
-    auto startRotationOld = std::chrono::steady_clock::now();
-    double rotationAngleOld = registrar.sofftRegistrationVoxel2DRotationOnlySO3(
-        voxelData1, voxelData2, goodGuessAlpha, angleCovarianceOld, false);
-    auto endRotationOld = std::chrono::steady_clock::now();
-    double rotationTimeOld = std::chrono::duration<double, std::milli>(endRotationOld - startRotationOld).count();
-    
-    std::cout << "Rotation detection time: " << rotationTimeOld << " ms" << std::endl;
-    std::cout << "Detected rotation: " << rotationAngleOld << " rad (" 
-              << rotationAngleOld * 180.0 / M_PI << "°)" << std::endl;
-    
-    // Translation detection (after rotating image 1)
-    auto startTranslationOld = std::chrono::steady_clock::now();
-    
-    // Copy and rotate image 1
-    double* voxelData1Rotated = (double*)malloc(N * N * sizeof(double));
-    for (int i = 0; i < N * N; i++) {
-        voxelData1Rotated[i] = voxelData1[i];
-    }
-    
-    cv::Mat magTMP1(N, N, CV_64F, voxelData1Rotated);
-    cv::Mat magTMP2(N, N, CV_64F, voxelData2);
-    
-    if (useGauss) {
-        for (int i = 0; i < 2; i++) {
-            cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-            cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
-        }
-    }
-    
-    cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
-    cv::Mat r = cv::getRotationMatrix2D(pc, rotationAngleOld * 180.0 / M_PI, 1.0);
-    cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
-    
-    std::vector<translationPeakfs2D> translationsOld = registrar.sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-        voxelData1Rotated, voxelData2, cellSize, 1.0, false, 0, potentialNecessaryForPeak);
-    
-    auto endTranslationOld = std::chrono::steady_clock::now();
-    double translationTimeOld = std::chrono::duration<double, std::milli>(endTranslationOld - startTranslationOld).count();
-    
-    std::cout << "Translation detection time: " << translationTimeOld << " ms" << std::endl;
-    
-    // Find best translation (closest to initial guess)
-    translationPeakfs2D bestTranslationOld;
-    double bestDistance = 100000;
-    for (auto& trans : translationsOld) {
-        double diffX = trans.translationSI.x() - initialGuess(0, 3);
-        double diffY = trans.translationSI.y() - initialGuess(1, 3);
-        double distance = std::sqrt(diffX * diffX + diffY * diffY);
-        if (distance < bestDistance) {
-            bestTranslationOld = trans;
-            bestDistance = distance;
-        }
-    }
+    std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSO3(
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true);
     
     auto endTotalOld = std::chrono::steady_clock::now();
     double totalTimeOld = std::chrono::duration<double, std::milli>(endTotalOld - startTotalOld).count();
     
+    // Find best transformation (closest to initial guess)
+    transformationPeakfs2D bestTransformationOld;
+    double bestDistanceOld = 100000;
+    double initialRotation = std::atan2(initialGuess(1, 0), initialGuess(0, 0));
+    for (auto& trans : allTransformationsOld) {
+        double rotationDiff = std::abs(angleDifference(trans.potentialRotation.angle, initialRotation));
+        for (auto& translation : trans.potentialTranslations) {
+            double diffX = translation.translationSI.x() - initialGuess(0, 3);
+            double diffY = translation.translationSI.y() - initialGuess(1, 3);
+            double translationDistance = std::sqrt(diffX * diffX + diffY * diffY);
+            double totalDistance = rotationDiff * 100 + translationDistance;
+            if (totalDistance < bestDistanceOld) {
+                bestTransformationOld = trans;
+                bestDistanceOld = totalDistance;
+            }
+        }
+    }
+    
     // Build transformation matrix
     Eigen::Matrix4d resultOld = Eigen::Matrix4d::Identity();
-    Eigen::AngleAxisd rotation_vectorOld(rotationAngleOld, Eigen::Vector3d(0, 0, 1));
+    Eigen::AngleAxisd rotation_vectorOld(bestTransformationOld.potentialRotation.angle, Eigen::Vector3d(0, 0, 1));
     Eigen::Matrix3d rotMatrixOld = rotation_vectorOld.toRotationMatrix();
     resultOld.block<3, 3>(0, 0) = rotMatrixOld;
-    resultOld(0, 3) = bestTranslationOld.translationSI.x();
-    resultOld(1, 3) = bestTranslationOld.translationSI.y();
+    resultOld(0, 3) = bestTransformationOld.potentialTranslations[0].translationSI.x();
+    resultOld(1, 3) = bestTransformationOld.potentialTranslations[0].translationSI.y();
     
     printTransformationMatrix("Result:", resultOld, totalTimeOld);
-    
-    free(voxelData1Rotated);
     
     // ========================================
     // Method 2: NEW (1-Angle Direct)
@@ -170,77 +131,38 @@ int main(int argc, char** argv) {
     
     auto startTotalNew = std::chrono::steady_clock::now();
     
-    // Rotation detection
-    double angleCovarianceNew;
-    
-    auto startRotationNew = std::chrono::steady_clock::now();
-    double rotationAngleNew = registrar.sofftRegistrationVoxel2DRotationOnlyDirect(
-        voxelData1, voxelData2, goodGuessAlpha, angleCovarianceNew, false);
-    auto endRotationNew = std::chrono::steady_clock::now();
-    double rotationTimeNew = std::chrono::duration<double, std::milli>(endRotationNew - startRotationNew).count();
-    
-    std::cout << "Rotation detection time: " << rotationTimeNew << " ms" << std::endl;
-    std::cout << "Detected rotation: " << rotationAngleNew << " rad (" 
-              << rotationAngleNew * 180.0 / M_PI << "°)" << std::endl;
-    
-    // Translation detection (after rotating image 1)
-    auto startTranslationNew = std::chrono::steady_clock::now();
-    
-    // Copy and rotate image 1
-    voxelData1Rotated = (double*)malloc(N * N * sizeof(double));
-    for (int i = 0; i < N * N; i++) {
-        voxelData1Rotated[i] = voxelData1[i];
-    }
-    
-    magTMP1 = cv::Mat(N, N, CV_64F, voxelData1Rotated);
-    magTMP2 = cv::Mat(N, N, CV_64F, voxelData2);
-    
-    if (useGauss) {
-        for (int i = 0; i < 2; i++) {
-            cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-            cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
-        }
-    }
-    
-    pc = cv::Point2f(magTMP1.cols / 2., magTMP1.rows / 2.);
-    r = cv::getRotationMatrix2D(pc, rotationAngleNew * 180.0 / M_PI, 1.0);
-    cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
-    
-    std::vector<translationPeakfs2D> translationsNew = registrar.sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-        voxelData1Rotated, voxelData2, cellSize, 1.0, false, 0, potentialNecessaryForPeak);
-    
-    auto endTranslationNew = std::chrono::steady_clock::now();
-    double translationTimeNew = std::chrono::duration<double, std::milli>(endTranslationNew - startTranslationNew).count();
-    
-    std::cout << "Translation detection time: " << translationTimeNew << " ms" << std::endl;
-    
-    // Find best translation (closest to initial guess)
-    translationPeakfs2D bestTranslationNew;
-    bestDistance = 100000;
-    for (auto& trans : translationsNew) {
-        double diffX = trans.translationSI.x() - initialGuess(0, 3);
-        double diffY = trans.translationSI.y() - initialGuess(1, 3);
-        double distance = std::sqrt(diffX * diffX + diffY * diffY);
-        if (distance < bestDistance) {
-            bestTranslationNew = trans;
-            bestDistance = distance;
-        }
-    }
+    std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsDirect(
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true);
     
     auto endTotalNew = std::chrono::steady_clock::now();
     double totalTimeNew = std::chrono::duration<double, std::milli>(endTotalNew - startTotalNew).count();
     
+    // Find best transformation (closest to initial guess)
+    transformationPeakfs2D bestTransformationNew;
+    double bestDistanceNew = 100000;
+    for (auto& trans : allTransformationsNew) {
+        double rotationDiff = std::abs(angleDifference(trans.potentialRotation.angle, initialRotation));
+        for (auto& translation : trans.potentialTranslations) {
+            double diffX = translation.translationSI.x() - initialGuess(0, 3);
+            double diffY = translation.translationSI.y() - initialGuess(1, 3);
+            double translationDistance = std::sqrt(diffX * diffX + diffY * diffY);
+            double totalDistance = rotationDiff * 100 + translationDistance;
+            if (totalDistance < bestDistanceNew) {
+                bestTransformationNew = trans;
+                bestDistanceNew = totalDistance;
+            }
+        }
+    }
+    
     // Build transformation matrix
     Eigen::Matrix4d resultNew = Eigen::Matrix4d::Identity();
-    Eigen::AngleAxisd rotation_vectorNew(rotationAngleNew, Eigen::Vector3d(0, 0, 1));
+    Eigen::AngleAxisd rotation_vectorNew(bestTransformationNew.potentialRotation.angle, Eigen::Vector3d(0, 0, 1));
     Eigen::Matrix3d rotMatrixNew = rotation_vectorNew.toRotationMatrix();
     resultNew.block<3, 3>(0, 0) = rotMatrixNew;
-    resultNew(0, 3) = bestTranslationNew.translationSI.x();
-    resultNew(1, 3) = bestTranslationNew.translationSI.y();
+    resultNew(0, 3) = bestTransformationNew.potentialTranslations[0].translationSI.x();
+    resultNew(1, 3) = bestTransformationNew.potentialTranslations[0].translationSI.y();
     
     printTransformationMatrix("Result:", resultNew, totalTimeNew);
-    
-    free(voxelData1Rotated);
     
     // ========================================
     // Comparison
@@ -248,23 +170,22 @@ int main(int argc, char** argv) {
     std::cout << "\n\n=== Comparison ===" << std::endl;
     
     // Timing comparison
-    std::cout << "\nTiming breakdown:" << std::endl;
-    std::cout << "  Rotation detection: OLD=" << rotationTimeOld << " ms, NEW=" << rotationTimeNew << " ms, speedup=" 
-              << (rotationTimeOld / rotationTimeNew) << "x" << std::endl;
-    std::cout << "  Translation detection: OLD=" << translationTimeOld << " ms, NEW=" << translationTimeNew << " ms, speedup=" 
-              << (translationTimeOld / translationTimeNew) << "x" << std::endl;
+    std::cout << "\nTiming:" << std::endl;
     std::cout << "  Total: OLD=" << totalTimeOld << " ms, NEW=" << totalTimeNew << " ms, speedup=" 
               << (totalTimeOld / totalTimeNew) << "x" << std::endl;
     
     // Result comparison
     std::cout << "\nResult comparison:" << std::endl;
     
-    double rotationDiff = std::abs(angleDifference(rotationAngleOld, rotationAngleNew));
+    double rotationDiff = std::abs(angleDifference(bestTransformationOld.potentialRotation.angle, 
+                                                    bestTransformationNew.potentialRotation.angle));
     double rotationDiffDeg = rotationDiff * 180.0 / M_PI;
     std::cout << "  Rotation difference: " << rotationDiff << " rad (" << rotationDiffDeg << "°)" << std::endl;
     
-    double transDiffX = std::abs(bestTranslationOld.translationSI.x() - bestTranslationNew.translationSI.x());
-    double transDiffY = std::abs(bestTranslationOld.translationSI.y() - bestTranslationNew.translationSI.y());
+    double transDiffX = std::abs(bestTransformationOld.potentialTranslations[0].translationSI.x() - 
+                                  bestTransformationNew.potentialTranslations[0].translationSI.x());
+    double transDiffY = std::abs(bestTransformationOld.potentialTranslations[0].translationSI.y() - 
+                                  bestTransformationNew.potentialTranslations[0].translationSI.y());
     std::cout << "  Translation difference: (" << transDiffX << ", " << transDiffY << ") pixels" << std::endl;
     
     // Pass/fail
