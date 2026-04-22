@@ -156,6 +156,7 @@ add_executable(test_1angle_comparison
     src/PeakFinder.cpp
     include/PeakFinder.h
 )
+
 target_link_libraries(test_1angle_comparison
     fftw3
     generalhelpfullib
