@@ -197,7 +197,7 @@ add_executable(test_1angle_comparison
 )
 target_link_libraries(test_1angle_comparison 
     fftw3 
-    generalhelpfullib 
+    generalhelpfullib
     soft20::soft20 
     findpeaks 
     ${OpenCV_LIBS}

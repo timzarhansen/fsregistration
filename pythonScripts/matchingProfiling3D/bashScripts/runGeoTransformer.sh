@@ -19,13 +19,13 @@ echo "Starting jobs..."
 # -----------------------
 echo "Running LOW..."
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml low train > low_train.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml low train > low_train.log 2>&1 &
 pid1=$!
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml low val > low_val.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml low val > low_val.log 2>&1 &
 pid2=$!
 
-wait $pid1 $pid2
+
 echo "LOW done"
 
 # -----------------------
@@ -33,26 +33,28 @@ echo "LOW done"
 # -----------------------
 echo "Running HIGH..."
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml high train > high_train.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml high train > high_train.log 2>&1 &
 pid3=$!
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml high val > high_val.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml high val > high_val.log 2>&1 &
 pid4=$!
 
-wait $pid3 $pid4
+
 echo "HIGH done"
 
- -----------------------
- NONE
- -----------------------
+# -----------------------
+# NONE
+# -----------------------
 echo "Running NONE..."
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml None train > none_train.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml None train > none_train.log 2>&1 &
 pid5=$!
 
-python3 testingFPFHOnPredatorData.py configFiles/predatorNothingMac.yaml None val > none_val.log 2>&1 &
+python3 testingGeoTransformerOnPredatorData.py configFiles/predatorNothingMac.yaml None val > none_val.log 2>&1 &
 pid6=$!
 
+wait $pid3 $pid4
+wait $pid1 $pid2
 wait $pid5 $pid6
 #wait $pid5 $pid3
 echo "NONE done"

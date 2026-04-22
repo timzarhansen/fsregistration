@@ -14,6 +14,7 @@ import sys
 import argparse
 import csv
 import gc
+import time
 import numpy as np
 import open3d as o3d
 import transforms3d.quaternions as quat
@@ -108,16 +109,50 @@ def preprocess_point_cloud(pcd, voxel_size):
     return pcd_down, pcd_fpfh
 
 
+def init_retry_log(noise_level, type_data, output_dir):
+    """Initialize retry log file."""
+    log_path = os.path.join(output_dir, f'retry_log_{noise_level}_{type_data}.txt')
+    with open(log_path, 'w') as f:
+        f.write(f"Retry Log - Noise: {noise_level}, Data: {type_data}\n")
+        f.write("=" * 60 + "\n\n")
+    return log_path
+
+
+def log_retry(sample_idx, attempt, max_retries, error_msg, log_path):
+    """Log retry attempt."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | Retry {attempt + 1}/{max_retries} | Error: {error_msg}\n")
+    print(f"  [RETRY {attempt + 1}/{max_retries}] Sample {sample_idx}: {error_msg[:100]}")
+
+
+def log_max_retries_exceeded(sample_idx, error_msg, log_path):
+    """Log when max retries exceeded."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | MAX RETRIES EXCEEDED | Error: {error_msg}\n\n")
+    print(f"  [FAILED] Sample {sample_idx}: Max retries exceeded, using identity transform")
+
+
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Path to the config file.')
     parser.add_argument('type_of_noise', type=str, help='Noise level: None, low, high')
     parser.add_argument('type_of_data', type=str, help='Dataset type: train, val')
+    parser.add_argument('--start-index', type=int, required=True, help='First sample index to process (inclusive)')
+    parser.add_argument('--end-index', type=int, required=True, help='Last sample index to process (inclusive)')
+    parser.add_argument('--output-file', type=str, default=None, help='Output CSV file path (default: auto-generated)')
     args = parser.parse_args()
 
     noise_level = args.type_of_noise
     type_data = args.type_of_data
+    start_index = args.start_index
+    end_index = args.end_index
+
+    # Validate index range
+    if start_index < 0:
+        raise ValueError(f"start_index must be >= 0, got {start_index}")
+    if end_index < start_index:
+        raise ValueError(f"end_index ({end_index}) must be >= start_index ({start_index})")
 
     # Load Predator config and dataset
     config = load_config(args.config)
@@ -159,24 +194,39 @@ def main():
     output_dir = 'outputFiles'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Open CSV file for writing
-    csv_path = os.path.join(output_dir, f'outfile_fpfh_{noise_level}_{type_data}.csv')
+    # Initialize retry log
+    retry_log_path = init_retry_log(noise_level, type_data, output_dir)
 
-    # Write header if file doesn't exist
-    if not os.path.exists(csv_path):
-        with open(csv_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
-                           'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
+    # Set output CSV path
+    if args.output_file:
+        csv_path = args.output_file
+    else:
+        csv_path = os.path.join(output_dir, f'batch_{start_index:05d}_{end_index:05d}.csv')
+
+    # Write header (always overwrite for batch files)
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
+                       'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
 
     # Process dataset
     # Note: Both train and val branches assign to config.train_loader
     dataIter = iter(config.train_loader)
 
+# Skip to start_index
+    print(f"Skipping to sample {start_index}...")
+    for _ in range(start_index):
+        try:
+            next(dataIter)
+        except StopIteration:
+            raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
+
+    print(f"Processing samples {start_index} to {end_index}...")
+
     # FPFH Parameters
     voxel_size = 0.05
 
-    for indexDataLoader in range(dataSetSize):
+    for indexDataLoader in range(start_index, end_index + 1):
         inputs = next(dataIter)
 
         # Create Open3D point clouds
@@ -229,59 +279,88 @@ def main():
         maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
         overlapVoxelSize = (2 * maxDistance * 1.5) / N
 
-        # FPFH Global Registration
-        try:
-            # Preprocess both clouds
-            pcd1_down, fpfh1 = preprocess_point_cloud(pcd1_noisy, voxel_size)
-            pcd2_down, fpfh2 = preprocess_point_cloud(pcd2_noisy, voxel_size)
-            
-            # RANSAC registration
-            distance_threshold = voxel_size * 4.0
-            ransac_criteria = o3d.pipelines.registration.RANSACConvergenceCriteria(
-                max_iteration=100000,
-                confidence=0.999
-            )
-            result_ransac = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-                pcd1_down,
-                pcd2_down,
-                fpfh1,
-                fpfh2,
-                mutual_filter=True,
-                max_correspondence_distance=distance_threshold,
-                estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-                ransac_n=3,
-                checkers=[
-                    o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.5),
-                    o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
-                ],
-                criteria=ransac_criteria
-            )
-            estimated_transform = result_ransac.transformation
-            print(f"Sample {indexDataLoader}: fitness={result_ransac.fitness:.4f}, inlier_rmse={result_ransac.inlier_rmse:.6f}")
-            if np.allclose(estimated_transform, np.eye(4)):
-                print(f"  WARNING: RANSAC returned identity transform!")
-        except Exception as e:
-            print(f"Error processing sample {indexDataLoader}: {e}")
-            estimated_transform = np.eye(4)
+        # FPFH Global Registration with retry logic
+        max_retries = 3
+        retry_delay = 1.0
+        estimated_transform = np.eye(4)
+        result_ransac = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                # Preprocess both clouds
+                pcd1_down, fpfh1 = preprocess_point_cloud(pcd1_noisy, voxel_size)
+                pcd2_down, fpfh2 = preprocess_point_cloud(pcd2_noisy, voxel_size)
+                
+                # RANSAC registration
+                distance_threshold = voxel_size * 4.0
+                ransac_criteria = o3d.pipelines.registration.RANSACConvergenceCriteria(
+                    max_iteration=100000,
+                    confidence=0.999
+                )
+                result_ransac = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+                    pcd1_down,
+                    pcd2_down,
+                    fpfh1,
+                    fpfh2,
+                    mutual_filter=True,
+                    max_correspondence_distance=distance_threshold,
+                    estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+                    ransac_n=3,
+                    checkers=[
+                        o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.5),
+                        o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
+                    ],
+                    criteria=ransac_criteria
+                )
+                estimated_transform = result_ransac.transformation
+                print(f"Sample {indexDataLoader}: fitness={result_ransac.fitness:.4f}, inlier_rmse={result_ransac.inlier_rmse:.6f}")
+                if np.allclose(estimated_transform, np.eye(4)):
+                    print(f"  WARNING: RANSAC returned identity transform!")
+                
+                break  # Success, exit retry loop
+                
+            except (MemoryError, RuntimeError) as e:
+                error_str = str(e).lower()
+                if "malloc" in error_str or "heap" in error_str or "corruption" in error_str:
+                    if attempt < max_retries:
+                        log_retry(indexDataLoader, attempt, max_retries, str(e), retry_log_path)
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        log_max_retries_exceeded(indexDataLoader, str(e), retry_log_path)
+                        estimated_transform = np.eye(4)
+                        print(f"  Exiting after max retries exceeded for sample {indexDataLoader}")
+                        sys.exit(1)
+                else:
+                    raise
+            except Exception as e:
+                print(f"Error processing sample {indexDataLoader}: {e}")
+                estimated_transform = np.eye(4)
+                break
 
         # Compute metrics
         overlapPercentage = compute_overlap_ratio(pcd1_noisy, pcd2_noisy, gtTransformation, overlapVoxelSize)
 
-        # Save to CSV
-        with open(csv_path, 'a', newline='') as f:
+        # Save to CSV using atomic write (write to temp, then rename)
+        temp_csv_path = csv_path + '.tmp'
+        with open(temp_csv_path, 'a', newline='') as f:
             writer = csv.writer(f)
             inputWriter = [indexDataLoader, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimated_transform))
             writer.writerow(inputWriter)
+        # Atomic rename (POSIX)
+        os.rename(temp_csv_path, csv_path)
 
         print(f"Processed: {indexDataLoader}")
         
-        # Force garbage collection to prevent memory corruption on macOS
-        gc.collect()
+        # Force garbage collection every 50 samples to prevent memory buildup
+        # Avoid frequent gc.collect() to prevent malloc corruption on macOS
+        if (indexDataLoader + 1) % 50 == 0:
+            gc.collect()
 
     print("Completed!")
-    print(f"FPFH+RANSAC registration test finished. Results saved to {csv_path}")
+    print(f"Batch {start_index}-{end_index} finished. Results saved to {csv_path}")
 
 
 if __name__ == '__main__':
