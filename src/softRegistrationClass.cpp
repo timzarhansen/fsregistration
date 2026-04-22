@@ -1520,28 +1520,32 @@ softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Inpu
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                               double voxelData2Input[],
-                                                                               double cellSize,
-                                                                               double normalizationFactor,
-                                                                               bool debug,
-                                                                               int numberOfRotationForDebug,
-                                                                               double potentialNecessaryForPeak) {
+                                                                                double voxelData2Input[],
+                                                                                double cellSize,
+                                                                                double normalizationFactor,
+                                                                                bool debug,
+                                                                                int numberOfRotationForDebug,
+                                                                                double potentialNecessaryForPeak) {
     //copy and normalize voxelDataInput
 
 
 
+    auto t_fft1 = std::chrono::high_resolution_clock::now();
     // create padding in translation voxelData
     double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
-                                                                      this->phase1Correlation, false,
-                                                                      normalizationFactor);
+                                                                       this->phase1Correlation, false,
+                                                                       normalizationFactor);
+    auto t_fft2 = std::chrono::high_resolution_clock::now();
 
 
     double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
-                                                                      this->phase2Correlation, false,
-                                                                      normalizationFactor);
+                                                                       this->phase2Correlation, false,
+                                                                       normalizationFactor);
+    auto t_fft3 = std::chrono::high_resolution_clock::now();
 
 
     //calculate correlation of spectrums
+    auto t_corr = std::chrono::high_resolution_clock::now();
     for (int j = 0; j < this->correlationN; j++) {
         for (int i = 0; i < this->correlationN; i++) {
 
@@ -1560,9 +1564,11 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
 
         }
     }
+    auto t_ifft = std::chrono::high_resolution_clock::now();
 
     // back fft
     fftw_execute(planFourierToVoxel2DCorrelation);
+    auto t_shift = std::chrono::high_resolution_clock::now();
 
 
     // normalization Test:
@@ -1626,18 +1632,10 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
 //                                                                 registrationNoiseImpactFactor,
 //                                                                 ignorePercentageFactor);
 
-    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
+    //function of 2D peak detection
+    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationOptimized(
             cellSize,
             potentialNecessaryForPeak);
-
-    //function of 2D peak detection
-
-//    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationSimpleDouble1D(
-//            maximumCorrelation,
-//            cellSize,
-//            registrationNoiseImpactFactor,
-//            ignorePercentageFactor);
-
 
     if (debug) {
         std::ofstream myFile10;
@@ -2068,20 +2066,20 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
 }
 
 std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                                          double voxelData2Input[],
-                                                                                          double cellSize,
-                                                                                          bool useGauss,
-                                                                                          bool debug,
-                                                                                          double potentialNecessaryForPeak,
-                                                                                          bool multipleRadii,
-                                                                                          bool useClahe,
-                                                                                          bool useHamming) {
-    std::vector<transformationPeakfs2D> listOfTransformations;
+                                                                                           double voxelData2Input[],
+                                                                                           double cellSize,
+                                                                                           bool useGauss,
+                                                                                           bool debug,
+                                                                                           double potentialNecessaryForPeak,
+                                                                                           bool multipleRadii,
+                                                                                           bool useClahe,
+                                                                                           bool useHamming) {
+  std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
 
-  estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input,
-                                                                                       debug, multipleRadii, useClahe,
-                                                                                       useHamming);
+    estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input,
+                                                                                         debug, multipleRadii, useClahe,
+                                                                                         useHamming);
 
     int numAngles = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAngles);
@@ -2528,6 +2526,77 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
     free(current2DCorrelation);
     return (tmpTranslations);
 
+}
+
+std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrelationOptimized(double cellSize,
+                                                                                               double potentialNecessaryForPeak,
+                                                                                               double ignoreSidesPercentage) {
+
+    int definedRadius = 2;
+    std::vector<translationPeakfs2D> tmpTranslations;
+    tmpTranslations.reserve(10);
+
+    for (int j = definedRadius; j < this->correlationN - definedRadius; j++) {
+        for (int i = definedRadius; i < this->correlationN - definedRadius; i++) {
+            double centerValue = this->resultingCorrelationDouble[j + this->correlationN * i];
+
+            if (centerValue <= 0.1) {
+                continue;
+            }
+
+            bool isLocalMax = true;
+            for (int dj = -definedRadius; dj <= definedRadius; dj++) {
+                if (!isLocalMax) break;
+                for (int di = -definedRadius; di <= definedRadius; di++) {
+                    if (dj == 0 && di == 0) continue;
+                    int nj = j + dj;
+                    int ni = i + di;
+                    if (this->resultingCorrelationDouble[nj + this->correlationN * ni] >= centerValue) {
+                        isLocalMax = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!isLocalMax) {
+                continue;
+            }
+
+            bool inInterestingArea = true;
+            if (i < ignoreSidesPercentage * this->correlationN || 
+                i > (1 - ignoreSidesPercentage) * this->correlationN ||
+                j < ignoreSidesPercentage * this->correlationN || 
+                j > (1 - ignoreSidesPercentage) * this->correlationN) {
+                inInterestingArea = false;
+            }
+
+            if (inInterestingArea && centerValue > potentialNecessaryForPeak) {
+                translationPeakfs2D tmpTranslationPeak;
+                tmpTranslationPeak.translationSI.x() = -((i - (int)(this->correlationN / 2.0)) * cellSize);
+                tmpTranslationPeak.translationSI.y() = -((j - (int)(this->correlationN / 2.0)) * cellSize);
+                tmpTranslationPeak.translationVoxel.x() = i;
+                tmpTranslationPeak.translationVoxel.y() = j;
+                tmpTranslationPeak.peakHeight = centerValue;
+                tmpTranslationPeak.persistenceValue = centerValue;
+
+                double covSum = 0;
+                int covCount = 0;
+                for (int dj = -definedRadius; dj <= definedRadius; dj++) {
+                    for (int di = -definedRadius; di <= definedRadius; di++) {
+                        double val = this->resultingCorrelationDouble[(j + dj) + this->correlationN * (i + di)];
+                        covSum += val;
+                        covCount++;
+                    }
+                }
+                double avgCov = covSum / covCount;
+                tmpTranslationPeak.covariance << avgCov, 0, 0, avgCov;
+
+                tmpTranslations.push_back(tmpTranslationPeak);
+            }
+        }
+    }
+
+    return tmpTranslations;
 }
 
 int softRegistrationClass::getSizeOfRegistration() {

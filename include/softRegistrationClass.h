@@ -256,9 +256,13 @@ public:
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
-    std::vector<translationPeakfs2D>
+   std::vector<translationPeakfs2D>
     peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
-                                                 double ignoreSidesPercentage = 0.05);
+                                                  double ignoreSidesPercentage = 0.05);
+
+    std::vector<translationPeakfs2D>
+    peakDetectionOf2DCorrelationOptimized(double cellSize, double potentialNecessaryForPeak = 0.1,
+                                          double ignoreSidesPercentage = 0.05);
 
     int getSizeOfRegistration();
 
