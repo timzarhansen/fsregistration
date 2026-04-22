@@ -19,6 +19,8 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3)
 
 
+find_package(OpenMP REQUIRED)
+
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
@@ -90,27 +92,27 @@ add_executable(registration3DVoxels src/registrationOf3DVoxels.cpp src/softRegis
         src/softCorrelationClass3D.cpp
         src/softRegistrationClass3D.cpp)
 ament_target_dependencies(registration3DVoxels PCL)
-target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
+target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
 target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
 
 
 
 add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
-target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
+target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 target_include_directories(registrationOfTwoImages PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 
 add_executable(ros2ServiceRegistrationFS2D src/serviceRegistrationImage.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
 ament_target_dependencies(ros2ServiceRegistrationFS2D rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
-target_link_libraries(ros2ServiceRegistrationFS2D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
+target_link_libraries(ros2ServiceRegistrationFS2D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 target_include_directories(ros2ServiceRegistrationFS2D PUBLIC ${OpenCV_INCLUDE_DIRS})
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(ros2ServiceRegistrationFS2D "${cpp_typesupport_target}")
 
 add_executable(ros2ServiceRegistrationFS3D src/serviceRegistrationVoxel.cpp src/softRegistrationClass3D.cpp src/softCorrelationClass3D.cpp)
 ament_target_dependencies(ros2ServiceRegistrationFS3D rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
-target_link_libraries(ros2ServiceRegistrationFS3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
+target_link_libraries(ros2ServiceRegistrationFS3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
 target_include_directories(ros2ServiceRegistrationFS3D PUBLIC ${OpenCV_INCLUDE_DIRS})
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(ros2ServiceRegistrationFS3D "${cpp_typesupport_target}")
@@ -160,8 +162,27 @@ target_link_libraries(test_1angle_comparison
     soft20::soft20
     findpeaks
     ${OpenCV_LIBS}
+    OpenMP::OpenMP_CXX
 )
 target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
+
+# Full registration comparison test executable
+add_executable(test_full_registration_comparison
+    src/test_full_registration_comparison.cpp
+    src/softRegistrationClass.cpp
+    src/softCorrelationClass.cpp
+    src/PeakFinder.cpp
+    include/PeakFinder.h
+)
+target_link_libraries(test_full_registration_comparison
+    fftw3
+    generalhelpfullib
+    soft20::soft20
+    findpeaks
+    ${OpenCV_LIBS}
+    OpenMP::OpenMP_CXX
+)
+target_include_directories(test_full_registration_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 install(TARGETS
         ros2ServiceRegistrationFS2D

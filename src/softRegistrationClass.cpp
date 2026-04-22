@@ -172,11 +172,11 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
 
 double
 softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[],
-                                                            double goodGuessAlpha, double &covariance, bool debug) {
+                                                             double goodGuessAlpha, double &covariance, bool debug) {
 
     std::vector<rotationPeakfs2D> allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input,
-                                                                                                        voxelData2Input,
-                                                                                                        debug);
+                                                                                                         voxelData2Input,
+                                                                                                         debug);
 
     int indexCorrectAngle = 0;
     for (int i = 1; i < allAnglesList.size(); i++) {
@@ -187,6 +187,29 @@ softRegistrationClass::sofftRegistrationVoxel2DRotationOnly(double voxelData1Inp
     }
     covariance = allAnglesList[indexCorrectAngle].covariance;
     return allAnglesList[indexCorrectAngle].angle;//this angle is from Pos1 to Pos 2
+}
+
+double softRegistrationClass::sofftRegistrationVoxel2DRotationOnlyWithMethod(double voxelData1Input[], double voxelData2Input[],
+                                                                             double goodGuessAlpha, double &covariance,
+                                                                             bool useNewMethod, bool debug) {
+
+    std::vector<rotationPeakfs2D> allAnglesList;
+    
+    if (useNewMethod) {
+        allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input, debug);
+    } else {
+        allAnglesList = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input, debug);
+    }
+
+    int indexCorrectAngle = 0;
+    for (int i = 1; i < allAnglesList.size(); i++) {
+        if (std::abs(angleDifference(allAnglesList[indexCorrectAngle].angle, goodGuessAlpha)) >
+            std::abs(angleDifference(allAnglesList[i].angle, goodGuessAlpha))) {
+            indexCorrectAngle = i;
+        }
+    }
+    covariance = allAnglesList[indexCorrectAngle].covariance;
+    return allAnglesList[indexCorrectAngle].angle;
 }
 
 std::vector<rotationPeakfs2D>
@@ -1782,20 +1805,24 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 //        std::cout << estimatedAngle.angle << std::endl;
 //    }
 
-    int angleIndex = 0;
-    for (auto &estimatedAngle: estimatedAnglePeak) {
+    int numAngles = estimatedAnglePeak.size();
+    std::vector<transformationPeakfs2D> listOfTransformationsParallel;
+    listOfTransformationsParallel.reserve(numAngles);
 
-        begin = std::chrono::steady_clock::now();
+    #pragma omp parallel for schedule(dynamic)
+    for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
+        auto &estimatedAngle = estimatedAnglePeak[angleIndex];
 
-        //copy data
-        for (int i = 0; i < N * N; i++) {
-            this->voxelData1[i] = voxelData1Input[i];
-            this->voxelData2[i] = voxelData2Input[i];
+        std::vector<double> voxelData1_local(this->N * this->N);
+        std::vector<double> voxelData2_local(this->N * this->N);
+        for (int i = 0; i < this->N * this->N; i++) {
+            voxelData1_local[i] = voxelData1Input[i];
+            voxelData2_local[i] = voxelData2Input[i];
         }
 
-        cv::Mat magTMP1(this->N, this->N, CV_64F, voxelData1);
-        cv::Mat magTMP2(this->N, this->N, CV_64F, voxelData2);
-        //add gaussian blur
+        cv::Mat magTMP1(this->N, this->N, CV_64F, voxelData1_local.data());
+        cv::Mat magTMP2(this->N, this->N, CV_64F, voxelData2_local.data());
+
         if (useGauss) {
             for (int i = 0; i < 2; i++) {
                 cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
@@ -1804,28 +1831,23 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
         }
 
         cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
-        //positive values mean COUNTER CLOCK WISE (open cv description) threfore negative rotation
         cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
-        cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size()); // what size I should use?
+        cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
 
-//        end = std::chrono::steady_clock::now();
-//        std::cout << "2: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << std::endl;
-//        begin = std::chrono::steady_clock::now();
+        std::vector<translationPeakfs2D> potentialTranslations =
+                this->sofftRegistrationVoxel2DTranslationAllPossibleSolutionsThreadSafe(
+                        voxelData1_local.data(), voxelData2_local.data(),
+                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
 
-        std::vector<translationPeakfs2D> potentialTranslations = this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-                voxelData1, voxelData2,
-                cellSize,
-                1.0,
-                debug, angleIndex, potentialNecessaryForPeak);
-//        end = std::chrono::steady_clock::now();
-//        std::cout << "3: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << std::endl;
         transformationPeakfs2D transformationPeakTMP;
         transformationPeakTMP.potentialRotation = estimatedAngle;
         transformationPeakTMP.potentialTranslations = potentialTranslations;
 
-        listOfTransformations.push_back(transformationPeakTMP);
-        angleIndex++;
+        #pragma omp critical
+        listOfTransformationsParallel.push_back(transformationPeakTMP);
     }
+
+    listOfTransformations = std::move(listOfTransformationsParallel);
 
     // save list of transformations
     if (debug) {
@@ -2296,4 +2318,199 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
 
 int softRegistrationClass::getSizeOfRegistration() {
     return this->N;
+}
+
+double softRegistrationClass::getSpectrumFromVoxelData2DCorrelationThreadSafe(
+    double voxelData[], double magnitude[], double phase[],
+    bool gaussianBlur, double normalizationFactor,
+    int correlationN,
+    fftw_complex* inputSpacialDataCorrelation_local,
+    fftw_plan planVoxelToFourier2D_local) {
+
+    for (int i = 0; i < correlationN * correlationN; i++) {
+        inputSpacialDataCorrelation_local[i][0] = voxelData[i];
+        inputSpacialDataCorrelation_local[i][1] = 0;
+    }
+
+    if (gaussianBlur) {
+        cv::Mat magTMP(correlationN, correlationN, CV_64F, voxelData);
+        for (int i = 0; i < 2; i++) {
+            cv::GaussianBlur(magTMP, magTMP, cv::Size(9, 9), 0);
+        }
+        for (int i = 0; i < correlationN * correlationN; i++) {
+            inputSpacialDataCorrelation_local[i][0] = magTMP.ptr<double>(i / correlationN)[i % correlationN];
+        }
+    }
+
+    fftw_execute(planVoxelToFourier2D_local);
+
+    double maximum = 0;
+    fftw_complex* spectrum = inputSpacialDataCorrelation_local;
+
+    for (int j = 0; j < correlationN; j++) {
+        for (int i = 0; i < correlationN; i++) {
+            int indexX = (correlationN / 2 + i) % correlationN;
+            int indexY = (correlationN / 2 + j) % correlationN;
+
+            magnitude[indexY + correlationN * indexX] = sqrt(
+                    spectrum[j + correlationN * i][0] * spectrum[j + correlationN * i][0] +
+                    spectrum[j + correlationN * i][1] * spectrum[j + correlationN * i][1]) / normalizationFactor;
+
+            phase[indexY + correlationN * indexX] = atan2(
+                    spectrum[j + correlationN * i][1], spectrum[j + correlationN * i][0]);
+
+            if (maximum < magnitude[indexY + correlationN * indexX]) {
+                maximum = magnitude[indexY + correlationN * indexX];
+            }
+        }
+    }
+
+    return maximum;
+}
+
+std::vector<translationPeakfs2D>
+softRegistrationClass::peakDetectionOf2DCorrelationFromBuffer(
+    double* resultingCorrelationDouble, int correlationN,
+    double cellSize, double potentialNecessaryForPeak) {
+
+    double ignoreSidesPercentage = 0.05;
+
+    double maxValue = 0;
+    for (int i = 0; i < correlationN * correlationN; i++) {
+        if (maxValue < resultingCorrelationDouble[i]) {
+            maxValue = resultingCorrelationDouble[i];
+        }
+    }
+
+    size_t ourSize = correlationN * correlationN;
+    double* current2DCorrelation = (double*) malloc(sizeof(double) * ourSize);
+    for (int i = 0; i < ourSize; i++) {
+        current2DCorrelation[i] = resultingCorrelationDouble[i];
+    }
+
+    findpeaks::image_t<double> image = {
+            (size_t) correlationN, (size_t) correlationN,
+            current2DCorrelation
+    };
+
+    std::vector<findpeaks::peak_t<double>> peaks = findpeaks::persistance(image);
+    std::vector<translationPeakfs2D> tmpTranslations;
+    for (const auto &p: peaks) {
+        double levelPotential = p.persistence * sqrt(p.birth_level) *
+                                Eigen::Vector2d((double) ((int) p.birth_position.x - (int) p.death_position.x),
+                                                (double) ((int) p.birth_position.y - (int) p.death_position.y)).norm() *
+                                511.0 / correlationN;
+
+        bool inInterestingArea = true;
+        if ((int) p.birth_position.x < ignoreSidesPercentage * correlationN || (int) p.birth_position.x > (
+                1 - ignoreSidesPercentage) * correlationN ||
+            (int) p.birth_position.y < ignoreSidesPercentage * correlationN || (int) p.birth_position.y > (
+                    1 - ignoreSidesPercentage) * correlationN) {
+            inInterestingArea = false;
+        }
+
+        if (p.birth_level > 0.1 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
+            translationPeakfs2D tmpTranslationPeak;
+            tmpTranslationPeak.translationSI.x() = -(((int) p.birth_position.x - (int) (correlationN / 2.0)) *
+                                                     cellSize);
+            tmpTranslationPeak.translationSI.y() = -(((int) p.birth_position.y - (int) (correlationN / 2.0)) *
+                                                     cellSize);
+            tmpTranslationPeak.translationVoxel.x() = (int) p.birth_position.x;
+            tmpTranslationPeak.translationVoxel.y() = (int) p.birth_position.y;
+            tmpTranslationPeak.peakHeight = resultingCorrelationDouble[p.birth_position.y +
+                                                                       correlationN * p.birth_position.x] *
+                                            maxValue;
+            tmpTranslationPeak.persistenceValue = levelPotential;
+            tmpTranslations.push_back(tmpTranslationPeak);
+        }
+    }
+    free(current2DCorrelation);
+    return (tmpTranslations);
+}
+
+std::vector<translationPeakfs2D>
+softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutionsThreadSafe(
+    double voxelData1Input[], double voxelData2Input[],
+    double cellSize, double normalizationFactor, bool debug,
+    int numberOfRotationForDebug, double potentialNecessaryForPeak) {
+
+    int correlationN = this->N * 2 - 1;
+
+    std::vector<double> magnitude1Correlation(correlationN * correlationN * correlationN);
+    std::vector<double> magnitude2Correlation(correlationN * correlationN * correlationN);
+    std::vector<double> phase1Correlation(correlationN * correlationN * correlationN);
+    std::vector<double> phase2Correlation(correlationN * correlationN * correlationN);
+    std::vector<fftw_complex> resultingPhaseDiff2DCorrelation(correlationN * correlationN);
+    std::vector<fftw_complex> resultingShiftPeaks2DCorrelation(correlationN * correlationN);
+    std::vector<double> resultingCorrelationDouble(correlationN * correlationN);
+    std::vector<fftw_complex> inputSpacialDataCorrelation(correlationN * correlationN);
+    std::vector<fftw_complex> spectrumOutCorrelation(correlationN * correlationN * correlationN);
+
+    fftw_plan planVoxelToFourier2D = fftw_plan_dft_2d(correlationN, correlationN,
+                                                       inputSpacialDataCorrelation.data(),
+                                                       spectrumOutCorrelation.data(),
+                                                       FFTW_FORWARD, FFTW_ESTIMATE);
+    fftw_plan planFourierToVoxel2D = fftw_plan_dft_2d(correlationN, correlationN,
+                                                       resultingPhaseDiff2DCorrelation.data(),
+                                                       resultingShiftPeaks2DCorrelation.data(),
+                                                       FFTW_BACKWARD, FFTW_ESTIMATE);
+
+    double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
+            voxelData1Input, magnitude1Correlation.data(), phase1Correlation.data(),
+            false, normalizationFactor, correlationN,
+            inputSpacialDataCorrelation.data(), planVoxelToFourier2D);
+
+    double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
+            voxelData2Input, magnitude2Correlation.data(), phase2Correlation.data(),
+            false, normalizationFactor, correlationN,
+            inputSpacialDataCorrelation.data(), planVoxelToFourier2D);
+
+    for (int j = 0; j < correlationN; j++) {
+        for (int i = 0; i < correlationN; i++) {
+            int indexX = i;
+            int indexY = j;
+            std::complex<double> tmpComplex1 =
+                    magnitude1Correlation[indexY + correlationN * indexX] *
+                    std::exp(std::complex<double>(0, phase1Correlation[indexY + correlationN * indexX]));
+            std::complex<double> tmpComplex2 =
+                    magnitude2Correlation[indexY + correlationN * indexX] *
+                    std::exp(std::complex<double>(0, phase2Correlation[indexY + correlationN * indexX]));
+            std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
+            resultingPhaseDiff2DCorrelation[j + correlationN * i][0] = resultComplex.real();
+            resultingPhaseDiff2DCorrelation[j + correlationN * i][1] = resultComplex.imag();
+        }
+    }
+
+    fftw_execute(planFourierToVoxel2D);
+
+    double maximumCorrelation = 0;
+    for (int j = 0; j < correlationN; j++) {
+        for (int i = 0; i < correlationN; i++) {
+            int indexX = (correlationN / 2 + i + correlationN) % correlationN;
+            int indexY = (correlationN / 2 + j + correlationN) % correlationN;
+            double normalizationFactorForCorrelation =
+                    1 / this->normalizationFactorCalculation(indexX, indexY);
+            normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+
+            resultingCorrelationDouble[indexY + correlationN * indexX] =
+                    normalizationFactorForCorrelation * sqrt(
+                            resultingShiftPeaks2DCorrelation[j + correlationN * i][0] *
+                            resultingShiftPeaks2DCorrelation[j + correlationN * i][0] +
+                            resultingShiftPeaks2DCorrelation[j + correlationN * i][1] *
+                            resultingShiftPeaks2DCorrelation[j + correlationN * i][1]);
+
+            if (maximumCorrelation < resultingCorrelationDouble[indexY + correlationN * indexX]) {
+                maximumCorrelation = resultingCorrelationDouble[indexY + correlationN * indexX];
+            }
+        }
+    }
+
+    std::vector<translationPeakfs2D> potentialTranslations =
+            this->peakDetectionOf2DCorrelationFromBuffer(
+                    resultingCorrelationDouble.data(), correlationN, cellSize, potentialNecessaryForPeak);
+
+    fftw_destroy_plan(planVoxelToFourier2D);
+    fftw_destroy_plan(planFourierToVoxel2D);
+
+    return potentialTranslations;
 }
