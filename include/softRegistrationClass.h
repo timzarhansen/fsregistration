@@ -170,14 +170,15 @@ public:
 //                                                        Eigen::Vector3d initialGuess, bool useInitialGuess,
 //                                                        double &heightMaximumPeak, bool debug = false);
 
-    Eigen::Matrix4d registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
-                                                     double voxelData2Input[],
-                                                     Eigen::Matrix4d &initialGuess,Eigen::Matrix3d &covarianceMatrix,
-                                                     bool useInitialAngle, bool useInitialTranslation,
-                                                     double cellSize,
-                                                     bool useGauss,
-                                                     bool debug = false,
-                                                     double potentialNecessaryForPeak = 0.1);
+ Eigen::Matrix4d registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
+                                                      double voxelData2Input[],
+                                                      Eigen::Matrix4d &initialGuess,Eigen::Matrix3d &covarianceMatrix,
+                                                      bool useInitialAngle, bool useInitialTranslation,
+                                                      double cellSize,
+                                                      bool useGauss,
+                                                      bool debug = false,
+                                                      double potentialNecessaryForPeak = 0.1,
+                                                      bool benchmark = false);
 
    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
                                                                                    double voxelData2Input[],
@@ -214,13 +215,14 @@ public:
     double getSpectrumFromVoxelData2DCorrelation(double voxelData[], double magnitude[], double phase[],
                                                  bool gaussianBlur, double normalizationFactor);
 
-  std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                               double voxelData2Input[],
-                                                                                               double cellSize,
-                                                                                               double normalizationFactor,
-                                                                                               bool debug = false,
-                                                                                               int numberOfRotationForDebug = 0,
-                                                                                               double potentialNecessaryForPeak = 0.1);
+ std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
+                                                                                                double voxelData2Input[],
+                                                                                                double cellSize,
+                                                                                                double normalizationFactor,
+                                                                                                bool debug = false,
+                                                                                                int numberOfRotationForDebug = 0,
+                                                                                                double potentialNecessaryForPeak = 0.1,
+                                                                                                bool benchmark = false);
 
     std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutionsThreadSafe(
         double voxelData1Input[], double voxelData2Input[],
@@ -258,9 +260,9 @@ public:
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
-   std::vector<translationPeakfs2D>
-    peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
-                                                  double ignoreSidesPercentage = 0.05);
+std::vector<translationPeakfs2D>
+     peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
+                                                   double ignoreSidesPercentage = 0.05, bool benchmark = false);
 
     std::vector<translationPeakfs2D>
     peakDetectionOf2DCorrelationOptimized(double cellSize, double potentialNecessaryForPeak = 0.1,

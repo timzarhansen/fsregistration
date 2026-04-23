@@ -1521,224 +1521,157 @@ softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Inpu
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                double voxelData2Input[],
-                                                                                double cellSize,
-                                                                                double normalizationFactor,
-                                                                                bool debug,
-                                                                                int numberOfRotationForDebug,
-                                                                                double potentialNecessaryForPeak) {
+                                                                                 double voxelData2Input[],
+                                                                                 double cellSize,
+                                                                                 double normalizationFactor,
+                                                                                 bool debug,
+                                                                                 int numberOfRotationForDebug,
+                                                                                 double potentialNecessaryForPeak,
+                                                                                 bool benchmark) {
     //copy and normalize voxelDataInput
 
+    auto totalTransStart = std::chrono::high_resolution_clock::now();
 
+    double fft1Time = 0, fft2Time = 0, correlationTime = 0, ifftTime = 0;
+    double fftshiftTime = 0, peakDetectionTime = 0, covarianceTime = 0;
 
+    if (benchmark) {
+        auto fft1Start = std::chrono::high_resolution_clock::now();
   // create padding in translation voxelData
-    double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
-                                                                        this->phase1Correlation, false,
-                                                                        normalizationFactor);
+        double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
+                                                                             this->phase1Correlation, false,
+                                                                             normalizationFactor);
+        auto fft1End = std::chrono::high_resolution_clock::now();
+        fft1Time = std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
 
+        auto fft2Start = std::chrono::high_resolution_clock::now();
+        double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
+                                                                             this->phase2Correlation, false,
+                                                                             normalizationFactor);
+        auto fft2End = std::chrono::high_resolution_clock::now();
+        fft2Time = std::chrono::duration<double, std::milli>(fft2End - fft2Start).count();
 
-    double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
-                                                                        this->phase2Correlation, false,
-                                                                        normalizationFactor);
-
-
-    //calculate correlation of spectrums
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-
-            int indexX = i;
-            int indexY = j;
-            //calculate the spectrum back
-            std::complex<double> tmpComplex1 =
-                    magnitude1Correlation[indexY + this->correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase1Correlation[indexY + this->correlationN * indexX]));
-            std::complex<double> tmpComplex2 =
-                    magnitude2Correlation[indexY + this->correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase2Correlation[indexY + this->correlationN * indexX]));
-            std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
-            resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
-            resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
-
-        }
-    }
-
-    // back fft
-    fftw_execute(planFourierToVoxel2DCorrelation);
-
-    // fftshift and calc magnitude
-    double maximumCorrelation = 0;
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;// changed j and i here
-            int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
- //           double normalizationFactorForCorrelation = sqrt(
- //                    this->correlationN * this->correlationN / this->normalizationFactorCalculation(indexX, indexY));
-            //maybe without sqrt, but for now thats fine
-            double normalizationFactorForCorrelation =
-                    1 / this->normalizationFactorCalculation(indexX, indexY);
- //           double normalizationFactorForCorrelation = 1/this->normalizationFactorCalculation(indexX, indexY);
-            normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
- //           normalizationFactorForCorrelation = 1;
-
- //           double normalizationFactorForCorrelation = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) *
- //                                                                    cos(2 * M_PI * (i - this->correlationN / 2) *
- //                                                                       (j - this->correlationN / 2) /
- //                                                                         (pow(this->correlationN / 2, 2)));
-
-
-            //            int indexX = i;// changed j and i here
- //           int indexY = j;
-            resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]); // magnitude;
- //           if(resultingCorrelationDouble[indexY + this->correlationN * indexX] < 10000){
- //               resultingCorrelationDouble[indexY + this->correlationN * indexX] = 0;
- //           }
-            //meanCorrelation = meanCorrelation + resultingCorrelationDouble[indexY + N * indexX];
-            if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
-                maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
+        auto correlationStart = std::chrono::high_resolution_clock::now();
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                std::complex<double> tmpComplex1 =
+                        magnitude1Correlation[j + this->correlationN * i] *
+                        std::exp(std::complex<double>(0, phase1Correlation[j + this->correlationN * i]));
+                std::complex<double> tmpComplex2 =
+                        magnitude2Correlation[j + this->correlationN * i] *
+                        std::exp(std::complex<double>(0, phase2Correlation[j + this->correlationN * i]));
+                std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
+                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
+                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
             }
         }
-    }
+        auto correlationEnd = std::chrono::high_resolution_clock::now();
+        correlationTime = std::chrono::duration<double, std::milli>(correlationEnd - correlationStart).count();
 
-    //function of 2D peak detection
-    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
-            cellSize,
-            potentialNecessaryForPeak);
+        auto ifftStart = std::chrono::high_resolution_clock::now();
+        fftw_execute(planFourierToVoxel2DCorrelation);
+        auto ifftEnd = std::chrono::high_resolution_clock::now();
+        ifftTime = std::chrono::duration<double, std::milli>(ifftEnd - ifftStart).count();
 
-    if (debug) {
-        std::ofstream myFile10;
-        myFile10.open(
-                "/home/tim-external/matlab/registrationFourier/csvFiles/resultingCorrelationShift_" +
-                std::to_string(numberOfRotationForDebug) + "_.csv");
+        auto fftshiftStart = std::chrono::high_resolution_clock::now();
+        double maximumCorrelation = 0;
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
+                int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
+                double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
+                normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
+                if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
+                    maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
+                }
+            }
+        }
+        auto fftshiftEnd = std::chrono::high_resolution_clock::now();
+        fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
+    } else {
+        double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
+                                                                             this->phase1Correlation, false,
+                                                                             normalizationFactor);
+
+        double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
+                                                                             this->phase2Correlation, false,
+                                                                             normalizationFactor);
 
         for (int j = 0; j < this->correlationN; j++) {
             for (int i = 0; i < this->correlationN; i++) {
-                myFile10 << resultingCorrelationDouble[j + this->correlationN * i];
-                myFile10 << "\n";
+                std::complex<double> tmpComplex1 =
+                        magnitude1Correlation[j + this->correlationN * i] *
+                        std::exp(std::complex<double>(0, phase1Correlation[j + this->correlationN * i]));
+                std::complex<double> tmpComplex2 =
+                        magnitude2Correlation[j + this->correlationN * i] *
+                        std::exp(std::complex<double>(0, phase2Correlation[j + this->correlationN * i]));
+                std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
+                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
+                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
             }
         }
-        myFile10.close();
-    }
 
+        fftw_execute(planFourierToVoxel2DCorrelation);
 
-
-    // calculate for each maxima a covariance(my algorithm)
-//    int definedRadiusVoxel = ceil(this->correlationN / 30);
-//    double definedRadiusSI = cellSize * this->correlationN / 30.0;
-//    for (auto &potentialTranslation: potentialTranslations) {
-//        double resultingIntegral = 0;
-//        double maximumIntegral = M_PI * definedRadiusSI * definedRadiusSI * potentialTranslation.peakHeight;
-//        for (int i = -definedRadiusVoxel; i < definedRadiusVoxel + 1; i++) {
-//            for (int j = -definedRadiusVoxel; j < definedRadiusVoxel + 1; j++) {
-//                if (sqrt((double) (i * i + j * j)) *
-//                    cellSize < definedRadiusSI) {
-//                    resultingIntegral += resultingCorrelationDouble[(potentialTranslation.translationVoxel.y() + j) +
-//                                                                    this->correlationN *
-//                                                                    (potentialTranslation.translationVoxel.x() + i)];
-//                }
-//            }
-//        }
-//        potentialTranslation.covarianceX = resultingIntegral / maximumIntegral;
-//        potentialTranslation.covarianceY = resultingIntegral / maximumIntegral;
-//    }
-
-// covariance calculation
-    int definedRadiusVoxel = ceil(this->correlationN / 20);
-//    double definedRadiusSI = cellSize * this->correlationN / 30.0;
-    for (auto &potentialTranslation: potentialTranslations) {
-        // calculate a distribution dependent on peak height
-        std::vector<Eigen::Vector2d> listOfPoints;
-        for (int i = -definedRadiusVoxel; i < definedRadiusVoxel + 1; i++) {
-            for (int j = -definedRadiusVoxel; j < definedRadiusVoxel + 1; j++) {
-                double currentPeakHeight = resultingCorrelationDouble[(potentialTranslation.translationVoxel.y() + j) +
-                                                                      this->correlationN *
-                                                                      (potentialTranslation.translationVoxel.x() + i)];
-                int numberOfdatasetPoints = ceil(currentPeakHeight * currentPeakHeight / 1 * 200);
-                for (int k = 0; k < numberOfdatasetPoints; k++) {
-                    Eigen::Vector2d tmpVector(i * cellSize, j * cellSize);
-                    listOfPoints.push_back(tmpVector);
+        double maximumCorrelation = 0;
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
+                int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
+                double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
+                normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+                resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
+                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
+                if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
+                    maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
                 }
             }
         }
-
-        //calculate covariance matrix based on this distribution
-        double meanVar1 = 0;
-        double meanVar2 = 0;
-//        for (int i = 0; i < listOfPoints.size(); i++) {
-//            meanVar1 += listOfPoints[i].x();
-//            meanVar2 += listOfPoints[i].y();
-//        }
-//        meanVar1 = meanVar1 / listOfPoints.size();
-//        meanVar2 = meanVar2 / listOfPoints.size();
-
-//        meanVar1 = 0;
-//        meanVar2 = 0;
-        double cov1 = 0, cov2 = 0, var12 = 0;
-        if (listOfPoints.size() > 1) {
-            for (int i = 0; i < listOfPoints.size(); i++) {
-                cov1 += pow((listOfPoints[i].x() - meanVar1), 2);
-                cov2 += pow((listOfPoints[i].y() - meanVar2), 2);
-                var12 += (listOfPoints[i].x() - meanVar1) * (listOfPoints[i].y() - meanVar2);
-            }
-            cov1 = cov1 / (listOfPoints.size() - 1);
-            cov2 = cov2 / (listOfPoints.size() - 1);
-            var12 = var12 / (listOfPoints.size() - 1);
-        } else {
-            cov1 = 0.01;
-            cov2 = 0.01;
-            var12 = 0;
-        }
-        Eigen::Matrix2d tmpCovariance;
-        tmpCovariance(0, 0) = cov1 * 10;
-        tmpCovariance(1, 1) = cov2 * 10;
-        tmpCovariance(0, 1) = var12 * 10;
-        tmpCovariance(1, 0) = var12 * 10;
-        potentialTranslation.covariance = tmpCovariance;
-//        std::cout << tmpCovariance << std::endl;
-
-       cov1 = 0, cov2 = 0, var12 = 0;
-        if (listOfPoints.size() > 1) {
-            for (int i = -definedRadiusVoxel; i < definedRadiusVoxel + 1; i++) {
-                for (int j = -definedRadiusVoxel; j < definedRadiusVoxel + 1; j++) {
-                    double currentPeakHeight = resultingCorrelationDouble[(potentialTranslation.translationVoxel.y() + j) +
-                                                                           this->correlationN *
-                                                                           (potentialTranslation.translationVoxel.x() + i)];
-                    cov1 += pow((i * currentPeakHeight - meanVar1), 2);
-                    cov2 += pow((j * currentPeakHeight - meanVar2), 2);
-                    var12 += (i * currentPeakHeight - meanVar1) * (j * currentPeakHeight - meanVar2);
-                }
-            }
-            cov1 = cov1 / (listOfPoints.size() - 1);
-            cov2 = cov2 / (listOfPoints.size() - 1);
-            var12 = var12 / (listOfPoints.size() - 1);
-        } else {
-            cov1 = 0.01;
-            cov2 = 0.01;
-            var12 = 0;
-        }
-
-        tmpCovariance(0, 0) = cov1 * 500;
-        tmpCovariance(1, 1) = cov2 * 500;
-        tmpCovariance(0, 1) = var12 * 500;
-        tmpCovariance(1, 0) = var12 * 500;
-//        std::cout << tmpCovariance << std::endl;
-//        std::cout << "end" << std::endl;
     }
-   return potentialTranslations;
+
+    if (benchmark) {
+        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
+        std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
+                cellSize, potentialNecessaryForPeak, 0.05, benchmark);
+        auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+        peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+
+        auto totalTransEnd = std::chrono::high_resolution_clock::now();
+        double totalTransTime = std::chrono::duration<double, std::milli>(totalTransEnd - totalTransStart).count();
+
+        std::cerr << "  FFT1: " << fft1Time << " ms" << std::endl;
+        std::cerr << "  FFT2: " << fft2Time << " ms" << std::endl;
+        std::cerr << "  Complex correlation: " << correlationTime << " ms" << std::endl;
+        std::cerr << "  IFFT: " << ifftTime << " ms" << std::endl;
+        std::cerr << "  fftshift + magnitude: " << fftshiftTime << " ms" << std::endl;
+        std::cerr << "  Peak detection: " << peakDetectionTime << " ms" << std::endl;
+        std::cerr << "  Total translation: " << totalTransTime << " ms" << std::endl;
+
+        return potentialTranslations;
+    } else {
+        std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
+                cellSize, potentialNecessaryForPeak, 0.05, false);
+        return potentialTranslations;
+    }
 }
 
 Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
-                                                                        double voxelData2Input[],
-                                                                        Eigen::Matrix4d &initialGuess,
-                                                                        Eigen::Matrix3d &covarianceMatrix,
-                                                                        bool useInitialAngle,
-                                                                        bool useInitialTranslation,
-                                                                        double cellSize,
-                                                                        bool useGauss,
-                                                                        bool debug, double potentialNecessaryForPeak) {
+                                                                         double voxelData2Input[],
+                                                                         Eigen::Matrix4d &initialGuess,
+                                                                         Eigen::Matrix3d &covarianceMatrix,
+                                                                         bool useInitialAngle,
+                                                                         bool useInitialTranslation,
+                                                                         double cellSize,
+                                                                         bool useGauss,
+                                                                         bool debug, double potentialNecessaryForPeak, bool benchmark) {
     if (!useInitialAngle || !useInitialTranslation) {
         std::cout << "this function has to be used with initial guess = true" << std::endl;
         exit(-1);
@@ -1790,11 +1723,11 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
         cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
         cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size()); // what size I should use?
 
-        std::vector<translationPeakfs2D> potentialTranslations = this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-                voxelData1, voxelData2,
-                cellSize,
-                1.0,
-                debug, angleIndex, potentialNecessaryForPeak);
+      std::vector<translationPeakfs2D> potentialTranslations = this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
+                 voxelData1, voxelData2,
+                 cellSize,
+                 1.0,
+                 debug, angleIndex, potentialNecessaryForPeak, benchmark);
         Eigen::Matrix4d estimatedRotationScans = Eigen::Matrix4d::Identity();
         Eigen::AngleAxisd rotation_vectorTMP(estimatedAngle.angle, Eigen::Vector3d(0, 0, 1));
         Eigen::Matrix3d tmpRotMatrix3d = rotation_vectorTMP.toRotationMatrix();
@@ -2047,7 +1980,7 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
-                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
+                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark);
         auto translationEnd = std::chrono::high_resolution_clock::now();
         totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
 
@@ -2135,7 +2068,7 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
-                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
+                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark);
         auto translationEnd = std::chrono::high_resolution_clock::now();
         totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
 
@@ -2478,55 +2411,54 @@ double softRegistrationClass::normalizationFactorCalculation(int x, int y) {
 }
 
 std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize,
-                                                                                                     double potentialNecessaryForPeak,
-                                                                                                     double ignoreSidesPercentage) {
+                                                                                                      double potentialNecessaryForPeak,
+                                                                                                      double ignoreSidesPercentage,
+                                                                                                      bool benchmark) {
 
     double *current2DCorrelation;
     current2DCorrelation = (double *) malloc(sizeof(double) * this->correlationN * this->correlationN);
 
-    double maxValue = 0;
-    //copy data
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            current2DCorrelation[j + this->correlationN * i] = this->resultingCorrelationDouble[j +
-                                                                                                this->correlationN * i];
-            if (current2DCorrelation[j + this->correlationN * i] > maxValue) {
-                maxValue = current2DCorrelation[j + this->correlationN * i];
+    double copyTime = 0, normalizeTime = 0, persistenceTime = 0, filteringTime = 0;
+
+    if (benchmark) {
+        auto copyStart = std::chrono::high_resolution_clock::now();
+        double maxValue = 0;
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                current2DCorrelation[j + this->correlationN * i] = this->resultingCorrelationDouble[j + this->correlationN * i];
+                if (current2DCorrelation[j + this->correlationN * i] > maxValue) {
+                    maxValue = current2DCorrelation[j + this->correlationN * i];
+                }
             }
         }
-    }
-    //normalize data
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            current2DCorrelation[j + this->correlationN * i] =
-                    current2DCorrelation[j + this->correlationN * i] / maxValue;
-            this->resultingCorrelationDouble[j + this->correlationN * i] =
-                    this->resultingCorrelationDouble[j + this->correlationN * i] / maxValue;
+        auto copyEnd = std::chrono::high_resolution_clock::now();
+        copyTime = std::chrono::duration<double, std::milli>(copyEnd - copyStart).count();
+
+        auto normalizeStart = std::chrono::high_resolution_clock::now();
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                current2DCorrelation[j + this->correlationN * i] = current2DCorrelation[j + this->correlationN * i] / maxValue;
+                this->resultingCorrelationDouble[j + this->correlationN * i] = this->resultingCorrelationDouble[j + this->correlationN * i] / maxValue;
+            }
         }
-    }
-    cv::Mat magTMP1(this->correlationN, this->correlationN, CV_64F, this->resultingCorrelationDouble);
-//    cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
+        auto normalizeEnd = std::chrono::high_resolution_clock::now();
+        normalizeTime = std::chrono::duration<double, std::milli>(normalizeEnd - normalizeStart).count();
 
-//    cv::Mat element = getStructuringElement(cv::MORPH_ELLIPSE,
-//                                            cv::Size(ceil(0.02 * this->correlationN), ceil(0.02 * this->correlationN)));
-//    cv::morphologyEx(magTMP1, magTMP1, cv::MORPH_TOPHAT, element);
+        size_t ourSize = this->correlationN;
+        findpeaks::image_t<double> image = {ourSize, ourSize, this->resultingCorrelationDouble};
 
-    size_t ourSize = this->correlationN;
-    findpeaks::image_t<double> image = {
-            ourSize, ourSize,
-            this->resultingCorrelationDouble
-    };
+        auto persistenceStart = std::chrono::high_resolution_clock::now();
+        std::vector<findpeaks::peak_t<double>> peaks = findpeaks::persistance(image);
+        auto persistenceEnd = std::chrono::high_resolution_clock::now();
+        persistenceTime = std::chrono::duration<double, std::milli>(persistenceEnd - persistenceStart).count();
 
-    std::vector<findpeaks::peak_t<double>> peaks = findpeaks::persistance(image);
-    std::vector<translationPeakfs2D> tmpTranslations;
-    for (const auto &p: peaks) {
-        //calculation of level, that is a potential translation
-        double levelPotential = p.persistence * sqrt(p.birth_level) *
-                                Eigen::Vector2d((double) ((int) p.birth_position.x - (int) p.death_position.x),
-                                                (double) ((int) p.birth_position.y - (int) p.death_position.y)).norm() *
-                                511.0 / this->correlationN;
-//        std::cout << p.persistence<< std::endl;
-//        std::cout << Eigen::Vector2d((double) ((int) p.birth_position.x - (int) p.death_position.x),
+        auto filteringStart = std::chrono::high_resolution_clock::now();
+        std::vector<translationPeakfs2D> tmpTranslations;
+        for (const auto &p: peaks) {
+            double levelPotential = p.persistence * sqrt(p.birth_level) *
+                                    Eigen::Vector2d((double) ((int) p.birth_position.x - (int) p.death_position.x),
+                                                    (double) ((int) p.birth_position.y - (int) p.death_position.y)).norm() *
+                                    511.0 / this->correlationN;
 //                                     (double) ((int) p.birth_position.y - (int) p.death_position.y)).norm() << std::endl;
 
 //        if (p.persistence > 0.05  && p.birth_level>0.1) {
@@ -2542,9 +2474,6 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
         }
 
         if (p.birth_level > 0.1 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
-//            std::cout << levelPotential << std::endl;
-//            std::cout << potentialNecessaryForPeak << std::endl;
-
             translationPeakfs2D tmpTranslationPeak;
             tmpTranslationPeak.translationSI.x() = -(((int) p.birth_position.x - (int) (this->correlationN / 2.0)) *
                                                      cellSize);
@@ -2554,17 +2483,72 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
             tmpTranslationPeak.translationVoxel.y() = (int) p.birth_position.y;
             tmpTranslationPeak.peakHeight = resultingCorrelationDouble[p.birth_position.y +
                                                                        this->correlationN * p.birth_position.x] *
-                                            maxValue;
+                                             maxValue;
             tmpTranslationPeak.persistenceValue = levelPotential;
             tmpTranslations.push_back(tmpTranslationPeak);
-
-//            std::cout << tmpTranslationPeak.translationSI.x() << "  " << tmpTranslationPeak.translationSI.y()
-//                      << std::endl;
         }
     }
-    free(current2DCorrelation);
-    return (tmpTranslations);
+        auto filteringEnd = std::chrono::high_resolution_clock::now();
+        filteringTime = std::chrono::duration<double, std::milli>(filteringEnd - filteringStart).count();
 
+        std::cerr << "    Copy + find max: " << copyTime << " ms" << std::endl;
+        std::cerr << "    Normalize: " << normalizeTime << " ms" << std::endl;
+        std::cerr << "    Persistence calculation: " << persistenceTime << " ms" << std::endl;
+        std::cerr << "    Peak filtering: " << filteringTime << " ms" << std::endl;
+        std::cerr << "    Peaks found: " << tmpTranslations.size() << std::endl;
+
+        free(current2DCorrelation);
+        return tmpTranslations;
+    } else {
+        double maxValue = 0;
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                current2DCorrelation[j + this->correlationN * i] = this->resultingCorrelationDouble[j + this->correlationN * i];
+                if (current2DCorrelation[j + this->correlationN * i] > maxValue) {
+                    maxValue = current2DCorrelation[j + this->correlationN * i];
+                }
+            }
+        }
+        for (int j = 0; j < this->correlationN; j++) {
+            for (int i = 0; i < this->correlationN; i++) {
+                current2DCorrelation[j + this->correlationN * i] = current2DCorrelation[j + this->correlationN * i] / maxValue;
+                this->resultingCorrelationDouble[j + this->correlationN * i] = this->resultingCorrelationDouble[j + this->correlationN * i] / maxValue;
+            }
+        }
+        size_t ourSize = this->correlationN;
+        findpeaks::image_t<double> image = {ourSize, ourSize, this->resultingCorrelationDouble};
+        std::vector<findpeaks::peak_t<double>> peaks = findpeaks::persistance(image);
+        std::vector<translationPeakfs2D> tmpTranslations;
+        for (const auto &p: peaks) {
+            double levelPotential = p.persistence * sqrt(p.birth_level) *
+                                    Eigen::Vector2d((double) ((int) p.birth_position.x - (int) p.death_position.x),
+                                                    (double) ((int) p.birth_position.y - (int) p.death_position.y)).norm() *
+                                    511.0 / this->correlationN;
+            bool inInterestingArea = true;
+            if ((int) p.birth_position.x<ignoreSidesPercentage * this->correlationN || (int) p.birth_position.x>(
+                    1 - ignoreSidesPercentage) * this->correlationN ||
+                (int) p.birth_position.y<ignoreSidesPercentage * this->correlationN || (int) p.birth_position.y>(
+                        1 - ignoreSidesPercentage) * this->correlationN) {
+                inInterestingArea = false;
+            }
+            if (p.birth_level > 0.1 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
+                translationPeakfs2D tmpTranslationPeak;
+                tmpTranslationPeak.translationSI.x() = -(((int) p.birth_position.x - (int) (this->correlationN / 2.0)) *
+                                                         cellSize);
+                tmpTranslationPeak.translationSI.y() = -(((int) p.birth_position.y - (int) (this->correlationN / 2.0)) *
+                                                         cellSize);
+                tmpTranslationPeak.translationVoxel.x() = (int) p.birth_position.x;
+                tmpTranslationPeak.translationVoxel.y() = (int) p.birth_position.y;
+                tmpTranslationPeak.peakHeight = resultingCorrelationDouble[p.birth_position.y +
+                                                                           this->correlationN * p.birth_position.x] *
+                                                 maxValue;
+                tmpTranslationPeak.persistenceValue = levelPotential;
+                tmpTranslations.push_back(tmpTranslationPeak);
+            }
+        }
+        free(current2DCorrelation);
+        return tmpTranslations;
+    }
 }
 
 std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrelationOptimized(double cellSize,
