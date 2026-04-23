@@ -220,11 +220,6 @@ public:
                                                                                                int numberOfRotationForDebug = 0,
                                                                                                double potentialNecessaryForPeak = 0.1);
 
-    std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutionsDirect(
-        double voxelData1Input[], double voxelData2Input[], double cellSize,
-        double normalizationFactor, bool debug = false,
-        int numberOfRotationForDebug = 0, double potentialNecessaryForPeak = 0.1);
-
     std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutionsThreadSafe(
         double voxelData1Input[], double voxelData2Input[],
         double cellSize, double normalizationFactor, bool debug,

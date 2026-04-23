@@ -1726,144 +1726,7 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
 //        std::cout << tmpCovariance << std::endl;
 //        std::cout << "end" << std::endl;
     }
-    return potentialTranslations;
-}
-
-std::vector<translationPeakfs2D>
-softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutionsDirect(
-        double voxelData1Input[], double voxelData2Input[], double cellSize,
-        double normalizationFactor, bool debug, int numberOfRotationForDebug,
-        double potentialNecessaryForPeak) {
-    double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
-                                                                       this->phase1Correlation, false,
-                                                                       normalizationFactor);
-
-    double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
-                                                                       this->phase2Correlation, false,
-                                                                       normalizationFactor);
-
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            int indexX = i;
-            int indexY = j;
-            std::complex<double> tmpComplex1 =
-                    magnitude1Correlation[indexY + this->correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase1Correlation[indexY + this->correlationN * indexX]));
-            std::complex<double> tmpComplex2 =
-                    magnitude2Correlation[indexY + this->correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase2Correlation[indexY + this->correlationN * indexX]));
-            std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
-            resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
-            resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
-        }
-    }
-
-    fftw_execute(planFourierToVoxel2DCorrelation);
-
-    double maximumCorrelation = 0;
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
-            int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
-            double normalizationFactorForCorrelation =
-                    1 / this->normalizationFactorCalculation(indexX, indexY);
-            normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
-            resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
-                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
-            if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
-                maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
-            }
-        }
-    }
-
-    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationOptimized(
-            cellSize, potentialNecessaryForPeak);
-
-    if (debug) {
-        std::ofstream myFile10;
-        myFile10.open(
-                "/home/tim-external/matlab/registrationFourier/csvFiles/resultingCorrelationShift_" +
-                std::to_string(numberOfRotationForDebug) + "_.csv");
-
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int i = 0; i < this->correlationN; i++) {
-                myFile10 << resultingCorrelationDouble[j + this->correlationN * i];
-                myFile10 << "\n";
-            }
-        }
-        myFile10.close();
-    }
-
-    int definedRadiusVoxel = ceil(this->correlationN / 20);
-    for (auto &potentialTranslation: potentialTranslations) {
-        std::vector<Eigen::Vector2d> listOfPoints;
-        for (int i = -definedRadiusVoxel; i < definedRadiusVoxel + 1; i++) {
-            for (int j = -definedRadiusVoxel; j < definedRadiusVoxel + 1; j++) {
-                double currentPeakHeight = resultingCorrelationDouble[(potentialTranslation.translationVoxel.y() + j) +
-                                                                       this->correlationN *
-                                                                       (potentialTranslation.translationVoxel.x() + i)];
-                int numberOfdatasetPoints = ceil(currentPeakHeight * currentPeakHeight / 1 * 200);
-                for (int k = 0; k < numberOfdatasetPoints; k++) {
-                    Eigen::Vector2d tmpVector(i * cellSize, j * cellSize);
-                    listOfPoints.push_back(tmpVector);
-                }
-            }
-        }
-
-        double meanVar1 = 0;
-        double meanVar2 = 0;
-        double cov1 = 0, cov2 = 0, var12 = 0;
-        if (listOfPoints.size() > 1) {
-            for (int i = 0; i < listOfPoints.size(); i++) {
-                cov1 += pow((listOfPoints[i].x() - meanVar1), 2);
-                cov2 += pow((listOfPoints[i].y() - meanVar2), 2);
-                var12 += (listOfPoints[i].x() - meanVar1) * (listOfPoints[i].y() - meanVar2);
-            }
-            cov1 = cov1 / (listOfPoints.size() - 1);
-            cov2 = cov2 / (listOfPoints.size() - 1);
-            var12 = var12 / (listOfPoints.size() - 1);
-        } else {
-            cov1 = 0.01;
-            cov2 = 0.01;
-            var12 = 0;
-        }
-        Eigen::Matrix2d tmpCovariance;
-        tmpCovariance(0, 0) = cov1 * 10;
-        tmpCovariance(1, 1) = cov2 * 10;
-        tmpCovariance(0, 1) = var12 * 10;
-        tmpCovariance(1, 0) = var12 * 10;
-        potentialTranslation.covariance = tmpCovariance;
-
-        cov1 = 0, cov2 = 0, var12 = 0;
-        if (listOfPoints.size() > 1) {
-            for (int i = -definedRadiusVoxel; i < definedRadiusVoxel + 1; i++) {
-                for (int j = -definedRadiusVoxel; j < definedRadiusVoxel + 1; j++) {
-                    double currentPeakHeight = resultingCorrelationDouble[(potentialTranslation.translationVoxel.y() + j) +
-                                                                           this->correlationN *
-                                                                           (potentialTranslation.translationVoxel.x() + i)];
-                    cov1 += pow((i * currentPeakHeight - meanVar1), 2);
-                    cov2 += pow((j * currentPeakHeight - meanVar2), 2);
-                    var12 += (i * currentPeakHeight - meanVar1) * (j * currentPeakHeight - meanVar2);
-                }
-            }
-            cov1 = cov1 / (listOfPoints.size() - 1);
-            cov2 = cov2 / (listOfPoints.size() - 1);
-            var12 = var12 / (listOfPoints.size() - 1);
-        } else {
-            cov1 = 0.01;
-            cov2 = 0.01;
-            var12 = 0;
-        }
-
-        tmpCovariance(0, 0) = cov1 * 500;
-        tmpCovariance(1, 1) = cov2 * 500;
-        tmpCovariance(0, 1) = var12 * 500;
-        tmpCovariance(1, 0) = var12 * 500;
-    }
-    return potentialTranslations;
+   return potentialTranslations;
 }
 
 Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
@@ -2227,7 +2090,7 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
 
         std::vector<translationPeakfs2D> potentialTranslations =
-                this->sofftRegistrationVoxel2DTranslationAllPossibleSolutionsDirect(
+                this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
                         cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
 
