@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
     auto startTotalOld = std::chrono::steady_clock::now();
     
     std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSO3(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true);
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
     
     auto endTotalOld = std::chrono::steady_clock::now();
     double totalTimeOld = std::chrono::duration<double, std::milli>(endTotalOld - startTotalOld).count();
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
     auto startTotalNew = std::chrono::steady_clock::now();
     
     std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsDirect(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true);
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
     
     auto endTotalNew = std::chrono::steady_clock::now();
     double totalTimeNew = std::chrono::duration<double, std::milli>(endTotalNew - startTotalNew).count();

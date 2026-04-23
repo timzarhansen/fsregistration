@@ -3,6 +3,7 @@
 //
 
 #include "softRegistrationClass.h"
+#include <chrono>
 
 bool compareTwoAngleCorrelation(rotationPeakfs2D i1, rotationPeakfs2D i2) {
     return (i1.angle < i2.angle);
@@ -1987,20 +1988,26 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 }
 
 std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxelsSO3(double voxelData1Input[],
-                                                                                        double voxelData2Input[],
-                                                                                        double cellSize,
-                                                                                        bool useGauss,
-                                                                                        bool debug,
-                                                                                        double potentialNecessaryForPeak,
-                                                                                        bool multipleRadii,
-                                                                                        bool useClahe,
-                                                                                        bool useHamming) {
+                                                                                         double voxelData2Input[],
+                                                                                         double cellSize,
+                                                                                         bool useGauss,
+                                                                                         bool debug,
+                                                                                         double potentialNecessaryForPeak,
+                                                                                         bool multipleRadii,
+                                                                                         bool useClahe,
+                                                                                         bool useHamming,
+                                                                                         bool benchmark) {
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
 
+    auto totalStart = std::chrono::high_resolution_clock::now();
+
+    auto rotationStart = std::chrono::high_resolution_clock::now();
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
-                                                                                 debug, multipleRadii, useClahe,
-                                                                                 useHamming);
+                                                                                  debug, multipleRadii, useClahe,
+                                                                                  useHamming);
+    auto rotationEnd = std::chrono::high_resolution_clock::now();
+    double rotationTime = std::chrono::duration<double, std::milli>(rotationEnd - rotationStart).count();
 
     int numAngles = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAngles);
@@ -2008,9 +2015,13 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
     std::vector<double> voxelData1_local(this->N * this->N);
     std::vector<double> voxelData2_local(this->N * this->N);
 
+    double totalPreprocessingTime = 0;
+    double totalTranslationTime = 0;
+
     for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
         auto &estimatedAngle = estimatedAnglePeak[angleIndex];
 
+        auto preprocessStart = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < this->N * this->N; i++) {
             voxelData1_local[i] = voxelData1Input[i];
             voxelData2_local[i] = voxelData2Input[i];
@@ -2029,11 +2040,16 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
         cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
         cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
+        auto preprocessEnd = std::chrono::high_resolution_clock::now();
+        totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
 
+        auto translationStart = std::chrono::high_resolution_clock::now();
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
                         cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
+        auto translationEnd = std::chrono::high_resolution_clock::now();
+        totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
 
         transformationPeakfs2D transformationPeakTMP;
         transformationPeakTMP.potentialRotation = estimatedAngle;
@@ -2042,24 +2058,44 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         listOfTransformations.push_back(transformationPeakTMP);
     }
 
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
+
+    if (benchmark) {
+        std::cerr << "=== BENCHMARK: OLD Method (SO3) ===" << std::endl;
+        std::cerr << "Rotation detection: " << rotationTime << " ms" << std::endl;
+        std::cerr << "Translation detection: " << totalTranslationTime << " ms (" 
+                  << (numAngles > 0 ? (totalTranslationTime / numAngles) : 0) << " ms/angle, " << numAngles << " angles)" << std::endl;
+        std::cerr << "Image preprocessing: " << totalPreprocessingTime << " ms (" 
+                  << (numAngles > 0 ? (totalPreprocessingTime / numAngles) : 0) << " ms/angle)" << std::endl;
+        std::cerr << "Total time: " << totalTime << " ms" << std::endl;
+        std::cerr << std::endl;
+    }
+
     return listOfTransformations;
 }
 
 std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                                           double voxelData2Input[],
-                                                                                           double cellSize,
-                                                                                           bool useGauss,
-                                                                                           bool debug,
-                                                                                           double potentialNecessaryForPeak,
-                                                                                           bool multipleRadii,
-                                                                                           bool useClahe,
-                                                                                           bool useHamming) {
-  std::vector<transformationPeakfs2D> listOfTransformations;
+                                                                                            double voxelData2Input[],
+                                                                                            double cellSize,
+                                                                                            bool useGauss,
+                                                                                            bool debug,
+                                                                                            double potentialNecessaryForPeak,
+                                                                                            bool multipleRadii,
+                                                                                            bool useClahe,
+                                                                                            bool useHamming,
+                                                                                            bool benchmark) {
+   std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
 
+    auto totalStart = std::chrono::high_resolution_clock::now();
+
+    auto rotationStart = std::chrono::high_resolution_clock::now();
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input,
-                                                                                         debug, multipleRadii, useClahe,
-                                                                                         useHamming);
+                                                                                          debug, multipleRadii, useClahe,
+                                                                                          useHamming);
+    auto rotationEnd = std::chrono::high_resolution_clock::now();
+    double rotationTime = std::chrono::duration<double, std::milli>(rotationEnd - rotationStart).count();
 
     int numAngles = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAngles);
@@ -2067,9 +2103,13 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
     std::vector<double> voxelData1_local(this->N * this->N);
     std::vector<double> voxelData2_local(this->N * this->N);
 
+    double totalPreprocessingTime = 0;
+    double totalTranslationTime = 0;
+
     for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
         auto &estimatedAngle = estimatedAnglePeak[angleIndex];
 
+        auto preprocessStart = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < this->N * this->N; i++) {
             voxelData1_local[i] = voxelData1Input[i];
             voxelData2_local[i] = voxelData2Input[i];
@@ -2088,17 +2128,36 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
         cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
         cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
+        auto preprocessEnd = std::chrono::high_resolution_clock::now();
+        totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
 
+        auto translationStart = std::chrono::high_resolution_clock::now();
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
                         cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak);
+        auto translationEnd = std::chrono::high_resolution_clock::now();
+        totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
 
         transformationPeakfs2D transformationPeakTMP;
         transformationPeakTMP.potentialRotation = estimatedAngle;
         transformationPeakTMP.potentialTranslations = potentialTranslations;
 
         listOfTransformations.push_back(transformationPeakTMP);
+    }
+
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
+
+    if (benchmark) {
+        std::cerr << "=== BENCHMARK: NEW Method (Direct) ===" << std::endl;
+        std::cerr << "Rotation detection: " << rotationTime << " ms" << std::endl;
+        std::cerr << "Translation detection: " << totalTranslationTime << " ms (" 
+                  << (numAngles > 0 ? (totalTranslationTime / numAngles) : 0) << " ms/angle, " << numAngles << " angles)" << std::endl;
+        std::cerr << "Image preprocessing: " << totalPreprocessingTime << " ms (" 
+                  << (numAngles > 0 ? (totalPreprocessingTime / numAngles) : 0) << " ms/angle)" << std::endl;
+        std::cerr << "Total time: " << totalTime << " ms" << std::endl;
+        std::cerr << std::endl;
     }
 
     return listOfTransformations;

@@ -189,25 +189,27 @@ public:
                                                                                    bool useClahe = true,
                                                                                    bool useHamming = true);
 
-    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSO3(double voxelData1Input[],
-                                                                   double voxelData2Input[],
-                                                                   double cellSize,
-                                                                   bool useGauss,
-                                                                   bool debug = false,
-                                                                   double potentialNecessaryForPeak = 0.1,
-                                                                   bool multipleRadii = false,
-                                                                   bool useClahe = true,
-                                                                   bool useHamming = true);
+   std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSO3(double voxelData1Input[],
+                                                                    double voxelData2Input[],
+                                                                    double cellSize,
+                                                                    bool useGauss,
+                                                                    bool debug = false,
+                                                                    double potentialNecessaryForPeak = 0.1,
+                                                                    bool multipleRadii = false,
+                                                                    bool useClahe = true,
+                                                                    bool useHamming = true,
+                                                                    bool benchmark = false);
 
-    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                      double voxelData2Input[],
-                                                                      double cellSize,
-                                                                      bool useGauss,
-                                                                      bool debug = false,
-                                                                      double potentialNecessaryForPeak = 0.1,
-                                                                      bool multipleRadii = false,
-                                                                      bool useClahe = true,
-                                                                      bool useHamming = true);
+  std::vector<transformationPeakfs2D> registrationOfTwoVoxelsDirect(double voxelData1Input[],
+                                                                       double voxelData2Input[],
+                                                                       double cellSize,
+                                                                       bool useGauss,
+                                                                       bool debug = false,
+                                                                       double potentialNecessaryForPeak = 0.1,
+                                                                       bool multipleRadii = false,
+                                                                       bool useClahe = true,
+                                                                       bool useHamming = true,
+                                                                       bool benchmark = false);
 
     double getSpectrumFromVoxelData2DCorrelation(double voxelData[], double magnitude[], double phase[],
                                                  bool gaussianBlur, double normalizationFactor);
