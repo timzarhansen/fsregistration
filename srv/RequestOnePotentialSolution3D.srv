@@ -12,5 +12,7 @@ bool use_clahe
 int32 set_normalization # currently 0 or 1
 bool debug
 bool timing_computation_duration
+bool use_simple_rotation_peak false
+bool use_simple_translation_peak false
 ---
 fsregistration/PotentialSolution3D potential_solution # always calculates the closest peak of the initial guess
