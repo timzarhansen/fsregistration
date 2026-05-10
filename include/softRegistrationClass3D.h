@@ -259,26 +259,24 @@ public:
                                          double &covariance,
                                          bool debug = false);
 
-   std::vector<transformationPeakfs3D>
+    std::vector<transformationPeakfs3D>
     sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[], double voxelData2Input[],
-                                                            bool debug = false, bool useClahe = true,
-                                                            bool benchmark = false, double sizeVoxel = 1,
-                                                            double r_min = 0.0,
-                                                            double r_max = 0.0,
-                                                            double level_potential_rotation = 0.01,
-                                                            double level_potential_translation = 0.1,
-                                                            bool set_r_manual = false, int normalization = 0,
-                                                            bool useSimpleRotationPeak = false, bool useSimpleTranslationPeak = false);
+                                                          bool debug = false, bool useClahe = true,
+                                                          bool timeStuff = false, double sizeVoxel = 1,
+                                                          double r_min = 0.0,
+                                                          double r_max = 0.0,
+                                                          double level_potential_rotation = 0.01,
+                                                          double level_potential_translation = 0.1,
+                                                          bool set_r_manual = false, int normalization = 0);
     transformationPeakfs3D
     sofftRegistrationVoxel3DOneSolution(double voxelData1Input[], double voxelData2Input[], tf2::Quaternion initGuessOrientation,tf2::Vector3 initGuessPosition,
-                                                            bool debug = false, bool useClahe = true,
-                                                            bool benchmark = false, double sizeVoxel = 1,
-                                                            double r_min = 0.0,
-                                                            double r_max = 0.0,
-                                                            double level_potential_rotation = 0.01,
-                                                            double level_potential_translation = 0.1,
-                                                            bool set_r_manual = false, int normalization = 0,
-                                                            bool useSimpleRotationPeak = false, bool useSimpleTranslationPeak = false);
+                                                          bool debug = false, bool useClahe = true,
+                                                          bool timeStuff = false, double sizeVoxel = 1,
+                                                          double r_min = 0.0,
+                                                          double r_max = 0.0,
+                                                          double level_potential_rotation = 0.01,
+                                                          double level_potential_translation = 0.1,
+                                                          bool set_r_manual = false, int normalization = 0);
 
     bool isPeak(cv::Mat mx[], std::vector<cv::Point> &conn_points);
 
@@ -301,12 +299,6 @@ public:
 
     std::vector<rotationPeak4D>
     peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(std::vector<My4DPoint> listOfQuaternionCorrelation,double level_potential_rotation=0.01);
-
-    static std::vector<rotationPeak4D>
-    peakDetectionOf4DCorrelationSimpleMax(std::vector<My4DPoint> listOfQuaternionCorrelation);
-
-    std::vector<translationPeak3D>
-    peakDetectionOf3DCorrelationSimpleMax(const double *inputcorrelation, int dimensionN, double cellSize) const;
 
     static double getPixelValueInterpolated(Eigen::Vector3d positionVector, const double *volumeData, int dimensionN);
 

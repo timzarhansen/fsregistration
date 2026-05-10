@@ -22,7 +22,7 @@ import transforms3d.euler as euler
 from easydict import EasyDict as edict
 
 # Predator dataset imports
-from predator.datasets.dataloader import get_dataloader, get_datasets
+from predator.datasets.dataloader import get_dataloader, get_datasets, collate_fn_descriptor
 from predator.lib.utils import load_config
 
 
@@ -201,7 +201,7 @@ def main():
     if args.output_file:
         csv_path = args.output_file
     else:
-        csv_path = os.path.join(output_dir, f'batch_{start_index:05d}_{end_index:05d}.csv')
+        csv_path = os.path.join(output_dir, f'batch_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv')
 
     # Write header (always overwrite for batch files)
     with open(csv_path, 'w', newline='') as f:
@@ -209,25 +209,15 @@ def main():
         writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
                        'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
 
-    # Process dataset
-    # Note: Both train and val branches assign to config.train_loader
-    dataIter = iter(config.train_loader)
-
-# Skip to start_index
-    print(f"Skipping to sample {start_index}...")
-    for _ in range(start_index):
-        try:
-            next(dataIter)
-        except StopIteration:
-            raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
+    if start_index >= dataSetSize:
+        raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
 
     print(f"Processing samples {start_index} to {end_index}...")
 
-    # FPFH Parameters
-    voxel_size = 0.05
-
+    dataset = config.train_loader.dataset
     for indexDataLoader in range(start_index, end_index + 1):
-        inputs = next(dataIter)
+        raw_sample = dataset[indexDataLoader]
+        inputs = collate_fn_descriptor([raw_sample], config, neighborhood_limits)
 
         # Create Open3D point clouds
         pcd1 = o3d.geometry.PointCloud()
@@ -341,16 +331,19 @@ def main():
         # Compute metrics
         overlapPercentage = compute_overlap_ratio(pcd1_noisy, pcd2_noisy, gtTransformation, overlapVoxelSize)
 
-        # Save to CSV using atomic write (write to temp, then rename)
+        # Save to CSV using atomic write (write to temp, then append to main)
         temp_csv_path = csv_path + '.tmp'
-        with open(temp_csv_path, 'a', newline='') as f:
+        with open(temp_csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             inputWriter = [indexDataLoader, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimated_transform))
             writer.writerow(inputWriter)
-        # Atomic rename (POSIX)
-        os.rename(temp_csv_path, csv_path)
+        # Append temp file to main CSV, then remove temp
+        with open(csv_path, 'a', newline='') as main_f:
+            with open(temp_csv_path, 'r') as temp_f:
+                main_f.write(temp_f.read())
+        os.remove(temp_csv_path)
 
         print(f"Processed: {indexDataLoader}")
         
@@ -361,6 +354,15 @@ def main():
 
     print("Completed!")
     print(f"Batch {start_index}-{end_index} finished. Results saved to {csv_path}")
+    
+    # Quick validation: check file has expected number of rows
+    expected_rows = end_index - start_index + 1
+    with open(csv_path, 'r') as f:
+        actual_rows = sum(1 for _ in f) - 1  # Subtract header
+    if actual_rows == expected_rows:
+        print(f"Validation: OK - {actual_rows} data rows (expected {expected_rows})")
+    else:
+        print(f"WARNING: File has {actual_rows} data rows, expected {expected_rows}")
 
 
 if __name__ == '__main__':

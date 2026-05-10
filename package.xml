@@ -21,7 +21,6 @@
   <depend>sensor_msgs</depend>
   <depend>soft20</depend>
   <depend>cv_bridge</depend>
-  <depend>python3-numpy</depend>
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 

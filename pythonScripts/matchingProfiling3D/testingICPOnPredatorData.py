@@ -13,6 +13,8 @@ import os
 import sys
 import argparse
 import csv
+import gc
+import time
 import numpy as np
 import open3d as o3d
 import copy
@@ -21,7 +23,7 @@ import transforms3d.euler as euler
 from easydict import EasyDict as edict
 
 # Predator dataset imports
-from predator.datasets.dataloader import get_dataloader, get_datasets
+from predator.datasets.dataloader import get_dataloader, get_datasets, collate_fn_descriptor
 from predator.lib.utils import load_config
 
 
@@ -86,16 +88,51 @@ def transform_to_rpyxyz(matrix):
     return [roll, pitch, yaw, translation[0], translation[1], translation[2]]
 
 
+def init_retry_log(noise_level, type_data, output_dir):
+    """Initialize retry log file."""
+    log_path = os.path.join(output_dir, f'retry_log_{noise_level}_{type_data}.txt')
+    with open(log_path, 'w') as f:
+        f.write(f"Retry Log - Noise: {noise_level}, Data: {type_data}\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    return log_path
+
+
+def log_retry(sample_idx, attempt, max_retries, error_msg, log_path):
+    """Log retry attempt."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | Retry {attempt + 1}/{max_retries} | Error: {error_msg}\n")
+    print(f"  [RETRY {attempt + 1}/{max_retries}] Sample {sample_idx}: {error_msg[:100]}")
+
+
+def log_max_retries_exceeded(sample_idx, error_msg, log_path):
+    """Log when max retries exceeded."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | MAX RETRIES EXCEEDED | Error: {error_msg}\n\n")
+    print(f"  [FAILED] Sample {sample_idx}: Max retries exceeded, using identity transform")
+
+
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Path to the config file.')
     parser.add_argument('type_of_noise', type=str, help='Noise level: None, low, high')
     parser.add_argument('type_of_data', type=str, help='Dataset type: train, val')
+    parser.add_argument('--start-index', type=int, required=True, help='First sample index to process (inclusive)')
+    parser.add_argument('--end-index', type=int, required=True, help='Last sample index to process (inclusive)')
+    parser.add_argument('--output-file', type=str, default=None, help='Output CSV file path (default: auto-generated)')
     args = parser.parse_args()
 
     noise_level = args.type_of_noise
     type_data = args.type_of_data
+    start_index = args.start_index
+    end_index = args.end_index
+
+    # Validate index range
+    if start_index < 0:
+        raise ValueError(f"start_index must be >= 0, got {start_index}")
+    if end_index < start_index:
+        raise ValueError(f"end_index ({end_index}) must be >= start_index ({start_index})")
 
     # Load Predator config and dataset
     config = load_config(args.config)
@@ -133,25 +170,34 @@ def main():
     else:
         raise ValueError(f"Unknown data type: {type_data}")
 
-    # Create output directory
-    output_dir = 'outputFiles'
+    # Create output directory with method-specific subdirectory
+    output_dir = os.path.join('outputFiles', 'icp')
     os.makedirs(output_dir, exist_ok=True)
 
-    # Open CSV file for writing
-    csv_path = os.path.join(output_dir, f'outfile_icp_{noise_level}_{type_data}.csv')
+    # Initialize retry log
+    retry_log_path = init_retry_log(noise_level, type_data, output_dir)
 
-    # Write header if file doesn't exist
-    if not os.path.exists(csv_path) :
-        with open(csv_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
-                           'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
+    # Set output CSV path
+    if args.output_file:
+        csv_path = args.output_file
+    else:
+        csv_path = os.path.join(output_dir, f'batch_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv')
 
-    # Process dataset
-    dataIter = iter(config.train_loader)
+    # Write header (always overwrite for batch files)
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
+                       'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
 
-    for indexDataLoader in range(dataSetSize):
-        inputs = next(dataIter)
+    if start_index >= dataSetSize:
+        raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
+
+    print(f"Processing samples {start_index} to {end_index}...")
+
+    dataset = config.train_loader.dataset
+    for indexDataLoader in range(start_index, end_index + 1):
+        raw_sample = dataset[indexDataLoader]
+        inputs = collate_fn_descriptor([raw_sample], config, neighborhood_limits)
 
         # Create Open3D point clouds
         pcd1 = o3d.geometry.PointCloud()
@@ -203,36 +249,76 @@ def main():
         maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
         voxelSize = (2 * maxDistance * 1.5) / N
 
-        # ICP Registration
+        # ICP Registration with retry logic
         # Using Identity as initial guess
         transInit = np.eye(4)
         threshold = 0.02 # Distance threshold for ICP
         
-        try:
-            reg_p2p = o3d.pipelines.registration.registration_icp(
-                pcd1_noisy, pcd2_noisy, threshold, transInit,
-                o3d.pipelines.registration.TransformationEstimationPointToPoint()
-            )
-            estimated_transform = reg_p2p.transformation
-        except Exception as e:
-            print(f"Error processing sample {indexDataLoader}: {e}")
-            estimated_transform = np.eye(4)
+        max_retries = 3
+        retry_delay = 1.0
+        estimated_transform = np.eye(4)
+
+        for attempt in range(max_retries + 1):
+            try:
+                reg_p2p = o3d.pipelines.registration.registration_icp(
+                    pcd1_noisy, pcd2_noisy, threshold, transInit,
+                    o3d.pipelines.registration.TransformationEstimationPointToPoint()
+                )
+                estimated_transform = reg_p2p.transformation
+                break
+            except (MemoryError, RuntimeError) as e:
+                error_str = str(e).lower()
+                if "malloc" in error_str or "heap" in error_str or "corruption" in error_str:
+                    if attempt < max_retries:
+                        log_retry(indexDataLoader, attempt, max_retries, str(e), retry_log_path)
+                        time.sleep(retry_delay)
+                        gc.collect()
+                        continue
+                    else:
+                        log_max_retries_exceeded(indexDataLoader, str(e), retry_log_path)
+                        estimated_transform = np.eye(4)
+                        break
+                else:
+                    raise
+            except Exception as e:
+                print(f"Error processing sample {indexDataLoader}: {e}")
+                estimated_transform = np.eye(4)
+                break
 
         # Compute metrics
         overlapPercentage = compute_overlap_ratio(pcd1_noisy, pcd2_noisy, gtTransformation, voxelSize)
 
-        # Save to CSV
-        with open(csv_path, 'a', newline='') as f:
+        # Save to CSV using atomic write (write to temp, then append to main)
+        temp_csv_path = csv_path + '.tmp'
+        with open(temp_csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             inputWriter = [indexDataLoader, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimated_transform))
             writer.writerow(inputWriter)
+        # Append temp file to main CSV, then remove temp
+        with open(csv_path, 'a', newline='') as main_f:
+            with open(temp_csv_path, 'r') as temp_f:
+                main_f.write(temp_f.read())
+        os.remove(temp_csv_path)
 
         print(f"Processed: {indexDataLoader}")
+        
+        # Force garbage collection every 50 samples to prevent memory buildup
+        if (indexDataLoader + 1) % 50 == 0:
+            gc.collect()
 
     print("Completed!")
-    print(f"ICP registration test finished. Results saved to {csv_path}")
+    print(f"Batch {start_index}-{end_index} finished. Results saved to {csv_path}")
+    
+    # Quick validation: check file has expected number of rows
+    expected_rows = end_index - start_index + 1
+    with open(csv_path, 'r') as f:
+        actual_rows = sum(1 for _ in f) - 1  # Subtract header
+    if actual_rows == expected_rows:
+        print(f"Validation: OK - {actual_rows} data rows (expected {expected_rows})")
+    else:
+        print(f"WARNING: File has {actual_rows} data rows, expected {expected_rows}")
 
 
 if __name__ == '__main__':

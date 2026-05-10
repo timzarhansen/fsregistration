@@ -1,4 +1,9 @@
 *.pth
 *.tar
 *.so
-*.o
+*.o__pycache__/
+*.pyc
+.idea/
+build/
+*.log
+*.csv

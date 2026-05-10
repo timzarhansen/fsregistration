@@ -19,12 +19,14 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3)
 
 
-find_package(OpenMP REQUIRED)
-
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
+
+# GPU-accelerated correlation dependencies (optional)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
 
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -92,27 +94,27 @@ add_executable(registration3DVoxels src/registrationOf3DVoxels.cpp src/softRegis
         src/softCorrelationClass3D.cpp
         src/softRegistrationClass3D.cpp)
 ament_target_dependencies(registration3DVoxels PCL)
-target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
+target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
 target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
 
 
 
 add_executable(registrationOfTwoImages src/registrationOfTwoImageScans.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
-target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
+target_link_libraries(registrationOfTwoImages fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
 target_include_directories(registrationOfTwoImages PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 
 add_executable(ros2ServiceRegistrationFS2D src/serviceRegistrationImage.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h)
 ament_target_dependencies(ros2ServiceRegistrationFS2D rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
-target_link_libraries(ros2ServiceRegistrationFS2D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
+target_link_libraries(ros2ServiceRegistrationFS2D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
 target_include_directories(ros2ServiceRegistrationFS2D PUBLIC ${OpenCV_INCLUDE_DIRS})
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(ros2ServiceRegistrationFS2D "${cpp_typesupport_target}")
 
 add_executable(ros2ServiceRegistrationFS3D src/serviceRegistrationVoxel.cpp src/softRegistrationClass3D.cpp src/softCorrelationClass3D.cpp)
 ament_target_dependencies(ros2ServiceRegistrationFS3D rclcpp geometry_msgs tf2_geometry_msgs cv_bridge)
-target_link_libraries(ros2ServiceRegistrationFS3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} OpenMP::OpenMP_CXX)
+target_link_libraries(ros2ServiceRegistrationFS3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS})
 target_include_directories(ros2ServiceRegistrationFS3D PUBLIC ${OpenCV_INCLUDE_DIRS})
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(ros2ServiceRegistrationFS3D "${cpp_typesupport_target}")
@@ -134,75 +136,95 @@ target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 #target_link_libraries(servicecall2D "${cpp_typesupport_target}")
 
 ################################################################################
-# GPU-accelerated correlation class (cuFFT backend via soft20)
+# GPU-accelerated correlation class (s2fft backend)
 ################################################################################
 
-# Note: GPU acceleration is now provided by soft20's native cuFFT backend.
-# Build soft20 with -DUSE_CUFFT=ON to enable GPU acceleration.
-# The s2fft Python backend has been removed in favor of native CUDA implementation.
+# Copy Python backend to build directory
+configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/softCorrelation_gpu_backend.py
+        ${CMAKE_BINARY_DIR}/softCorrelation_gpu_backend.py
+        COPYONLY
+)
 
-message(STATUS "GPU acceleration available via soft20 cuFFT backend (build soft20 with -DUSE_CUFFT=ON)")
+# Create GPU correlation library (SHARED, not MODULE)
+add_library(softCorrelationGPUBackend SHARED
+        src/softCorrelationClassGPU.cpp
+)
+
+target_link_libraries(softCorrelationGPUBackend
+        PRIVATE
+        Python3::Python
+        pybind11::embed
+        fftw3
+)
+
+target_include_directories(softCorrelationGPUBackend
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# Inform user about PYTHONPATH setup
+add_custom_target(show_python_setup ALL
+        COMMAND ${CMAKE_COMMAND} -E echo ""
+        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
+        COMMAND ${CMAKE_COMMAND} -E echo "Before running GPU-enabled executables:"
+        COMMAND ${CMAKE_COMMAND} -E echo "  export PYTHONPATH=${CMAKE_BINARY_DIR}:$ENV{PYTHONPATH}"
+        COMMAND ${CMAKE_COMMAND} -E echo "========================================"
+        COMMAND ${CMAKE_COMMAND} -E echo ""
+)
+
+# Test comparison executable
+add_executable(test_correlation_comparison src/test_correlation_comparison.cpp)
+target_link_libraries(test_correlation_comparison 
+    softCorrelationGPUBackend
+    fftw3 
+    soft20::soft20
+)
+target_include_directories(test_correlation_comparison PRIVATE include)
 
 # Test 1-angle correlation comparison executable
-#add_executable(test_1angle_comparison src/test_1angle_comparison.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp)
-#target_link_libraries(test_1angle_comparison fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
-#target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
+add_executable(test_1angle_comparison src/test_1angle_comparison.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp)
+target_link_libraries(test_1angle_comparison fftw3 generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS})
+target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 # 1-angle correlation test executable
-add_executable(test_1angle_comparison
+add_executable(test_1angle_comparison 
     src/test_1angle_comparison.cpp
     src/softRegistrationClass.cpp
     src/softCorrelationClass.cpp
     src/PeakFinder.cpp
     include/PeakFinder.h
 )
-
-target_link_libraries(test_1angle_comparison
-    fftw3
+target_link_libraries(test_1angle_comparison 
+    fftw3 
     generalhelpfullib
-    soft20::soft20
-    findpeaks
+    soft20::soft20 
+    findpeaks 
     ${OpenCV_LIBS}
-    OpenMP::OpenMP_CXX
 )
 target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
-# Full registration comparison test executable
-add_executable(test_full_registration_comparison
-    src/test_full_registration_comparison.cpp
-    src/softRegistrationClass.cpp
-    src/softCorrelationClass.cpp
-    src/PeakFinder.cpp
-    include/PeakFinder.h
-)
-target_link_libraries(test_full_registration_comparison
-    fftw3
-    generalhelpfullib
-    soft20::soft20
-    findpeaks
-    ${OpenCV_LIBS}
-    OpenMP::OpenMP_CXX
-)
-target_include_directories(test_full_registration_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
-# Full 3D registration comparison test executable
-add_executable(test_full_registration_comparison3D
-    src/test_full_registration_comparison3D.cpp
-    src/softRegistrationClass3D.cpp
-    src/softCorrelationClass3D.cpp
-    src/generalHelpfulTools.cpp
-)
-target_link_libraries(test_full_registration_comparison3D
-    fftw3
-    generalhelpfullib
-    soft20::soft20
-    findpeaks
-    ${OpenCV_LIBS}
-    ${PCL_LIBRARIES}
-    OpenMP::OpenMP_CXX
-)
-target_include_directories(test_full_registration_comparison3D PUBLIC ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+################################################################################
+# pybind11 module for direct Python access to 3D registration
+################################################################################
 
+pybind11_add_module(pybind_registration_3d
+        src/pybind_registration_3d.cpp
+        src/softRegistrationClass3D.cpp
+        src/softCorrelationClass3D.cpp
+)
+target_link_libraries(pybind_registration_3d PRIVATE
+        soft20::soft20
+        generalhelpfullib
+        findpeaks
+        fftw3
+        ${OpenCV_LIBS}
+)
+target_include_directories(pybind_registration_3d PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
+)
 install(TARGETS
         ros2ServiceRegistrationFS2D
         ros2ServiceRegistrationFS3D

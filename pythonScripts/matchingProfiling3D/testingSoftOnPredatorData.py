@@ -1,58 +1,39 @@
 #!/usr/bin/python3
-import os, torch, json, argparse, shutil, csv
+"""
+Testing script for soft registration on Predator dataset.
+Uses the C++ softRegistrationClass3D directly via pybind11 (no ROS2 needed).
 
-from prompt_toolkit.utils import to_str
+Usage:
+    python testingSoftOnPredatorData.py configFiles/predatorNothing.yaml 128 0 16 48 0.001 0.001 2 high train --start-index 0 --end-index 99
+"""
 
-from predator.datasets.dataloader import get_dataloader, get_datasets
-from easydict import EasyDict as edict
-from predator.lib.utils import setup_seed, load_config
-# ros include stuff
-import rclpy
-from rclpy.node import Node
+import os
+import sys
+import torch
+import json
+import argparse
+import shutil
+import csv
+import gc
+import time
 import numpy as np
-from fsregistration.srv import RequestListPotentialSolution3D
-
-# from std_msgs.msg import Float64MultiArray
 import open3d as o3d
 import copy
 import transforms3d.quaternions as quat
 import transforms3d.euler as euler
-import gc
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(script_dir))
+fsregistration_src = os.path.join(root_dir, 'src')
+
+sys.path.insert(0, fsregistration_src)
+
+from pybind_registration_3d import SoftRegistrationWrapper
+
+from dataloader_utils import PredatorDataLoader
 
 
-class MinimalClientAsync(Node):
-
-    def __init__(self, node_name):
-        super().__init__('client_' + node_name)
-        self.cli = self.create_client(RequestListPotentialSolution3D, 'fs3D/registration/all_solutions')
-        while not self.cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('service not available, waiting again...')
-        self.req = RequestListPotentialSolution3D.Request()
-
-    def send_request(self, scan1, scan2, N, VoxelSize, use_clahe, r_min, r_max, set_r_manual, level_potential_rotation,
-                     level_potential_translation,normalization_factor):
-        self.req.size_of_voxel = VoxelSize
-        # self.req.potential_for_necessary_peak = 0.1
-        self.req.debug = False
-        self.req.dimension_size = N
-        self.req.sonar_scan_1 = scan1.tolist()
-        self.req.sonar_scan_2 = scan2.tolist()
-        self.req.timing_computation_duration = False
-        self.req.use_clahe = use_clahe
-        self.req.r_min = int(r_min)
-        self.req.r_max = int(r_max)
-        self.req.level_potential_rotation = level_potential_rotation
-        self.req.level_potential_translation = level_potential_translation
-        self.req.set_normalization = normalization_factor
-        self.req.set_r_manual = set_r_manual
-
-        self.future = self.cli.call_async(self.req)
-        rclpy.spin_until_future_complete(self, self.future)
-        return self.future.result()
-
-
-# used to plot everything. now we save to file to look at it from the outside
-def draw_registration_result(source, target, transformation,nameOfFile):
+def draw_registration_result(source, target, transformation, nameOfFile):
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     source_temp.paint_uniform_color([1, 0.706, 0])
@@ -60,70 +41,56 @@ def draw_registration_result(source, target, transformation,nameOfFile):
     source_temp.transform(transformation)
     source_temp += target_temp
     o3d.io.write_point_cloud(nameOfFile, source_temp, format='ply')
-    # o3d.io.write_point_cloud("test2.ply", source_temp,format='ply')
-    # o3d.visualization.draw_geometries([source_temp, target_temp])
+
 
 def add_gaussian_noise_to_pointcloud(pcd, mean=0.0, std=0.01, seed=None):
-    # pcd = pcd.copy()
     points = np.asarray(pcd.points)
-    if seed is not None: np.random.seed(seed)
+    if seed is not None:
+        np.random.seed(seed)
     pcdNew = o3d.geometry.PointCloud()
     pcdNew.points = o3d.utility.Vector3dVector(points + np.random.normal(mean, std, points.shape))
     return pcdNew
 
+
 def add_salt_pepper_noise(pcd, percentage, min_x, max_x, min_y, max_y, min_z, max_z):
-    # pcd = pcd.copy()
     points = np.asarray(pcd.points)
     mask = np.random.rand(len(points)) < percentage
-    points[mask] = np.random.uniform([min_x, min_y, min_z], [max_x, max_y, max_z], size=(np.sum(mask), 3))
+    points[mask] = np.random.uniform(
+        [min_x, min_y, min_z],
+        [max_x, max_y, max_z],
+        size=(np.sum(mask), 3)
+    )
     pcdNew = o3d.geometry.PointCloud()
     pcdNew.points = o3d.utility.Vector3dVector(points)
-    return pcd
+    return pcdNew
+
 
 def compute_overlap_ratio(pcd0, pcd1, trans, voxel_size):
     pcd0_down = pcd0.voxel_down_sample(voxel_size)
     pcd1_down = pcd1.voxel_down_sample(voxel_size)
     matching01 = get_matching_indices(pcd0_down, pcd1_down, trans, voxel_size, 1)
-    matching10 = get_matching_indices(pcd1_down, pcd0_down, np.linalg.inv(trans),
-                                      voxel_size, 1)
+    matching10 = get_matching_indices(pcd1_down, pcd0_down, np.linalg.inv(trans), voxel_size, 1)
     overlap0 = len(matching01) / len(pcd0_down.points)
     overlap1 = len(matching10) / len(pcd1_down.points)
     return max(overlap0, overlap1)
 
 
-def getVoxelIndex(x, y, z, voxelSize, N):
-    voxelX = int(x / voxelSize)
-    voxelY = int(y / voxelSize)
-    voxelZ = int(z / voxelSize)
-
-    return int(voxelZ + N / 2 + (voxelY + N / 2) * N + (voxelX + N / 2) * N * N)
-
-
 def pointToVoxel(pointcloud, N, voxelSize, shift):
-    # voxelGrid = Float64MultiArray.data
-    voxelGrid = np.zeros(N * N * N)
-
-    # print(len(pointcloud.points))
-    # print(pointcloud.points[0])
-    # print(pointcloud.points[0][0])
-    # print(pointcloud.points[1][1])
-    # print(pointcloud.points[1][2])
+    voxelGrid = np.zeros(N * N * N, dtype=np.float64)
     for point in pointcloud.points:
         pointShifted = point + shift
-        index = getVoxelIndex(pointShifted[0], pointShifted[1], pointShifted[2], voxelSize, N);
+        voxelX = int(pointShifted[0] / voxelSize)
+        voxelY = int(pointShifted[1] / voxelSize)
+        voxelZ = int(pointShifted[2] / voxelSize)
+        index = int(voxelZ + N / 2 + (voxelY + N / 2) * N + (voxelX + N / 2) * N * N)
         if index >= 0 and index < len(voxelGrid):
             voxelGrid[index] = 1
-        # print(point[0], point[1], point[2])
-        # print(index)
-
-    # getVoxelIndex(x, y, z, voxelSize, N);
     return voxelGrid
 
 
 def get_matching_indices(source, target, trans, search_voxel_size, K=None):
     source_copy = copy.deepcopy(source)
     target_copy = copy.deepcopy(target)
-    # source.transform(trans)
     source_copy.transform(trans)
     pcd_tree = o3d.geometry.KDTreeFlann(target_copy)
 
@@ -136,355 +103,247 @@ def get_matching_indices(source, target, trans, search_voxel_size, K=None):
             match_inds.append((i, j))
     return match_inds
 
-def compute_transformation_from_peak(peak,mean1Transform,mean2Transform):
 
-    currentQuaternion = [peak.resulting_transformation.orientation.w,
-                         peak.resulting_transformation.orientation.x,
-                         peak.resulting_transformation.orientation.y,
-                         peak.resulting_transformation.orientation.z]
+def compute_transformation_from_peak(peak, mean1Transform, mean2Transform):
+    currentQuaternion = [
+        peak.potentialRotation.w,
+        peak.potentialRotation.x,
+        peak.potentialRotation.y,
+        peak.potentialRotation.z
+    ]
 
     rotationMatrix = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
-    translationVector = np.squeeze(np.asarray(
-        [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
-         peak.resulting_transformation.position.z]))
+
+    translations = peak.potentialTranslations
+    if not translations:
+        translationVector = np.array([0.0, 0.0, 0.0])
+    else:
+        translationVector = np.array([
+            translations[0].xTranslation,
+            translations[0].yTranslation,
+            translations[0].zTranslation
+        ])
+
     resultingTransformation = np.eye(4)
     resultingTransformation[:3, :3] = rotationMatrix
-    resultingTransformation[:3, 3] = np.matmul(rotationMatrix,translationVector)
-    print("quaternion: ")
-    print(currentQuaternion)
-    print("translation before: ")
-    print(translationVector)
-    print("translation: ")
-    print(resultingTransformation[:3, 3])
+    resultingTransformation[:3, 3] = np.matmul(rotationMatrix, translationVector)
 
-    estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform),np.matmul(resultingTransformation, mean1Transform))
-
-    print("estimatedActualRotation1")
-    print(estimatedActualRotation1)
-    print(np.matmul(mean1Transform,np.matmul(resultingTransformation, np.linalg.inv(mean2Transform))))
-    # print(np.matmul(mean2Transform,np.matmul(resultingTransformation, np.linalg.inv(mean1Transform))))
-    print(np.matmul(np.linalg.inv(mean1Transform),np.matmul(np.linalg.inv(resultingTransformation), mean2Transform)))
-    print(np.matmul(np.linalg.inv(mean2Transform),np.matmul(resultingTransformation, mean1Transform)))
-    # print(np.matmul(np.linalg.inv(mean1Transform),np.matmul(resultingTransformation, np.linalg.inv(mean2Transform))))
-    # print(np.matmul(np.linalg.inv(mean2Transform),np.matmul(resultingTransformation, np.linalg.inv(mean1Transform))))
-
-    # estimatedActualRotation1 = np.matmul(np.linalg.inv(mean2Transform),
-    #                                      np.matmul(resultingTransformation, mean1Transform))
+    estimatedActualRotation1 = np.matmul(
+        np.linalg.inv(mean2Transform),
+        np.matmul(resultingTransformation, mean1Transform)
+    )
     return estimatedActualRotation1
 
-def difference_between_transformations(transformation1,transformation2):
+
+def difference_between_transformations(transformation1, transformation2):
     diffMatrix = np.linalg.inv(transformation1) @ transformation2
     np.set_printoptions(suppress=True)
-    print(diffMatrix)
 
     trans = diffMatrix[:3, 3]
     normTrans = np.linalg.norm(trans)
     quatRot = quat.mat2quat(diffMatrix[:3, :3])
     rotaionAngle = quat.quat2axangle(quatRot)
-    # print(rotaionAngle[1])
-    # print(np.linalg.norm(trans))
-    #
-    # print("test")
 
-    return rotaionAngle[1] *normTrans
+    return rotaionAngle[1] * normTrans
 
 
 def transform_to_rpyxyz(matrix):
-    """Converts a 4x4 transformation matrix to Roll, Pitch, Yaw (RPY) and translation XYZ using transforms3d."""
-
     translation = matrix[:3, 3]
     rotation_matrix = matrix[:3, :3]
-
-    # Convert rotation matrix to quaternion
     quaternion = quat.mat2quat(rotation_matrix)
-
-    # Convert quaternion to Euler angles (RPY) - specify the order!
-    roll, pitch, yaw = euler.quat2euler(quaternion, 'sxyz') # or another order if needed
-
+    roll, pitch, yaw = euler.quat2euler(quaternion, 'sxyz')
     return [roll, pitch, yaw, translation[0], translation[1], translation[2]]
 
 
-
-architectures = dict()
-architectures['indoor'] = [
-    'simple',
-    'resnetb',
-    'resnetb_strided',
-    'resnetb',
-    'resnetb',
-    'resnetb_strided',
-    'resnetb',
-    'resnetb',
-    'resnetb_strided',
-    'resnetb',
-    'resnetb',
-    'nearest_upsample',
-    'unary',
-    'nearest_upsample',
-    'unary',
-    'nearest_upsample',
-    'last_unary'
-]
-
-if __name__ == '__main__':
-    # load configs
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Path to the config file.')
-    parser.add_argument('N', type=int, help='Path to the config file.')
-    parser.add_argument('use_clahe', type=int)
-    parser.add_argument('r_min', type=int, help='Path to the config file.')
-    parser.add_argument('r_max', type=int, help='Path to the config file.')
-    parser.add_argument('level_potential_rotation', type=float, help='Path to the config file.')
-    parser.add_argument('level_potential_translation', type=float, help='Path to the config file.')
-    parser.add_argument('normalization_factor', type=int, help='Path to the config file.')
-    parser.add_argument('type_of_noise', type=str, help='Path to the config file.')
-    parser.add_argument('type_of_data', type=str, help='Path to the config file.')
-    # start at 10:17
-    # configFiles/predatorNothing.yaml 128 0 16 48 0.001 0.001 2 high train
-    # configFiles/predatorNothing.yaml 128 0 16 48 0.001 0.001 2 low train
-    # configFiles/predatorNothing.yaml 128 0 16 48 0.001 0.001 2 None train
-    # configFiles/predatorNothing.yaml 64 1 8 24 0.01 0.01 2
-    # configFiles/predatorNothing.yaml 32 1 4 12 0.01 0.001 2
-    # outfile32_0_4_12_0.001_0.01__2.csv
+    parser.add_argument('N', type=int, help='Voxel grid dimension size.')
+    parser.add_argument('use_clahe', type=int, help='Use CLAHE (0 or 1).')
+    parser.add_argument('r_min', type=int, help='Minimum radius for peak search.')
+    parser.add_argument('r_max', type=int, help='Maximum radius for peak search.')
+    parser.add_argument('level_potential_rotation', type=float, help='Rotation potential level.')
+    parser.add_argument('level_potential_translation', type=float, help='Translation potential level.')
+    parser.add_argument('normalization_factor', type=int, help='Normalization factor (0 or 2).')
+    parser.add_argument('type_of_noise', type=str, help='Noise level: None, low, high')
+    parser.add_argument('type_of_data', type=str, help='Dataset type: train, val')
+    parser.add_argument('--start-index', type=int, required=True, help='First sample index to process (inclusive)')
+    parser.add_argument('--end-index', type=int, required=True, help='Last sample index to process (inclusive)')
+    parser.add_argument('--output-file', type=str, default=None, help='Output CSV file path (default: auto-generated)')
     args = parser.parse_args()
-    N = args.N  # 32 64 128
-    use_clahe = bool(args.use_clahe)  # True False
-    r_min = args.r_min  # N / 8 , N / 4
-    r_max = args.r_max  # N / 2 - N / 4 , N / 2 - N / 4
+
+    N = args.N
+    use_clahe = bool(args.use_clahe)
+    r_min = args.r_min
+    r_max = args.r_max
     set_r_manual = True
-    level_potential_rotation = args.level_potential_rotation  # 0.01 , 0.001
-    level_potential_translation = args.level_potential_translation  # 0.1 , 0.01
-    normalization_factor = args.normalization_factor # 0 , 1
-    noise_level = args.type_of_noise # None low high
-    type_data = args.type_of_data #train, val
+    level_potential_rotation = args.level_potential_rotation
+    level_potential_translation = args.level_potential_translation
+    normalization_factor = args.normalization_factor
+    noise_level = args.type_of_noise
+    type_data = args.type_of_data
+    start_index = args.start_index
+    end_index = args.end_index
 
+    if start_index < 0:
+        raise ValueError(f"start_index must be >= 0, got {start_index}")
+    if end_index < start_index:
+        raise ValueError(f"end_index ({end_index}) must be >= start_index ({start_index})")
 
+    loader = PredatorDataLoader(args.config, split=type_data)
 
-    config = load_config(args.config)
-    config['snapshot_dir'] = '%s' % config['exp_dir']
-    config['tboard_dir'] = '%s/tensorboard' % config['exp_dir']
-    config['save_dir'] = '%s/checkpoints' % config['exp_dir']
-    config = edict(config)
+    if start_index >= len(loader):
+        raise ValueError(f"start_index {start_index} exceeds dataset size {len(loader)}")
 
-    config.architecture = architectures[config.dataset]
-    train_set, val_set, benchmark_set = get_datasets(config)
-    dataSetSize = 0
-    if type_data == "train":
-        config.train_loader, neighborhood_limits = get_dataloader(dataset=train_set,
-                                                                  batch_size=config.batch_size,
-                                                                  shuffle=False,
-                                                                  num_workers=config.num_workers,
-                                                                  )
-        dataSetSize = len(train_set)
-    if type_data == "val":
-        config.train_loader, neighborhood_limits = get_dataloader(dataset=val_set,
-                                                                  batch_size=config.batch_size,
-                                                                  shuffle=False,
-                                                                  num_workers=config.num_workers,
-                                                                  )
-        dataSetSize = len(val_set)
-    # ROS2 Node
-    rclpy.init()
+    print(f"Initializing SoftRegistrationWrapper(N={N})...")
+    reg = SoftRegistrationWrapper(N, N // 2, N // 2, N // 2 - 1)
+    print(f"Registration object created.")
 
-    minimal_client = MinimalClientAsync(
-        to_str(N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-            int(level_potential_rotation * 1000)) + '_' + to_str(int(level_potential_translation * 1000)))
+    output_dir = 'outputFiles'
+    os.makedirs(output_dir, exist_ok=True)
 
-    # config.val_loader, _ = get_dataloader(dataset=val_set,
-    #                                        batch_size=config.batch_size,
-    #                                       shuffle=False,
-    #                                       num_workers=0,
-    #                                       neighborhood_limits=neighborhood_limits
-    #                                       )
-    # config.test_loader, _ = get_dataloader(dataset=benchmark_set,
-    #                                        batch_size=config.batch_size,
-    #                                        shuffle=False,
-    #                                        num_workers=0,
-    #                                        neighborhood_limits=neighborhood_limits)
-    interesting_MatchesList = {1, 2}
-    dataIter = iter(config.train_loader)
-    # for indexDataLoader in range(200):
-    for indexDataLoader in range(dataSetSize):
+    if args.output_file:
+        csv_path = args.output_file
+    else:
+        csv_path = os.path.join(
+            output_dir,
+            f'results_{N}_{int(use_clahe)}_{r_min}_{r_max}_{level_potential_rotation}_{level_potential_translation}_{normalization_factor}_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv'
+        )
+
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'index', 'numSolutions', 'overlap%',
+            'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
+            'EstHighest_roll', 'EstHighest_pitch', 'EstHighest_yaw', 'EstHighest_x', 'EstHighest_y', 'EstHighest_z',
+            'EstBest_roll', 'EstBest_pitch', 'EstBest_yaw', 'EstBest_x', 'EstBest_y', 'EstBest_z'
+        ])
+
+    print(f"Processing samples {start_index} to {end_index}...")
+
+    for indexDataLoader in range(start_index, end_index + 1):
         gc.collect()
-        # for indexDataLoader in range(2):
-        inputs = next(dataIter)
-        # if indexDataLoader not in interesting_MatchesList:
-        #     continue
-        # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
+        inputs = loader.get_by_index(indexDataLoader)
+
         pcd1 = o3d.geometry.PointCloud()
         pcd2 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(inputs["src_pcd_raw"])
         pcd2.points = o3d.utility.Vector3dVector(inputs["tgt_pcd_raw"])
 
-
-
-
         mean1, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd1)
         mean2, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd2)
-        meanNoise = 0
-        percentageNoise = 0
+
         if noise_level == "None":
             meanNoise = 0
             percentageNoise = 0
-        if noise_level == "low":
+        elif noise_level == "low":
             meanNoise = 0.01
             percentageNoise = 0.01
-        if noise_level == "high":
+        elif noise_level == "high":
             meanNoise = 0.05
             percentageNoise = 0.05
+        else:
+            raise ValueError(f"Unknown noise level: {noise_level}")
 
-        # add gaussian noise
         pcd1_noisy = add_gaussian_noise_to_pointcloud(pcd1, mean=0.0, std=meanNoise, seed=None)
         pcd2_noisy = add_gaussian_noise_to_pointcloud(pcd2, mean=0.0, std=meanNoise, seed=None)
 
-
-        pcd1_noisy = add_salt_pepper_noise(pcd1_noisy, percentageNoise, np.min(pcd1.points,axis=0)[0], np.max(pcd1.points,axis=0)[0], np.min(pcd1.points,axis=0)[1], np.max(pcd1.points,axis=0)[1], np.min(pcd1.points,axis=0)[2], np.max(pcd1.points,axis=0)[2])
-        pcd2_noisy = add_salt_pepper_noise(pcd2_noisy, percentageNoise, np.min(pcd2.points,axis=0)[0], np.max(pcd2.points,axis=0)[0], np.min(pcd2.points,axis=0)[1], np.max(pcd2.points,axis=0)[1], np.min(pcd2.points,axis=0)[2], np.max(pcd2.points,axis=0)[2])
-
+        pcd1_noisy = add_salt_pepper_noise(
+            pcd1_noisy, percentageNoise,
+            np.min(pcd1.points, axis=0)[0], np.max(pcd1.points, axis=0)[0],
+            np.min(pcd1.points, axis=0)[1], np.max(pcd1.points, axis=0)[1],
+            np.min(pcd1.points, axis=0)[2], np.max(pcd1.points, axis=0)[2]
+        )
+        pcd2_noisy = add_salt_pepper_noise(
+            pcd2_noisy, percentageNoise,
+            np.min(pcd2.points, axis=0)[0], np.max(pcd2.points, axis=0)[0],
+            np.min(pcd2.points, axis=0)[1], np.max(pcd2.points, axis=0)[1],
+            np.min(pcd2.points, axis=0)[2], np.max(pcd2.points, axis=0)[2]
+        )
 
         mean1 = -mean1
         mean2 = -mean2
-        # mean1 = np.array([0,0,-0.8])
-        # mean2 = np.array([0,0,-0.5])
 
-        # N = 128
         maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
         voxelSize = (2 * maxDistance * 1.5) / N
 
-        # add salt and pepper noise
-
-
-
-
-        # print("voxelSize")
-        # print(voxelSize)
-
-        # mean1 = mean1
-        # print(mean1)
-        # print(mean2)
         mean1Transform = np.eye(4)
         mean2Transform = np.eye(4)
         mean1Transform[:3, 3] = np.squeeze(np.asarray(mean1))
         mean2Transform[:3, 3] = np.squeeze(np.asarray(mean2))
-        # draw_registration_result(pcd1,pcd2,np.identity(4))
 
         gtTransformation = np.eye(4)
         gtTransformation[:3, :3] = inputs["rot"]
         gtTransformation[:3, 3] = np.squeeze(np.asarray(inputs["trans"]))
-        # print("rotation Matrix GT: ")
-        # print(T)
-        # print("rotation Quat GT: ")
-        # print(quat.mat2quat(gtTransformation[0:3, 0:3]))
-        # voxelSize = 0.05
-        # print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, T, voxelSize))
-        pcd1Vox = pcd1_noisy.voxel_down_sample(voxel_size=voxelSize/10.0)
-        pcd2Vox = pcd2_noisy.voxel_down_sample(voxel_size=voxelSize/10.0)
 
+        pcd1Vox = pcd1_noisy.voxel_down_sample(voxel_size=voxelSize / 10.0)
+        pcd2Vox = pcd2_noisy.voxel_down_sample(voxel_size=voxelSize / 10.0)
 
         voxelArray1 = pointToVoxel(pcd1_noisy, N, voxelSize, mean1).astype(np.float64)
         voxelArray2 = pointToVoxel(pcd2_noisy, N, voxelSize, mean2).astype(np.float64)
 
-        response = RequestListPotentialSolution3D.Response()
-        response = minimal_client.send_request(voxelArray1, voxelArray2, N, voxelSize, use_clahe, r_min, r_max,
-                                               set_r_manual, level_potential_rotation, level_potential_translation,normalization_factor)
-        heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
-        # find highest peak
-        # save percentage overlap, angle difference, translation difference,
+        listPeaks = reg.registerVoxels(
+            voxelArray1, voxelArray2,
+            debug=False,
+            useClahe=use_clahe,
+            timeStuff=False,
+            sizeVoxel=voxelSize,
+            r_min=float(r_min),
+            r_max=float(r_max),
+            level_potential_rotation=level_potential_rotation,
+            level_potential_translation=level_potential_translation,
+            set_r_manual=set_r_manual,
+            normalization=normalization_factor
+        )
 
-        # save all solutions of estimation
-        # with open('/home/tim-external/ros_ws/src/fsregistration/pythonScripts/matchingProfiling3D/outputFiles/outfile' + to_str(
-        #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-        #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
-        #     indexDataLoader).zfill(5)+ '_' + to_str(normalization_factor) + '.txt', 'w') as f:
-        # with open('/home/tim-external/matlab/registrationFourier/3D/resultingMatchingTest/outfile' + to_str(
-        #         N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-        #     level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(
-        #     indexDataLoader) + '.txt', 'w') as f :
-        # overlap Ratio:
-        # np.savetxt(f, np.matrix(compute_overlap_ratio(pcd1, pcd2, gtTransformation, voxelSize)), fmt='%.10f')
         overlapPercentage = compute_overlap_ratio(pcd1, pcd2, gtTransformation, voxelSize)
-        # N Size:
-        # np.savetxt(f, np.matrix(N), fmt='%.10f')
-        # GT
-        # for line in np.matrix(gtTransformation):
-        #     np.savetxt(f, line, fmt='%.10f')
-        # Number Of Solutions:
-        # np.savetxt(f, np.matrix(len(response.list_potential_solutions)), fmt='%.10f')
-
-        numberOfSolutions = len(response.list_potential_solutions)
-
-        for index, peak in enumerate(response.list_potential_solutions):
-            # save all Transformation
-            currentQuaternion = [peak.resulting_transformation.orientation.w,
-                                 peak.resulting_transformation.orientation.x,
-                                 peak.resulting_transformation.orientation.y,
-                                 peak.resulting_transformation.orientation.z]
-            tmpTransformation = np.eye(4)
-            tmpTransformation[:3, :3] = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
-            tmpTransformation[:3, 3] = np.squeeze(np.asarray(
-                [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
-                 peak.resulting_transformation.position.z]))
-            # for line in np.matrix(tmpTransformation):
-            #     np.savetxt(f, line, fmt='%.10f')
-            # save Peak
-            # np.savetxt(f, np.matrix(peak.transformation_peak_height), fmt='%.10f')
+        numberOfSolutions = len(listPeaks)
 
         highestPeakCorrelation = 0.0
         indexHighestPeak = 0
-        closestPeak = 10000000000000000000
+        closestPeak = float('inf')
         indexClosestPeak = 0
-        for index, peak in enumerate(response.list_potential_solutions):
-            # find peak
-            if peak.transformation_peak_height > highestPeakCorrelation:
-                highestPeakCorrelation = peak.transformation_peak_height
+
+        for index, peak in enumerate(listPeaks):
+            if peak.potentialRotation.correlationHeight > highestPeakCorrelation:
+                highestPeakCorrelation = peak.potentialRotation.correlationHeight
                 indexHighestPeak = index
-            currentPeakTransformation = compute_transformation_from_peak(peak,mean1Transform,mean2Transform)
-            distanceSolutions = difference_between_transformations(gtTransformation,currentPeakTransformation)
-            if closestPeak>distanceSolutions:
+            currentPeakTransformation = compute_transformation_from_peak(peak, mean1Transform, mean2Transform)
+            distanceSolutions = difference_between_transformations(gtTransformation, currentPeakTransformation)
+            if closestPeak > distanceSolutions:
                 closestPeak = distanceSolutions
                 indexClosestPeak = index
-        print("StartingRealSolutions: ")
-        print("GT Transformation: ")
-        print(gtTransformation)
-        highestPeak = response.list_potential_solutions[indexHighestPeak]
-        bestPeak = response.list_potential_solutions[indexClosestPeak]
-        estimatedHighestTransformation = compute_transformation_from_peak(highestPeak,mean1Transform,mean2Transform)
-        estimatedBestTransformation = compute_transformation_from_peak(bestPeak,mean1Transform,mean2Transform)
+
+        highestPeak = listPeaks[indexHighestPeak]
+        bestPeak = listPeaks[indexClosestPeak]
+        estimatedHighestTransformation = compute_transformation_from_peak(highestPeak, mean1Transform, mean2Transform)
+        estimatedBestTransformation = compute_transformation_from_peak(bestPeak, mean1Transform, mean2Transform)
+
         np.set_printoptions(suppress=True)
 
+        print(f"Sample {indexDataLoader}: solutions={numberOfSolutions}, overlap={overlapPercentage:.4f}")
 
-        print("Estimated Transformation Highest Peak: ")
-        print(estimatedHighestTransformation)
-        print("Estimated Transformation Best Peak: ")
-        print(estimatedBestTransformation)
-        print("GT Transformation: ")
-        print(gtTransformation)
-        print("percentage Overlap: ", compute_overlap_ratio(pcd1, pcd2, gtTransformation, voxelSize))
-
-        # for line in np.matrix(estimatedHighestTransformation):
-        #     np.savetxt(f, line, fmt='%.10f')
-        # for line in np.matrix(estimatedBestTransformation):
-        #     np.savetxt(f, line, fmt='%.10f')
-        # print(response)
-        # draw_registration_result(pcd1Vox, pcd2Vox, gtTransformation,"resultingTransformationGT.ply")  # GT
-        # draw_registration_result(pcd1Vox, pcd2Vox, estimatedHighestTransformation,"resultingTransformationHighestEstimation.ply") # Estimation
-        # draw_registration_result(pcd1Vox, pcd2Vox, estimatedBestTransformation,"resultingTransformationBestEstimation.ply") # Estimation
-        with open('/home/tim-external/ros_ws/src/fsregistration/pythonScripts/matchingProfiling3D/outputFiles/results' + to_str(
-                N) + '_' + to_str(int(use_clahe)) + '_' + to_str(r_min) + '_' + to_str(r_max) + '_' + to_str(
-            level_potential_rotation) + '_' + to_str(level_potential_translation) + '_' + to_str(normalization_factor)+ '_' + to_str(noise_level)+ '_' + to_str(type_data)+ '.csv', 'a', newline='') as f:
+        with open(csv_path, 'a', newline='') as f:
             writer = csv.writer(f)
-            # GTroll, GTpitch, GTyaw, GTx, GTy, GTz = transform_to_rpyxyz(gtTransformation)
-            # outfile32_0_4_12_0.001_0.01__2.csv
             inputWriter = [indexDataLoader, numberOfSolutions, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimatedHighestTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimatedBestTransformation))
-            # print("test")
             writer.writerow(inputWriter)
 
-        # to_str(indexDataLoader).zfill(5),numberOfSolutions,overlapPercentage,gtTransformation,estimatedHighestTransformation,estimatedBestTransformation
+        if (indexDataLoader + 1) % 50 == 0:
+            gc.collect()
 
-        print("first: ",indexDataLoader)
-        # exit(-1)
+    print(f"Completed! Results saved to {csv_path}")
 
-    print("test2")
+    expected_rows = end_index - start_index + 1
+    with open(csv_path, 'r') as f:
+        actual_rows = sum(1 for _ in f) - 1
+    if actual_rows == expected_rows:
+        print(f"Validation: OK - {actual_rows} data rows (expected {expected_rows})")
+    else:
+        print(f"WARNING: File has {actual_rows} data rows, expected {expected_rows}")
+
+
+if __name__ == '__main__':
+    main()
