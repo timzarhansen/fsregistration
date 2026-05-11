@@ -206,8 +206,7 @@ private:
             req->r_max,
             req->level_potential_rotation,
             req->level_potential_translation,
-            req->set_r_manual,req->set_normalization,
-            req->use_simple_rotation_peak, req->use_simple_translation_peak);
+            req->set_r_manual,req->set_normalization);
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();
         free(voxelData1);
@@ -359,8 +358,7 @@ private:
                 req->r_max,
                 req->level_potential_rotation,
                 req->level_potential_translation,
-                req->set_r_manual,req->set_normalization,
-                req->use_simple_rotation_peak, req->use_simple_translation_peak);
+                req->set_r_manual,req->set_normalization);
         std::cout << "ending List Potential Solution callback" << std::endl;
         free(voxelData1);
         free(voxelData2);

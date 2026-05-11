@@ -19,12 +19,14 @@ find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3)
 
 
-find_package(OpenMP REQUIRED)
-
 find_package(tf2 REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
+
+# GPU-accelerated correlation dependencies (optional)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
 
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -168,14 +170,14 @@ target_link_libraries(test_1angle_comparison
 target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 # Full registration comparison test executable
-add_executable(test_full_registration_comparison2D
-        src/test_full_registration_comparison2D.cpp
+add_executable(test_full_registration_comparison
+    src/test_full_registration_comparison.cpp
     src/softRegistrationClass.cpp
     src/softCorrelationClass.cpp
     src/PeakFinder.cpp
     include/PeakFinder.h
 )
-target_link_libraries(test_full_registration_comparison2D
+target_link_libraries(test_full_registration_comparison
     fftw3
     generalhelpfullib
     soft20::soft20
@@ -183,7 +185,7 @@ target_link_libraries(test_full_registration_comparison2D
     ${OpenCV_LIBS}
     OpenMP::OpenMP_CXX
 )
-target_include_directories(test_full_registration_comparison2D PUBLIC ${OpenCV_INCLUDE_DIRS})
+target_include_directories(test_full_registration_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
 # Full 3D registration comparison test executable
 add_executable(test_full_registration_comparison3D

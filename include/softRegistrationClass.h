@@ -28,7 +28,6 @@
 #include <findpeaks/mask.hpp>
 #include <findpeaks/persistence.hpp>
 #include "fftw3.h"
-#include <omp.h>
 
 struct rotationPeakfs2D {
     double angle;
@@ -112,12 +111,9 @@ public:
                                                 spectrumOut, FFTW_FORWARD, FFTW_ESTIMATE);
         planVoxelToFourier2D = fftw_plan_dft_2d(N, N, inputSpacialData,
                                                 spectrumOut, FFTW_FORWARD, FFTW_ESTIMATE);
-       planVoxelToFourier2DCorrelation = fftw_plan_dft_2d(this->correlationN, this->correlationN,
-                                                            inputSpacialDataCorrelation,
-                                                            spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
-        this->correlation1D = (double *) malloc(sizeof(double) * N);
-        this->PmR = (double *) malloc(sizeof(double) * (2 * bwIn));
-        this->PmI = (double *) malloc(sizeof(double) * (2 * bwIn));
+        planVoxelToFourier2DCorrelation = fftw_plan_dft_2d(this->correlationN, this->correlationN,
+                                                           inputSpacialDataCorrelation,
+                                                           spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
     }
 
         ~softRegistrationClass() {
@@ -134,35 +130,19 @@ public:
 //                             double goodGuessAlpha, bool debug);
 
 
-   double
-    sofftRegistrationVoxel2DRotationOnlySO3(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,double &covariance,
-                                          bool debug = false);
+    double
+    sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,double &covariance,
+                                         bool debug = false);
 
     std::vector<rotationPeakfs2D>
     sofftRegistrationVoxel2DListOfPossibleRotations(double voxelData1Input[], double voxelData2Input[],
                                                     bool debug = false, bool multipleRadii = false,
                                                     bool useClahe = true, bool useHamming = true);
 
-   std::vector<rotationPeakfs2D>
+    std::vector<rotationPeakfs2D>
     sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[], double voxelData2Input[],
-                                                           bool debug = false, bool multipleRadii = false,
-                                                           bool useClahe = true, bool useHamming = true);
-
-    double sofftRegistrationVoxel2DRotationOnlyDirect(double voxelData1Input[], double voxelData2Input[],
-                                                       double goodGuessAlpha, double &covariance,
-                                                       bool debug = false);
-
-    std::pair<std::vector<float>, std::vector<float>>
-    compute1AngleCorrelationArraySO3(double voxelData1Input[], double voxelData2Input[],
-                                      bool multipleRadii = false,
-                                      bool useClahe = true, bool useHamming = true,
-                                      bool debug = false);
-
-    std::pair<std::vector<float>, std::vector<float>>
-    compute1AngleCorrelationArrayDirect(double voxelData1Input[], double voxelData2Input[],
-                                         bool multipleRadii = false,
-                                         bool useClahe = true, bool useHamming = true,
-                                         bool debug = false);
+                                                          bool debug = false, bool multipleRadii = false,
+                                                          bool useClahe = true, bool useHamming = true);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -170,76 +150,35 @@ public:
 //                                                        Eigen::Vector3d initialGuess, bool useInitialGuess,
 //                                                        double &heightMaximumPeak, bool debug = false);
 
- Eigen::Matrix4d registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
-                                                      double voxelData2Input[],
-                                                      Eigen::Matrix4d &initialGuess,Eigen::Matrix3d &covarianceMatrix,
-                                                      bool useInitialAngle, bool useInitialTranslation,
-                                                      double cellSize,
-                                                      bool useGauss,
-                                                      bool debug = false,
-                                                      double potentialNecessaryForPeak = 0.1,
-                                                      bool benchmark = false);
+    Eigen::Matrix4d registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
+                                                     double voxelData2Input[],
+                                                     Eigen::Matrix4d &initialGuess,Eigen::Matrix3d &covarianceMatrix,
+                                                     bool useInitialAngle, bool useInitialTranslation,
+                                                     double cellSize,
+                                                     bool useGauss,
+                                                     bool debug = false,
+                                                     double potentialNecessaryForPeak = 0.1);
 
-   std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
-                                                                                   double voxelData2Input[],
-                                                                                   double cellSize,
-                                                                                   bool useGauss,
-                                                                                   bool debug = false,
-                                                                                   double potentialNecessaryForPeak = 0.1,
-                                                                                   bool multipleRadii = false,
-                                                                                   bool useClahe = true,
-                                                                                   bool useHamming = true);
-
-   std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSO3(double voxelData1Input[],
-                                                                    double voxelData2Input[],
-                                                                    double cellSize,
-                                                                    bool useGauss,
-                                                                    bool debug = false,
-                                                                    double potentialNecessaryForPeak = 0.1,
-                                                                    bool multipleRadii = false,
-                                                                    bool useClahe = true,
-                                                                    bool useHamming = true,
-                                                                    bool benchmark = false);
-
-  std::vector<transformationPeakfs2D> registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                       double voxelData2Input[],
-                                                                       double cellSize,
-                                                                       bool useGauss,
-                                                                       bool debug = false,
-                                                                       double potentialNecessaryForPeak = 0.1,
-                                                                       bool multipleRadii = false,
-                                                                       bool useClahe = true,
-                                                                       bool useHamming = true,
-                                                                       bool benchmark = false);
+    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
+                                                                                  double voxelData2Input[],
+                                                                                  double cellSize,
+                                                                                  bool useGauss,
+                                                                                  bool debug = false,
+                                                                                  double potentialNecessaryForPeak = 0.1,
+                                                                                  bool multipleRadii = false,
+                                                                                  bool useClahe = true,
+                                                                                  bool useHamming = true);
 
     double getSpectrumFromVoxelData2DCorrelation(double voxelData[], double magnitude[], double phase[],
                                                  bool gaussianBlur, double normalizationFactor);
 
- std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                                double voxelData2Input[],
-                                                                                                double cellSize,
-                                                                                                double normalizationFactor,
-                                                                                                bool debug = false,
-                                                                                                int numberOfRotationForDebug = 0,
-                                                                                                double potentialNecessaryForPeak = 0.1,
-                                                                                                bool benchmark = false);
-
-    std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutionsThreadSafe(
-        double voxelData1Input[], double voxelData2Input[],
-        double cellSize, double normalizationFactor, bool debug,
-        int numberOfRotationForDebug, double potentialNecessaryForPeak);
-
-    double getSpectrumFromVoxelData2DCorrelationThreadSafe(
-        double voxelData[], double magnitude[], double phase[],
-        bool gaussianBlur, double normalizationFactor,
-        int correlationN,
-        fftw_complex* inputSpacialDataCorrelation_local,
-        fftw_plan planVoxelToFourier2D_local);
-
-    std::vector<translationPeakfs2D>
-    peakDetectionOf2DCorrelationFromBuffer(
-        double* resultingCorrelationDouble, int correlationN,
-        double cellSize, double potentialNecessaryForPeak);
+    std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
+                                                                                             double voxelData2Input[],
+                                                                                             double cellSize,
+                                                                                             double normalizationFactor,
+                                                                                             bool debug = false,
+                                                                                             int numberOfRotationForDebug = 0,
+                                                                                             double potentialNecessaryForPeak = 0.1);
 
     std::vector<translationPeakfs2D>
     peakDetectionOf2DCorrelationSimpleDouble1D(double maximumCorrelation, double cellSize, int impactOfNoiseFactor = 2,
@@ -260,13 +199,9 @@ public:
 
     void imextendedmax_imreconstruct(cv::Mat g, cv::Mat f, cv::Mat &dest);
 
-std::vector<translationPeakfs2D>
-     peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
-                                                   double ignoreSidesPercentage = 0.05, bool benchmark = false);
-
     std::vector<translationPeakfs2D>
-    peakDetectionOf2DCorrelationOptimized(double cellSize, double potentialNecessaryForPeak = 0.1,
-                                          double ignoreSidesPercentage = 0.05);
+    peakDetectionOf2DCorrelationFindPeaksLibrary(double cellSize, double potentialNecessaryForPeak = 0.1,
+                                                 double ignoreSidesPercentage = 0.05);
 
     int getSizeOfRegistration();
 
@@ -314,9 +249,6 @@ private://here everything is created. malloc is done in the constructor
     fftw_plan planVoxelToFourier2DCorrelation;
     fftw_plan planFourierToVoxel2D;
     fftw_plan planFourierToVoxel2DCorrelation;
-    double *correlation1D;
-    double *PmR;
-    double *PmI;
 };
 
 

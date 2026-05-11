@@ -14,6 +14,8 @@ import sys
 import torch
 import argparse
 import csv
+import gc
+import time
 import numpy as np
 import open3d as o3d
 import copy
@@ -111,16 +113,51 @@ def se3_to_matrix(pose):
     return T
 
 
+def init_retry_log(noise_level, type_data, output_dir):
+    """Initialize retry log file."""
+    log_path = os.path.join(output_dir, f'retry_log_{noise_level}_{type_data}.txt')
+    with open(log_path, 'w') as f:
+        f.write(f"Retry Log - Noise: {noise_level}, Data: {type_data}\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    return log_path
+
+
+def log_retry(sample_idx, attempt, max_retries, error_msg, log_path):
+    """Log retry attempt."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | Retry {attempt + 1}/{max_retries} | Error: {error_msg}\n")
+    print(f"  [RETRY {attempt + 1}/{max_retries}] Sample {sample_idx}: {error_msg[:100]}")
+
+
+def log_max_retries_exceeded(sample_idx, error_msg, log_path):
+    """Log when max retries exceeded."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | MAX RETRIES EXCEEDED | Error: {error_msg}\n\n")
+    print(f"  [FAILED] Sample {sample_idx}: Max retries exceeded, using identity transform")
+
+
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Path to the config file.')
     parser.add_argument('type_of_noise', type=str, help='Noise level: None, low, high')
     parser.add_argument('type_of_data', type=str, help='Dataset type: train, val')
+    parser.add_argument('--start-index', type=int, required=True, help='First sample index to process (inclusive)')
+    parser.add_argument('--end-index', type=int, required=True, help='Last sample index to process (inclusive)')
+    parser.add_argument('--output-file', type=str, default=None, help='Output CSV file path (default: auto-generated)')
     args = parser.parse_args()
 
     noise_level = args.type_of_noise
     type_data = args.type_of_data
+    start_index = args.start_index
+    end_index = args.end_index
+
+    # Validate index range
+    if start_index < 0:
+        raise ValueError(f"start_index must be >= 0, got {start_index}")
+    if end_index < start_index:
+        raise ValueError(f"end_index ({end_index}) must be >= start_index ({start_index})")
 
     # Get script directory for path resolution
     script_dir = Path(__file__).resolve().parent
@@ -131,8 +168,8 @@ def main():
     config = loader.config
     neighborhood_limits = loader.neighborhood_limits
 
-    # Setup RegTR model
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Use CPU (MPS has known gaps for ops used by these 3D registration models)
+    device = torch.device('cpu')
     print(f"Using device: {device}")
 
     # Load RegTR config
@@ -157,23 +194,32 @@ def main():
     # Check for crop_radius in config
     crop_radius = regtr_cfg.get('crop_radius', None)
 
-    # Create output directory
-    output_dir = 'outputFiles'
+    # Create output directory with method-specific subdirectory
+    output_dir = os.path.join('outputFiles', 'regtr')
     os.makedirs(output_dir, exist_ok=True)
 
-    # Open CSV file for writing
-    csv_path = os.path.join(output_dir, f'outfile_regtr_{noise_level}_{type_data}.csv')
+    # Initialize retry log
+    retry_log_path = init_retry_log(noise_level, type_data, output_dir)
 
-    # Write header if file doesn't exist
-    if not os.path.exists(csv_path):
-        with open(csv_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
-                           'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
+    # Set output CSV path
+    if args.output_file:
+        csv_path = args.output_file
+    else:
+        csv_path = os.path.join(output_dir, f'batch_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv')
 
-    # Process dataset
-    for indexDataLoader in range(len(loader)):
-        inputs = loader.get_next()
+    # Write header (always overwrite for batch files)
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
+                       'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z'])
+
+    if start_index >= len(loader):
+        raise ValueError(f"start_index {start_index} exceeds dataset size {len(loader)}")
+
+    print(f"Processing samples {start_index} to {end_index}...")
+
+    for indexDataLoader in range(start_index, end_index + 1):
+        inputs = loader.get_by_index(indexDataLoader)
 
         # Create Open3D point clouds
         pcd1 = o3d.geometry.PointCloud()
@@ -241,34 +287,75 @@ def main():
             'tgt_xyz': [torch.from_numpy(tgt_xyz).float().to(device)]
         }
 
-        # Run inference
-        try:
-            with torch.no_grad():
-                outputs = model(data_batch)
-                pose = outputs['pose'][-1, 0].cpu().numpy()
+        # Run inference with retry logic
+        max_retries = 3
+        retry_delay = 1.0
+        estimated_transform = np.eye(4)
 
-            # Convert pose to 4x4 transformation matrix
-            # RegTR outputs SE3 pose as 6-element array [tx, ty, tz, rx, ry, rz]
-            estimated_transform = se3_to_matrix(pose)
+        for attempt in range(max_retries + 1):
+            try:
+                with torch.no_grad():
+                    outputs = model(data_batch)
+                    pose = outputs['pose'][-1, 0].cpu().numpy()
 
-        except Exception as e:
-            print(f"Error processing sample {indexDataLoader}: {e}")
-            estimated_transform = np.eye(4)
+                # Convert pose to 4x4 transformation matrix
+                # RegTR outputs SE3 pose as 6-element array [tx, ty, tz, rx, ry, rz]
+                estimated_transform = se3_to_matrix(pose)
+                break
+
+            except (MemoryError, RuntimeError) as e:
+                error_str = str(e).lower()
+                if "malloc" in error_str or "heap" in error_str or "corruption" in error_str:
+                    if attempt < max_retries:
+                        log_retry(indexDataLoader, attempt, max_retries, str(e), retry_log_path)
+                        time.sleep(retry_delay)
+                        gc.collect()
+                        continue
+                    else:
+                        log_max_retries_exceeded(indexDataLoader, str(e), retry_log_path)
+                        estimated_transform = np.eye(4)
+                        break
+                else:
+                    raise
+            except Exception as e:
+                print(f"Error processing sample {indexDataLoader}: {e}")
+                estimated_transform = np.eye(4)
+                break
 
         # Compute metrics
         overlapPercentage = compute_overlap_ratio(pcd1_noisy, pcd2_noisy, gtTransformation, voxelSize)
 
-        # Save to CSV
-        with open(csv_path, 'a', newline='') as f:
+        # Save to CSV using atomic write (write to temp, then append to main)
+        temp_csv_path = csv_path + '.tmp'
+        with open(temp_csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             inputWriter = [indexDataLoader, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimated_transform))
             writer.writerow(inputWriter)
+        # Append temp file to main CSV, then remove temp
+        with open(csv_path, 'a', newline='') as main_f:
+            with open(temp_csv_path, 'r') as temp_f:
+                main_f.write(temp_f.read())
+        os.remove(temp_csv_path)
 
         print(f"Processed: {indexDataLoader}")
+        
+        # Force garbage collection every 50 samples to prevent memory buildup
+        if (indexDataLoader + 1) % 50 == 0:
+            gc.collect()
 
     print("Completed!")
+    print(f"Batch {start_index}-{end_index} finished. Results saved to {csv_path}")
+    
+    # Quick validation: check file has expected number of rows
+    expected_rows = end_index - start_index + 1
+    with open(csv_path, 'r') as f:
+        actual_rows = sum(1 for _ in f) - 1  # Subtract header
+    if actual_rows == expected_rows:
+        print(f"Validation: OK - {actual_rows} data rows (expected {expected_rows})")
+    else:
+        print(f"WARNING: File has {actual_rows} data rows, expected {expected_rows}")
 
 
 if __name__ == '__main__':
