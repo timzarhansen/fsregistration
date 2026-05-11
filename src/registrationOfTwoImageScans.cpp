@@ -8,6 +8,8 @@
 // /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_0/00_ForShow.jpg /home/tim-external/dataFolder/StPereDataset/lowNoise52/scanNumber_1/00_ForShow.jpg
 // /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
 #include "generalHelpfulTools.h"
+
+#define DEBUG_RESULTS_2D "/home/tim-external/volumeROS/src/fsregistration/debug_results/2d/"
 //#include "slamToolsRos.h"
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
@@ -164,8 +166,8 @@ int main(int argc, char **argv) {
 //            convertMatToDoubleArray(img2, voxelData2);
 
     std::ofstream myFile1, myFile2;
-    myFile1.open("/home/tim-external/matlab/registrationFourier/csvFiles/resultVoxel1.csv");
-    myFile2.open("/home/tim-external/matlab/registrationFourier/csvFiles/resultVoxel2.csv");
+    myFile1.open(DEBUG_RESULTS_2D "resultVoxel1.csv");
+    myFile2.open(DEBUG_RESULTS_2D "resultVoxel2.csv");
     for (int i = 0; i < dimensionScan; i++) {
         for (int j = 0; j < dimensionScan; j++) {
             myFile1 << voxelData1[j + dimensionScan * i]; // real part

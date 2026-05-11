@@ -8,6 +8,8 @@
 #include <cmath>
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
+
+#define DEBUG_RESULTS_2D "/home/tim-external/volumeROS/src/fsregistration/debug_results/2d/"
 #include <opencv4/opencv2/imgproc.hpp>
 #include <fstream>
 #include <random>
@@ -93,8 +95,8 @@ int main(int argc, char** argv) {
     std::cout << "   Correlation array size: " << corrNew.size() << " points" << std::endl;
 
     // Save correlation arrays to CSV for plotting
-    saveCorrelationToCSV(corrOld, anglesOld, "/home/tim-external/matlab/registrationFourier/csvFiles/correlation_OLD.csv");
-    saveCorrelationToCSV(corrNew, anglesNew, "/home/tim-external/matlab/registrationFourier/csvFiles/correlation_NEW.csv");
+    saveCorrelationToCSV(corrOld, anglesOld, std::string(DEBUG_RESULTS_2D) + "correlation_OLD.csv");
+    saveCorrelationToCSV(corrNew, anglesNew, std::string(DEBUG_RESULTS_2D) + "correlation_NEW.csv");
     std::cout << "\n   Saved correlation arrays to CSV files for plotting" << std::endl;
 
     std::cout << "\n=== Correlation Array Comparison ===" << std::endl;

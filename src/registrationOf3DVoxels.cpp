@@ -17,7 +17,7 @@
 #include <pcl/point_types.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/voxel_grid.h>
-#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/surface/convex_hull.h>
 #include <pcl/common/norms.h>

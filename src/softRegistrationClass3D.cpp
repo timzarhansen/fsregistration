@@ -4,6 +4,8 @@
 
 #include "softRegistrationClass3D.h"
 
+#define DEBUG_RESULTS_3D "/home/tim-external/volumeROS/src/fsregistration/debug_results/3d/data/"
+
 //bool compareTwoAngleCorrelation3D(translationPeak3D i1, translationPeak3D i2) {
 //    return (i1.angle < i2.angle);
 //}
@@ -162,17 +164,17 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     if (debug) {
         std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW1.csv");
+            DEBUG_RESULTS_3D "magnitudeFFTW1.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW1.csv");
+            DEBUG_RESULTS_3D "phaseFFTW1.csv");
         myFile3.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW1.csv");
+            DEBUG_RESULTS_3D "voxelDataFFTW1.csv");
         myFile4.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2.csv");
+            DEBUG_RESULTS_3D "magnitudeFFTW2.csv");
         myFile5.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2.csv");
+            DEBUG_RESULTS_3D "phaseFFTW2.csv");
         myFile6.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2.csv");
+            DEBUG_RESULTS_3D "voxelDataFFTW2.csv");
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 for (int k = 0; k < N; k++) {
@@ -326,9 +328,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     if (debug) {
         std::ofstream myFile1, myFile2;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_1.csv");
+            DEBUG_RESULTS_3D "resampledMagnitudeSO3_1.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_2.csv");
+            DEBUG_RESULTS_3D "resampledMagnitudeSO3_2.csv");
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 myFile1 << this->resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j,
@@ -360,9 +362,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     if (debug) {
         std::ofstream myFile1, myFile2;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationReal.csv");
+            DEBUG_RESULTS_3D "resultingCorrelationReal.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationComplex.csv");
+            DEBUG_RESULTS_3D "resultingCorrelationComplex.csv");
         for (int i = 0; i < bwOut * 2; i++) {
             for (int j = 0; j < bwOut * 2; j++) {
                 for (int k = 0; k < bwOut * 2; k++) {
@@ -380,72 +382,82 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
     auto overheadStart = std::chrono::high_resolution_clock::now();
 
-    double minimumCorrelation = INFINITY;
-    double maximumCorrelation = 0;
-    for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
-        if (minimumCorrelation > NORM(resultingCorrelationComplex[i])) {
-            minimumCorrelation = NORM(resultingCorrelationComplex[i]);
-        }
-        if (maximumCorrelation < NORM(resultingCorrelationComplex[i])) {
-            maximumCorrelation = NORM(resultingCorrelationComplex[i]);
-        }
-    }
-
-
-    double correlationCurrent;
-    std::vector<My4DPoint> listOfQuaternionCorrelation;
-    for (int i = 0; i < bwOut * 2; i++) {
-        for (int j = 0; j < bwOut * 2; j++) {
-            for (int k = 0; k < bwOut * 2; k++) {
-                correlationCurrent =
-                        (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
-                         minimumCorrelation) /
-                        (maximumCorrelation - minimumCorrelation);
-                Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-                Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
-                Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-
-                Eigen::Matrix3d tmpMatrix3d =
-                        rotation_vectorz1.toRotationMatrix().inverse() *
-                        rotation_vectory.toRotationMatrix().inverse() *
-                        rotation_vectorz2.toRotationMatrix().inverse();
-                Eigen::Quaterniond quaternionResult(tmpMatrix3d);
-                quaternionResult.normalize();
-
-                if (quaternionResult.w() < 0) {
-                    Eigen::Quaterniond tmpQuad = quaternionResult;
-                    quaternionResult.w() = -tmpQuad.w();
-                    quaternionResult.x() = -tmpQuad.x();
-                    quaternionResult.y() = -tmpQuad.y();
-                    quaternionResult.z() = -tmpQuad.z();
-                }
-                My4DPoint currentPoint;
-                currentPoint.correlation = correlationCurrent;
-                currentPoint[0] = quaternionResult.w();
-                currentPoint[1] = quaternionResult.x();
-                currentPoint[2] = quaternionResult.y();
-                currentPoint[3] = quaternionResult.z();
-
-                listOfQuaternionCorrelation.push_back(currentPoint);
-            }
-        }
-    }
-    if (benchmark) {
-        auto overheadEnd = std::chrono::high_resolution_clock::now();
-        overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
-    }
-    // config -> settings for peak detection
-    auto peakDetectionStart = std::chrono::high_resolution_clock::now();
     std::vector<rotationPeak4D> potentialRotationsTMP;
     if (useSimpleRotationPeak) {
-        potentialRotationsTMP = peakDetectionOf4DCorrelationSimpleMax(listOfQuaternionCorrelation);
+        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
+        potentialRotationsTMP = peakDetectionOf4DCorrelationSimpleMaxRaw(
+            resultingCorrelationComplex, bwOut, N);
+        if (benchmark) {
+            auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+            peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+        }
     } else {
+        double minimumCorrelation = INFINITY;
+        double maximumCorrelation = 0;
+        for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
+            if (minimumCorrelation > NORM(resultingCorrelationComplex[i])) {
+                minimumCorrelation = NORM(resultingCorrelationComplex[i]);
+            }
+            if (maximumCorrelation < NORM(resultingCorrelationComplex[i])) {
+                maximumCorrelation = NORM(resultingCorrelationComplex[i]);
+            }
+        }
+
+        double correlationCurrent;
+        std::vector<My4DPoint> listOfQuaternionCorrelation;
+        for (int i = 0; i < bwOut * 2; i++) {
+            for (int j = 0; j < bwOut * 2; j++) {
+                for (int k = 0; k < bwOut * 2; k++) {
+                    correlationCurrent =
+                            (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
+                             minimumCorrelation) /
+                            (maximumCorrelation - minimumCorrelation);
+                    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+                    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
+                    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+
+                    Eigen::Matrix3d tmpMatrix3d =
+                            rotation_vectorz1.toRotationMatrix().inverse() *
+                            rotation_vectory.toRotationMatrix().inverse() *
+                            rotation_vectorz2.toRotationMatrix().inverse();
+                    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
+                    quaternionResult.normalize();
+
+                    if (quaternionResult.w() < 0) {
+                        Eigen::Quaterniond tmpQuad = quaternionResult;
+                        quaternionResult.w() = -tmpQuad.w();
+                        quaternionResult.x() = -tmpQuad.x();
+                        quaternionResult.y() = -tmpQuad.y();
+                        quaternionResult.z() = -tmpQuad.z();
+                    }
+                    My4DPoint currentPoint;
+                    currentPoint.correlation = correlationCurrent;
+                    currentPoint[0] = quaternionResult.w();
+                    currentPoint[1] = quaternionResult.x();
+                    currentPoint[2] = quaternionResult.y();
+                    currentPoint[3] = quaternionResult.z();
+
+                    listOfQuaternionCorrelation.push_back(currentPoint);
+                }
+            }
+        }
+
+        if (benchmark) {
+            auto overheadEnd = std::chrono::high_resolution_clock::now();
+            overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
+        }
+
+        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
         potentialRotationsTMP = this->peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
             listOfQuaternionCorrelation, level_potential_rotation);
+        if (benchmark) {
+            auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+            peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+        }
     }
-    if (benchmark) {
-        auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
-        peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+    if (useSimpleRotationPeak && benchmark) {
+        auto overheadEnd = std::chrono::high_resolution_clock::now();
+        overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
     }
 
 
@@ -483,22 +495,23 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     for (int i = 0; i < this->N * this->N * this->N; i++) {
         voxelData2Rotated[i] = 0;
     }
-    Eigen::Quaterniond currentRotation(bestFittingPeak.w, bestFittingPeak.x,
-                                       bestFittingPeak.y, bestFittingPeak.z);
-    std::cout << "currentRotation" << std::endl;
-    std::cout << currentRotation << std::endl;
+   Eigen::Quaterniond currentRotation(bestFittingPeak.w, bestFittingPeak.x,
+                                        bestFittingPeak.y, bestFittingPeak.z);
+    Eigen::Matrix3d R = currentRotation.toRotationMatrix();
 
     for (int i = 0; i < this->N; i++) {
+        double xi = i - this->N / 2;
         for (int j = 0; j < this->N; j++) {
+            double yj = j - this->N / 2;
             for (int k = 0; k < this->N; k++) {
-                int index = generalHelpfulTools::index3D(i, j, k, this->N);
-                int xCoordinate = i - this->N / 2;
-                int yCoordinate = j - this->N / 2;
-                int zCoordinate = k - this->N / 2;
+                double zk = k - this->N / 2;
 
-                Eigen::Vector3d newCoordinate(xCoordinate, yCoordinate, zCoordinate);
-                Eigen::Vector3d lookUpVector = currentRotation * newCoordinate;
-                double occupancyValue = getPixelValueInterpolated(lookUpVector, voxelData2Input, this->N);
+                double lx = R(0,0)*xi + R(0,1)*yj + R(0,2)*zk;
+                double ly = R(1,0)*xi + R(1,1)*yj + R(1,2)*zk;
+                double lz = R(2,0)*xi + R(2,1)*yj + R(2,2)*zk;
+
+                int index = generalHelpfulTools::index3D(i, j, k, this->N);
+                double occupancyValue = getPixelValueInterpolated(Eigen::Vector3d(lx, ly, lz), voxelData2Input, this->N);
                 voxelData2Rotated[index] = occupancyValue;
             }
         }
@@ -532,9 +545,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     if (debug) {
         std::ofstream myFile1, myFile2, myFile3;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2Rotated.csv");
+            DEBUG_RESULTS_3D "magnitudeFFTW2Rotated.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2Rotated.csv");
+            DEBUG_RESULTS_3D "phaseFFTW2Rotated.csv");
 
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
@@ -551,7 +564,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         myFile2.close();
 
         myFile3.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2Rotated.csv");
+            DEBUG_RESULTS_3D "voxelDataFFTW2Rotated.csv");
         for (int i = 0; i < this->N; i++) {
             for (int j = 0; j < this->N; j++) {
                 for (int k = 0; k < this->N; k++) {
@@ -645,19 +658,19 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         }
     }
 
-    for (int i = 0; i < this->correlationN * this->correlationN * this->correlationN; i++) {
-        resultingCorrelationDouble[i] = (resultingCorrelationDouble[i] - minimumCorrelationTranslation) /
-                                        (maximumCorrelationTranslation - minimumCorrelationTranslation);
-    }
-    if (benchmark) {
-        auto fftshiftEnd = std::chrono::high_resolution_clock::now();
-        fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
-    }
+      for (int i = 0; i < this->correlationN * this->correlationN * this->correlationN; i++) {
+            resultingCorrelationDouble[i] = (resultingCorrelationDouble[i] - minimumCorrelationTranslation) /
+                                             (maximumCorrelationTranslation - minimumCorrelationTranslation);
+        }
+        if (benchmark) {
+            auto fftshiftEnd = std::chrono::high_resolution_clock::now();
+            fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
+        }
 
     if (debug) {
         std::ofstream myFile10;
         myFile10.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationShift.csv");
+            DEBUG_RESULTS_3D "resultingCorrelationShift.csv");
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
                 for (int k = 0; k < this->correlationN; k++) {
@@ -714,31 +727,32 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     if (benchmark) {
         auto totalTransEnd = std::chrono::high_resolution_clock::now();
         totalTransTime = std::chrono::duration<double, std::milli>(totalTransEnd - totalTransStart).count();
-
-        std::cerr << "  --- Translation pipeline (1 solution) ---" << std::endl;
-        std::cerr << "    Voxel rotation:     " << voxelRotationTime << " ms" << std::endl;
-        std::cerr << "    FFT1:               " << fft1Time << " ms" << std::endl;
-        std::cerr << "    FFT2:               " << fft2Time << " ms" << std::endl;
-        std::cerr << "    Complex correlation: " << correlationTime << " ms" << std::endl;
-        std::cerr << "    IFFT:               " << ifftTime << " ms" << std::endl;
-        std::cerr << "    fftshift + magnitude: " << fftshiftTime << " ms" << std::endl;
-        std::cerr << "    Peak detection:     " << translationPeakDetectionTime << " ms" << std::endl;
-        std::cerr << "    Total translation:  " << totalTransTime << " ms" << std::endl;
     }
 
     if (benchmark) {
         auto totalEnd = std::chrono::high_resolution_clock::now();
         double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
 
+        int numTransPeaks = tmpSolution.potentialTranslations.size();
         std::cerr << "  --- 3D One Solution Summary ---" << std::endl;
-        std::cerr << "    3D Spectrum:              " << spectrumTime << " ms" << std::endl;
-        std::cerr << "    SOFT descriptor:          " << softDescriptorTime << " ms" << std::endl;
-        std::cerr << "    Rotation correlation:     " << rotationCorrelationTime << " ms" << std::endl;
-        std::cerr << "    Overhead + quaternion:    " << overheadTime << " ms" << std::endl;
-        std::cerr << "    Rotation peak detection:  " << peakDetectionTime << " ms" << std::endl;
-        std::cerr << "    Best-fit selection:       " << plottingTime << " ms" << std::endl;
-        std::cerr << "    Translation pipeline:     " << totalTransTime << " ms" << std::endl;
-        std::cerr << "    Total time:               " << totalTime << " ms" << std::endl;
+        std::cerr << "    Rotation peaks found:           1" << std::endl;
+        std::cerr << "    Translation peaks found:        " << numTransPeaks << std::endl;
+        std::cerr << "    3D Spectrum (FFT):              " << spectrumTime << " ms" << std::endl;
+        std::cerr << "    SOFT descriptor projection:     " << softDescriptorTime << " ms" << std::endl;
+        std::cerr << "    SOFT correlation (FFT):         " << rotationCorrelationTime << " ms" << std::endl;
+        std::cerr << "    Quaternion preparation:         " << overheadTime << " ms" << std::endl;
+        std::cerr << "    Rotation peak detection:        " << peakDetectionTime << " ms" << std::endl;
+        std::cerr << "    Rotation selection:             " << plottingTime << " ms" << std::endl;
+        std::cerr << "    --- Translation breakdown (1 solution) ---" << std::endl;
+        std::cerr << "      Voxel rotation:               " << voxelRotationTime << " ms" << std::endl;
+        std::cerr << "      FFT1:                         " << fft1Time << " ms" << std::endl;
+        std::cerr << "      FFT2:                         " << fft2Time << " ms" << std::endl;
+        std::cerr << "      Complex correlation:          " << correlationTime << " ms" << std::endl;
+        std::cerr << "      IFFT:                         " << ifftTime << " ms" << std::endl;
+        std::cerr << "      fftshift + magnitude:         " << fftshiftTime << " ms" << std::endl;
+        std::cerr << "      Peak detection:               " << translationPeakDetectionTime << " ms" << std::endl;
+        std::cerr << "    Total translation:              " << totalTransTime << " ms" << std::endl;
+        std::cerr << "    Total time:                     " << totalTime << " ms" << std::endl;
     }
 
     return tmpSolution;
@@ -747,23 +761,24 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
 std::vector<transformationPeakfs3D>
 softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[],
-                                                                                double voxelData2Input[], bool debug,
-                                                                                bool useClahe, bool benchmark,
-                                                                                double sizeVoxel, double r_min,
-                                                                                double r_max,
-                                                                                double level_potential_rotation,
-                                                                                double level_potential_translation,
-                                                                                bool set_r_manual, int normalization,
-                                                                                bool useSimpleRotationPeak, bool useSimpleTranslationPeak) {
+                                                                                 double voxelData2Input[], bool debug,
+                                                                                 bool useClahe, bool benchmark,
+                                                                                 double sizeVoxel, double r_min,
+                                                                                 double r_max,
+                                                                                 double level_potential_rotation,
+                                                                                 double level_potential_translation,
+                                                                                 bool set_r_manual, int normalization,
+                                                                                 bool useSimpleRotationPeak, bool useSimpleTranslationPeak,
+                                                                                 BenchmarkTimings3D* timings) {
     auto totalStart = std::chrono::high_resolution_clock::now();
-
-    if (benchmark) {
-        std::cerr << "\n=== BENCHMARK: 3D All Solutions ===" << std::endl;
-    }
 
     double spectrumTime = 0, softDescriptorTime = 0, rotationCorrelationTime = 0;
     double overheadTime = 0, peakDetectionTime = 0, plottingTime = 0;
     double totalAllTransTime = 0;
+    double transVoxelRotationTime = 0, transFft1Time = 0, transFft2Time = 0;
+    double transCorrelationTime = 0, transIfftTime = 0, transFftshiftTime = 0;
+    double transPeakDetectionTime = 0;
+    std::vector<double> transPerSolutionTimes;
 
     auto spectrumStart = std::chrono::high_resolution_clock::now();
 
@@ -774,7 +789,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                                                                     this->phase2, false);
 
     auto spectrumEnd = std::chrono::high_resolution_clock::now();
-    if (benchmark) {
+    if (benchmark || timings) {
         spectrumTime = std::chrono::duration<double, std::milli>(spectrumEnd - spectrumStart).count();
     }
 
@@ -782,17 +797,17 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     if (debug) {
         std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW1.csv");
+            DEBUG_RESULTS_3D "magnitudeFFTW1.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW1.csv");
+            DEBUG_RESULTS_3D "phaseFFTW1.csv");
         myFile3.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW1.csv");
+            DEBUG_RESULTS_3D "voxelDataFFTW1.csv");
         myFile4.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2.csv");
+            DEBUG_RESULTS_3D "magnitudeFFTW2.csv");
         myFile5.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2.csv");
+            DEBUG_RESULTS_3D "phaseFFTW2.csv");
         myFile6.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2.csv");
+            DEBUG_RESULTS_3D "voxelDataFFTW2.csv");
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 for (int k = 0; k < N; k++) {
@@ -939,9 +954,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     if (debug) {
         std::ofstream myFile1, myFile2;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_1.csv");
+            DEBUG_RESULTS_3D "resampledMagnitudeSO3_1.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resampledMagnitudeSO3_2.csv");
+            DEBUG_RESULTS_3D "resampledMagnitudeSO3_2.csv");
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 myFile1 << this->resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j,
@@ -956,7 +971,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         myFile2.close();
     }
 
-    if (benchmark) {
+    if (benchmark || timings) {
         auto softDescriptorEnd = std::chrono::high_resolution_clock::now();
         softDescriptorTime = std::chrono::duration<double, std::milli>(softDescriptorEnd - spectrumEnd).count();
     }
@@ -965,7 +980,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     auto rotationCorrelationStart = std::chrono::high_resolution_clock::now();
     this->sofftCorrelationObject3D.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
                                                                  resultingCorrelationComplex);
-    if (benchmark) {
+    if (benchmark || timings) {
         auto rotationCorrelationEnd = std::chrono::high_resolution_clock::now();
         rotationCorrelationTime = std::chrono::duration<double, std::milli>(rotationCorrelationEnd - rotationCorrelationStart).count();
     }
@@ -973,9 +988,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     if (debug) {
         std::ofstream myFile1, myFile2;
         myFile1.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationReal.csv");
+            DEBUG_RESULTS_3D "resultingCorrelationReal.csv");
         myFile2.open(
-            "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationComplex.csv");
+            DEBUG_RESULTS_3D "resultingCorrelationComplex.csv");
         for (int i = 0; i < bwOut * 2; i++) {
             for (int j = 0; j < bwOut * 2; j++) {
                 for (int k = 0; k < bwOut * 2; k++) {
@@ -993,72 +1008,82 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
     auto overheadStart = std::chrono::high_resolution_clock::now();
 
-    double minimumCorrelation = INFINITY;
-    double maximumCorrelation = 0;
-    for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
-        if (minimumCorrelation > NORM(resultingCorrelationComplex[i])) {
-            minimumCorrelation = NORM(resultingCorrelationComplex[i]);
-        }
-        if (maximumCorrelation < NORM(resultingCorrelationComplex[i])) {
-            maximumCorrelation = NORM(resultingCorrelationComplex[i]);
-        }
-    }
-
-
-    double correlationCurrent;
-    std::vector<My4DPoint> listOfQuaternionCorrelation;
-    for (int i = 0; i < bwOut * 2; i++) {
-        for (int j = 0; j < bwOut * 2; j++) {
-            for (int k = 0; k < bwOut * 2; k++) {
-                correlationCurrent =
-                        (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
-                         minimumCorrelation) /
-                        (maximumCorrelation - minimumCorrelation);
-                Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-                Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
-                Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-
-                Eigen::Matrix3d tmpMatrix3d =
-                        rotation_vectorz1.toRotationMatrix().inverse() *
-                        rotation_vectory.toRotationMatrix().inverse() *
-                        rotation_vectorz2.toRotationMatrix().inverse();
-                Eigen::Quaterniond quaternionResult(tmpMatrix3d);
-                quaternionResult.normalize();
-
-                if (quaternionResult.w() < 0) {
-                    Eigen::Quaterniond tmpQuad = quaternionResult;
-                    quaternionResult.w() = -tmpQuad.w();
-                    quaternionResult.x() = -tmpQuad.x();
-                    quaternionResult.y() = -tmpQuad.y();
-                    quaternionResult.z() = -tmpQuad.z();
-                }
-                My4DPoint currentPoint;
-                currentPoint.correlation = correlationCurrent;
-                currentPoint[0] = quaternionResult.w();
-                currentPoint[1] = quaternionResult.x();
-                currentPoint[2] = quaternionResult.y();
-                currentPoint[3] = quaternionResult.z();
-
-                listOfQuaternionCorrelation.push_back(currentPoint);
-            }
-        }
-    }
-    if (benchmark) {
-        auto overheadEnd = std::chrono::high_resolution_clock::now();
-        overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
-    }
-
-    auto peakDetectionStart = std::chrono::high_resolution_clock::now();
     std::vector<rotationPeak4D> potentialRotationsTMP;
     if (useSimpleRotationPeak) {
-        potentialRotationsTMP = peakDetectionOf4DCorrelationSimpleMax(listOfQuaternionCorrelation);
+        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
+        potentialRotationsTMP = peakDetectionOf4DCorrelationSimpleMaxRaw(
+            resultingCorrelationComplex, bwOut, N);
+        if (benchmark || timings) {
+            auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+            peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+        }
     } else {
+        double minimumCorrelation = INFINITY;
+        double maximumCorrelation = 0;
+        for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
+            if (minimumCorrelation > NORM(resultingCorrelationComplex[i])) {
+                minimumCorrelation = NORM(resultingCorrelationComplex[i]);
+            }
+            if (maximumCorrelation < NORM(resultingCorrelationComplex[i])) {
+                maximumCorrelation = NORM(resultingCorrelationComplex[i]);
+            }
+        }
+
+        double correlationCurrent;
+        std::vector<My4DPoint> listOfQuaternionCorrelation;
+        for (int i = 0; i < bwOut * 2; i++) {
+            for (int j = 0; j < bwOut * 2; j++) {
+                for (int k = 0; k < bwOut * 2; k++) {
+                    correlationCurrent =
+                            (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
+                             minimumCorrelation) /
+                            (maximumCorrelation - minimumCorrelation);
+                    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+                    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
+                    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+
+                    Eigen::Matrix3d tmpMatrix3d =
+                            rotation_vectorz1.toRotationMatrix().inverse() *
+                            rotation_vectory.toRotationMatrix().inverse() *
+                            rotation_vectorz2.toRotationMatrix().inverse();
+                    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
+                    quaternionResult.normalize();
+
+                    if (quaternionResult.w() < 0) {
+                        Eigen::Quaterniond tmpQuad = quaternionResult;
+                        quaternionResult.w() = -tmpQuad.w();
+                        quaternionResult.x() = -tmpQuad.x();
+                        quaternionResult.y() = -tmpQuad.y();
+                        quaternionResult.z() = -tmpQuad.z();
+                    }
+                    My4DPoint currentPoint;
+                    currentPoint.correlation = correlationCurrent;
+                    currentPoint[0] = quaternionResult.w();
+                    currentPoint[1] = quaternionResult.x();
+                    currentPoint[2] = quaternionResult.y();
+                    currentPoint[3] = quaternionResult.z();
+
+                    listOfQuaternionCorrelation.push_back(currentPoint);
+                }
+            }
+        }
+
+        if (benchmark || timings) {
+            auto overheadEnd = std::chrono::high_resolution_clock::now();
+            overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
+        }
+
+        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
         potentialRotationsTMP = this->peakDetectionOf4DCorrelationWithKDTreeFindPeaksLibrary(
             listOfQuaternionCorrelation, level_potential_rotation);
+        if (benchmark || timings) {
+            auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+            peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+        }
     }
-    if (benchmark) {
-        auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
-        peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+    if (useSimpleRotationPeak && benchmark) {
+        auto overheadEnd = std::chrono::high_resolution_clock::now();
+        overheadTime = std::chrono::duration<double, std::milli>(overheadEnd - overheadStart).count();
     }
 
     auto plottingStart = std::chrono::high_resolution_clock::now();
@@ -1066,15 +1091,16 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         Eigen::Quaterniond rotationQuat(potentialRotationsTMP[i].w, potentialRotationsTMP[i].x,
                                         potentialRotationsTMP[i].y, potentialRotationsTMP[i].z);
         Eigen::Vector3d rpyCurrentRot = generalHelpfulTools::getRollPitchYaw(rotationQuat);
-
-        std::cout << i << " , " << potentialRotationsTMP[i].levelPotential << " , "
-                << potentialRotationsTMP[i].correlationHeight
-                << " , " << potentialRotationsTMP[i].persistence << " , " << rpyCurrentRot[0] * 180 / M_PI << " , "
-                << rpyCurrentRot[1] * 180 / M_PI << " , " << rpyCurrentRot[2] * 180 / M_PI << " , "
-                << potentialRotationsTMP[i].x << " , " << potentialRotationsTMP[i].y << " , "
-                << potentialRotationsTMP[i].z << " , " << potentialRotationsTMP[i].w << std::endl;
+        if (debug) {
+                std::cout << i << " , " << potentialRotationsTMP[i].levelPotential << " , "
+            << potentialRotationsTMP[i].correlationHeight
+            << " , " << potentialRotationsTMP[i].persistence << " , " << rpyCurrentRot[0] * 180 / M_PI << " , "
+            << rpyCurrentRot[1] * 180 / M_PI << " , " << rpyCurrentRot[2] * 180 / M_PI << " , "
+            << potentialRotationsTMP[i].x << " , " << potentialRotationsTMP[i].y << " , "
+            << potentialRotationsTMP[i].z << " , " << potentialRotationsTMP[i].w << std::endl;
+        }
     }
-    if (benchmark) {
+    if (benchmark || timings) {
         auto plottingEnd = std::chrono::high_resolution_clock::now();
         plottingTime = std::chrono::duration<double, std::milli>(plottingEnd - plottingStart).count();
     }
@@ -1082,49 +1108,71 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     auto totalAllTransStart = std::chrono::high_resolution_clock::now();
     std::vector<transformationPeakfs3D> allSolutions;
     for (int p = 0; p < potentialRotationsTMP.size(); p++) {
+        auto solStart = std::chrono::high_resolution_clock::now();
 
         double *voxelData2Rotated;
         voxelData2Rotated = (double *) malloc(sizeof(double) * this->N * this->N * this->N);
         for (int i = 0; i < this->N * this->N * this->N; i++) {
             voxelData2Rotated[i] = 0;
         }
-        Eigen::Quaterniond currentRotation(potentialRotationsTMP[p].w, potentialRotationsTMP[p].x,
-                                           potentialRotationsTMP[p].y, potentialRotationsTMP[p].z);
+       Eigen::Quaterniond currentRotation(potentialRotationsTMP[p].w, potentialRotationsTMP[p].x,
+                                            potentialRotationsTMP[p].y, potentialRotationsTMP[p].z);
+        Eigen::Matrix3d R = currentRotation.toRotationMatrix();
+        if (debug) {
+            std::cout << currentRotation << std::endl;
+        }
 
-        std::cout << currentRotation << std::endl;
+        auto voxelRotStart = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < this->N; i++) {
+            double xi = i - this->N / 2;
             for (int j = 0; j < this->N; j++) {
+                double yj = j - this->N / 2;
                 for (int k = 0; k < this->N; k++) {
-                    int index = generalHelpfulTools::index3D(i, j, k, this->N);
-                    int xCoordinate = i - this->N / 2;
-                    int yCoordinate = j - this->N / 2;
-                    int zCoordinate = k - this->N / 2;
+                    double zk = k - this->N / 2;
 
-                    Eigen::Vector3d newCoordinate(xCoordinate, yCoordinate, zCoordinate);
-                    Eigen::Vector3d lookUpVector = currentRotation * newCoordinate;
-                    double occupancyValue = getPixelValueInterpolated(lookUpVector, voxelData2Input, this->N);
+                    double lx = R(0,0)*xi + R(0,1)*yj + R(0,2)*zk;
+                    double ly = R(1,0)*xi + R(1,1)*yj + R(1,2)*zk;
+                    double lz = R(2,0)*xi + R(2,1)*yj + R(2,2)*zk;
+
+                    int index = generalHelpfulTools::index3D(i, j, k, this->N);
+                    double occupancyValue = getPixelValueInterpolated(Eigen::Vector3d(lx, ly, lz), voxelData2Input, this->N);
                     voxelData2Rotated[index] = occupancyValue;
                 }
             }
         }
 
-        this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
-                                                    this->magnitude1Correlation,
-                                                    this->phase1Correlation,
-                                                    false);
+        if (benchmark || timings) {
+            auto voxelRotEnd = std::chrono::high_resolution_clock::now();
+            transVoxelRotationTime += std::chrono::duration<double, std::milli>(voxelRotEnd - voxelRotStart).count();
+        }
+
+        auto fft1Start = std::chrono::high_resolution_clock::now();
+       this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
+                                                     this->magnitude1Correlation,
+                                                     this->phase1Correlation,
+                                                     false);
+        if (benchmark || timings) {
+            auto fft1End = std::chrono::high_resolution_clock::now();
+            transFft1Time += std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
+            fft1Start = std::chrono::high_resolution_clock::now();
+        }
         this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
-                                                    this->magnitude2Correlation,
-                                                    this->phase2Correlation,
-                                                    false);
+                                                     this->magnitude2Correlation,
+                                                     this->phase2Correlation,
+                                                     false);
+        if (benchmark || timings) {
+            auto fft2End = std::chrono::high_resolution_clock::now();
+            transFft2Time += std::chrono::duration<double, std::milli>(fft2End - fft1Start).count();
+        }
 
         if (debug) {
             std::ofstream myFile1, myFile2, myFile3;
             myFile1.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/magnitudeFFTW2Rotated" +
+                DEBUG_RESULTS_3D "magnitudeFFTW2Rotated" +
                 std::to_string(p) + ".csv");
             myFile2.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/phaseFFTW2Rotated" +
+                DEBUG_RESULTS_3D "phaseFFTW2Rotated" +
                 std::to_string(p) + ".csv");
 
             for (int i = 0; i < this->correlationN; i++) {
@@ -1142,7 +1190,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             myFile2.close();
 
             myFile3.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/voxelDataFFTW2Rotated" +
+                DEBUG_RESULTS_3D "voxelDataFFTW2Rotated" +
                 std::to_string(p) + ".csv");
             for (int i = 0; i < this->N; i++) {
                 for (int j = 0; j < this->N; j++) {
@@ -1157,6 +1205,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         }
 
         //calculate correlation of spectrums
+        auto corrStart = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
                 for (int k = 0; k < this->correlationN; k++) {
@@ -1177,8 +1226,20 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                 }
             }
         }
+        if (benchmark || timings) {
+            auto corrEnd = std::chrono::high_resolution_clock::now();
+            transCorrelationTime += std::chrono::duration<double, std::milli>(corrEnd - corrStart).count();
+        }
+
+        auto ifftStart = std::chrono::high_resolution_clock::now();
         // back fft
         fftw_execute(planFourierToVoxel3DCorrelation);
+        if (benchmark || timings) {
+            auto ifftEnd = std::chrono::high_resolution_clock::now();
+            transIfftTime += std::chrono::duration<double, std::milli>(ifftEnd - ifftStart).count();
+        }
+
+        auto fftshiftStart = std::chrono::high_resolution_clock::now();
         // fftshift and calc magnitude
         double maximumCorrelationTranslation = 0;
         double minimumCorrelationTranslation = INFINITY;
@@ -1229,10 +1290,15 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                                             (maximumCorrelationTranslation - minimumCorrelationTranslation);
         }
 
+        if (benchmark || timings) {
+            auto fftshiftEnd = std::chrono::high_resolution_clock::now();
+            transFftshiftTime += std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
+        }
+
         if (debug) {
             std::ofstream myFile10;
             myFile10.open(
-                "/home/tim-external/matlab/registrationFourier/3D/csvFiles/resultingCorrelationShift" +
+                DEBUG_RESULTS_3D "resultingCorrelationShift" +
                 std::to_string(p) + ".csv");
             for (int i = 0; i < this->correlationN; i++) {
                 for (int j = 0; j < this->correlationN; j++) {
@@ -1246,6 +1312,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             myFile10.close();
         }
         // config -> settings for peak detection
+        auto peakDetStart = std::chrono::high_resolution_clock::now();
         std::vector<translationPeak3D> resulting3DPeakList;
         if (useSimpleTranslationPeak) {
             resulting3DPeakList = peakDetectionOf3DCorrelationSimpleMax(
@@ -1254,18 +1321,24 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             resulting3DPeakList = peakDetectionOf3DCorrelationFindPeaksLibrary(
                 resultingCorrelationDouble, this->correlationN, sizeVoxel, level_potential_translation);
         }
+        if (benchmark || timings) {
+            auto peakDetEnd = std::chrono::high_resolution_clock::now();
+            transPeakDetectionTime += std::chrono::duration<double, std::milli>(peakDetEnd - peakDetStart).count();
+        }
         transformationPeakfs3D tmpSolution;
         tmpSolution.potentialRotation = potentialRotationsTMP[p];
         for (int i = 0; i < resulting3DPeakList.size(); i++) {
             resulting3DPeakList[i].correlationHeight = resulting3DPeakList[i].correlationHeight *
                                                        (maximumCorrelationTranslation - minimumCorrelationTranslation) +
                                                        minimumCorrelationTranslation;
+            if (debug) {
+                std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
+                << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
+                << " , " << resulting3DPeakList[i].xTranslation << " , "
+                << resulting3DPeakList[i].yTranslation
+                << " , " << resulting3DPeakList[i].zTranslation << std::endl;
+            }
 
-            std::cout << p << " , " << i << " , " << resulting3DPeakList[i].levelPotential << " , "
-                    << resulting3DPeakList[i].correlationHeight << " , " << resulting3DPeakList[i].persistence
-                    << " , " << resulting3DPeakList[i].xTranslation << " , "
-                    << resulting3DPeakList[i].yTranslation
-                    << " , " << resulting3DPeakList[i].zTranslation << std::endl;
 
             tmpSolution.potentialTranslations.push_back(resulting3DPeakList[i]);
         }
@@ -1276,18 +1349,17 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
         allSolutions.push_back(tmpSolution);
 
-        if (benchmark) {
+        if (benchmark || timings) {
             auto transPerSolutionEnd = std::chrono::high_resolution_clock::now();
-            double transPerSolutionTime = std::chrono::duration<double, std::milli>(transPerSolutionEnd - totalAllTransStart).count();
-            if (p == 0) {
-                totalAllTransStart = transPerSolutionEnd;
-            } else {
+            double transPerSolutionTime = std::chrono::duration<double, std::milli>(transPerSolutionEnd - solStart).count();
+            transPerSolutionTimes.push_back(transPerSolutionTime);
+            if (benchmark && !timings) {
                 std::cerr << "  Translation solution [" << p << "]: " << transPerSolutionTime << " ms" << std::endl;
             }
         }
     }
 
-    if (benchmark) {
+    if (benchmark || timings) {
         auto totalAllTransEnd = std::chrono::high_resolution_clock::now();
         totalAllTransTime = std::chrono::duration<double, std::milli>(totalAllTransEnd - totalAllTransStart).count();
 
@@ -1295,18 +1367,56 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
         int numSolutions = potentialRotationsTMP.size();
 
-        std::cerr << "  --- 3D All Solutions Summary ---" << std::endl;
-        std::cerr << "    3D Spectrum:              " << spectrumTime << " ms" << std::endl;
-        std::cerr << "    SOFT descriptor:          " << softDescriptorTime << " ms" << std::endl;
-        std::cerr << "    Rotation correlation:     " << rotationCorrelationTime << " ms" << std::endl;
-        std::cerr << "    Overhead + quaternion:    " << overheadTime << " ms" << std::endl;
-        std::cerr << "    Rotation peak detection:  " << peakDetectionTime << " ms" << std::endl;
-        std::cerr << "    Printing solutions:       " << plottingTime << " ms" << std::endl;
-        std::cerr << "    Translation (" << numSolutions << " solutions): " << totalAllTransTime << " ms" << std::endl;
-        if (numSolutions > 0) {
-            std::cerr << "    Per translation solution: " << (totalAllTransTime / numSolutions) << " ms/solution" << std::endl;
+        int totalTransPeaks = 0;
+        for (const auto& sol : allSolutions) {
+            totalTransPeaks += sol.potentialTranslations.size();
         }
-        std::cerr << "    Total time:               " << totalTime << " ms" << std::endl;
+
+        if (timings) {
+            timings->spectrumTime = spectrumTime;
+            timings->softDescriptorTime = softDescriptorTime;
+            timings->rotationCorrelationTime = rotationCorrelationTime;
+            timings->overheadTime = overheadTime;
+            timings->peakDetectionTime = peakDetectionTime;
+            timings->plottingTime = plottingTime;
+            timings->totalAllTransTime = totalAllTransTime;
+            timings->transVoxelRotationTime = transVoxelRotationTime;
+            timings->transFft1Time = transFft1Time;
+            timings->transFft2Time = transFft2Time;
+            timings->transCorrelationTime = transCorrelationTime;
+            timings->transIfftTime = transIfftTime;
+            timings->transFftshiftTime = transFftshiftTime;
+            timings->transPeakDetectionTime = transPeakDetectionTime;
+            timings->transPerSolutionTimes = transPerSolutionTimes;
+            timings->numSolutions = numSolutions;
+            timings->totalTransPeaks = totalTransPeaks;
+            timings->totalTime = totalTime;
+        }
+
+        if (benchmark && !timings) {
+            std::cerr << "  --- 3D All Solutions Summary ---" << std::endl;
+            std::cerr << "    Rotation peaks found:           " << numSolutions << std::endl;
+            std::cerr << "    Translation peaks found:        " << totalTransPeaks << std::endl;
+            std::cerr << "    3D Spectrum (FFT):              " << spectrumTime << " ms" << std::endl;
+            std::cerr << "    SOFT descriptor projection:     " << softDescriptorTime << " ms" << std::endl;
+            std::cerr << "    SOFT correlation (FFT):         " << rotationCorrelationTime << " ms" << std::endl;
+            std::cerr << "    Quaternion preparation:         " << overheadTime << " ms" << std::endl;
+            std::cerr << "    Rotation peak detection:        " << peakDetectionTime << " ms" << std::endl;
+            std::cerr << "    Solution printing:              " << plottingTime << " ms" << std::endl;
+            std::cerr << "    --- Translation breakdown (" << numSolutions << " solutions) ---" << std::endl;
+            if (numSolutions > 0) {
+                double perSol = 1.0 / numSolutions;
+                std::cerr << "      Voxel rotation:             " << transVoxelRotationTime << " ms (" << (transVoxelRotationTime * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      FFT1:                       " << transFft1Time << " ms (" << (transFft1Time * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      FFT2:                       " << transFft2Time << " ms (" << (transFft2Time * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      Complex correlation:        " << transCorrelationTime << " ms (" << (transCorrelationTime * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      IFFT:                       " << transIfftTime << " ms (" << (transIfftTime * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      fftshift + magnitude:       " << transFftshiftTime << " ms (" << (transFftshiftTime * perSol) << " ms/sol)" << std::endl;
+                std::cerr << "      Peak detection:             " << transPeakDetectionTime << " ms (" << (transPeakDetectionTime * perSol) << " ms/sol)" << std::endl;
+            }
+            std::cerr << "    Total translation:            " << totalAllTransTime << " ms" << std::endl;
+            std::cerr << "    Total time:                   " << totalTime << " ms" << std::endl;
+        }
     }
 
     return allSolutions;
@@ -1350,131 +1460,45 @@ double softRegistrationClass3D::normalizationFactorCalculation(int x, int y, int
 
 double
 softRegistrationClass3D::getPixelValueInterpolated(Eigen::Vector3d positionVector, const double *volumeData,
-                                                   int dimensionN) {
+                                                    int dimensionN) {
     int xDown = floor(positionVector.x());
-    int xUp = ceil(positionVector.x());
-
     int yDown = floor(positionVector.y());
-    int yUp = ceil(positionVector.y());
-
     int zDown = floor(positionVector.z());
-    int zUp = ceil(positionVector.z());
 
-    int xDownCorrected = xDown + dimensionN / 2;
-    int xUpCorrected = xUp + dimensionN / 2;
+    double dx = positionVector.x() - xDown;
+    double dy = positionVector.y() - yDown;
+    double dz = positionVector.z() - zDown;
 
-    int yDownCorrected = yDown + dimensionN / 2;
-    int yUpCorrected = yUp + dimensionN / 2;
+    int xUp = xDown + 1;
+    int yUp = yDown + 1;
+    int zUp = zDown + 1;
 
-    int zDownCorrected = zDown + dimensionN / 2;
-    int zUpCorrected = zUp + dimensionN / 2;
+    int off = dimensionN / 2;
+    int idx000 = generalHelpfulTools::index3D(xDown + off, yDown + off, zDown + off, dimensionN);
+    int idx100 = generalHelpfulTools::index3D(xUp   + off, yDown + off, zDown + off, dimensionN);
+    int idx010 = generalHelpfulTools::index3D(xDown + off, yUp   + off, zDown + off, dimensionN);
+    int idx110 = generalHelpfulTools::index3D(xUp   + off, yUp   + off, zDown + off, dimensionN);
+    int idx001 = generalHelpfulTools::index3D(xDown + off, yDown + off, zUp   + off, dimensionN);
+    int idx101 = generalHelpfulTools::index3D(xUp   + off, yDown + off, zUp   + off, dimensionN);
+    int idx011 = generalHelpfulTools::index3D(xDown + off, yUp   + off, zUp   + off, dimensionN);
+    int idx111 = generalHelpfulTools::index3D(xUp   + off, yUp   + off, zUp   + off, dimensionN);
 
+    auto v = [&](int idx) -> double {
+        return (idx == -1) ? 0.0 : volumeData[idx];
+    };
 
-    double dist1 = (positionVector - Eigen::Vector3d(xDown, yDown, zDown)).norm();
-    double dist2 = (positionVector - Eigen::Vector3d(xDown, yDown, zUp)).norm();
-    double dist3 = (positionVector - Eigen::Vector3d(xDown, yUp, zDown)).norm();
-    double dist4 = (positionVector - Eigen::Vector3d(xDown, yUp, zUp)).norm();
-    double dist5 = (positionVector - Eigen::Vector3d(xUp, yDown, zDown)).norm();
-    double dist6 = (positionVector - Eigen::Vector3d(xUp, yDown, zUp)).norm();
-    double dist7 = (positionVector - Eigen::Vector3d(xUp, yUp, zDown)).norm();
-    double dist8 = (positionVector - Eigen::Vector3d(xUp, yUp, zUp)).norm();
+    double v000 = v(idx000), v100 = v(idx100), v010 = v(idx010), v110 = v(idx110);
+    double v001 = v(idx001), v101 = v(idx101), v011 = v(idx011), v111 = v(idx111);
 
+    double v00 = (1.0 - dx) * v000 + dx * v100;
+    double v10 = (1.0 - dx) * v010 + dx * v110;
+    double v01 = (1.0 - dx) * v001 + dx * v101;
+    double v11 = (1.0 - dx) * v011 + dx * v111;
 
-    int index1 = generalHelpfulTools::index3D(xDownCorrected, yDownCorrected, zDownCorrected, dimensionN);
-    int index2 = generalHelpfulTools::index3D(xDownCorrected, yDownCorrected, zUpCorrected, dimensionN);
-    int index3 = generalHelpfulTools::index3D(xDownCorrected, yUpCorrected, zDownCorrected, dimensionN);
-    int index4 = generalHelpfulTools::index3D(xDownCorrected, yUpCorrected, zUpCorrected, dimensionN);
-    int index5 = generalHelpfulTools::index3D(xUpCorrected, yDownCorrected, zDownCorrected, dimensionN);
-    int index6 = generalHelpfulTools::index3D(xUpCorrected, yDownCorrected, zUpCorrected, dimensionN);
-    int index7 = generalHelpfulTools::index3D(xUpCorrected, yUpCorrected, zDownCorrected, dimensionN);
-    int index8 = generalHelpfulTools::index3D(xUpCorrected, yUpCorrected, zUpCorrected, dimensionN);
+    double v0 = (1.0 - dy) * v00 + dy * v10;
+    double v1 = (1.0 - dy) * v01 + dy * v11;
 
-
-    double correlationValue1;
-    double correlationValue2;
-    double correlationValue3;
-    double correlationValue4;
-    double correlationValue5;
-    double correlationValue6;
-    double correlationValue7;
-    double correlationValue8;
-    if (index1 == -1) {
-        correlationValue1 = 0;
-    } else {
-        correlationValue1 = volumeData[index1];
-    }
-    if (index2 == -1) {
-        correlationValue2 = 0;
-    } else {
-        correlationValue2 = volumeData[index2];
-    }
-    if (index3 == -1) {
-        correlationValue3 = 0;
-    } else {
-        correlationValue3 = volumeData[index3];
-    }
-    if (index4 == -1) {
-        correlationValue4 = 0;
-    } else {
-        correlationValue4 = volumeData[index4];
-    }
-    if (index5 == -1) {
-        correlationValue5 = 0;
-    } else {
-        correlationValue5 = volumeData[index5];
-    }
-    if (index6 == -1) {
-        correlationValue6 = 0;
-    } else {
-        correlationValue6 = volumeData[index6];
-    }
-    if (index7 == -1) {
-        correlationValue7 = 0;
-    } else {
-        correlationValue7 = volumeData[index7];
-    }
-    if (index8 == -1) {
-        correlationValue8 = 0;
-    } else {
-        correlationValue8 = volumeData[index8];
-    }
-
-    double e = 1.0 / 10000000.0;
-    if (dist1 < e) {
-        return correlationValue1;
-    }
-    if (dist2 < e) {
-        return correlationValue2;
-    }
-    if (dist3 < e) {
-        return correlationValue3;
-    }
-    if (dist4 < e) {
-        return correlationValue4;
-    }
-    if (dist5 < e) {
-        return correlationValue5;
-    }
-    if (dist6 < e) {
-        return correlationValue6;
-    }
-    if (dist7 < e) {
-        return correlationValue7;
-    }
-    if (dist8 < e) {
-        return correlationValue8;
-    }
-
-    double correlationValue = (correlationValue1 / dist1 + correlationValue2 / dist2 + correlationValue3 / dist3 +
-                               correlationValue4 / dist4 + correlationValue5 / dist5 + correlationValue6 / dist6 +
-                               correlationValue7 / dist7 + correlationValue8 / dist8) /
-                              (1.0 / dist1 + 1.0 / dist2 + 1.0 / dist3 + 1.0 / dist4 + 1.0 / dist5 + 1.0 / dist6 +
-                               1.0 / dist7 +
-                               1.0 / dist8);
-    if (correlationValue > 1.1) {
-        std::cout << "huhu" << std::endl;
-    }
-    return correlationValue;
+    return (1.0 - dz) * v0 + dz * v1;
 }
 
 
@@ -1799,6 +1823,58 @@ softRegistrationClass3D::peakDetectionOf4DCorrelationSimpleMax(std::vector<My4DP
     peak.w = bestPoint[0];
     peak.persistence = 1.0;
     peak.correlationHeight = bestPoint.correlation;
+    peak.levelPotential = 1.0;
+    tmpRotations.push_back(peak);
+    return tmpRotations;
+}
+
+std::vector<rotationPeak4D>
+softRegistrationClass3D::peakDetectionOf4DCorrelationSimpleMaxRaw(fftw_complex* resultingCorrelationComplex, int bwOut, int N) {
+    std::vector<rotationPeak4D> tmpRotations;
+    if (!resultingCorrelationComplex || bwOut <= 0) {
+        return tmpRotations;
+    }
+
+    size_t maxIndex = 0;
+    double maxCorrelation = NORM(resultingCorrelationComplex[0]);
+    size_t totalSize = (size_t)bwOut * 2 * bwOut * 2 * bwOut * 2;
+    for (size_t i = 1; i < totalSize; i++) {
+        double currentCorr = NORM(resultingCorrelationComplex[i]);
+        if (currentCorr > maxCorrelation) {
+            maxCorrelation = currentCorr;
+            maxIndex = i;
+        }
+    }
+
+    int k = maxIndex / ((bwOut * 2) * (bwOut * 2));
+    int j = (maxIndex / (bwOut * 2)) % (bwOut * 2);
+    int i = maxIndex % (bwOut * 2);
+
+    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
+    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
+
+    Eigen::Matrix3d tmpMatrix3d =
+            rotation_vectorz1.toRotationMatrix().inverse() *
+            rotation_vectory.toRotationMatrix().inverse() *
+            rotation_vectorz2.toRotationMatrix().inverse();
+    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
+    quaternionResult.normalize();
+
+    if (quaternionResult.w() < 0) {
+        quaternionResult.w() = -quaternionResult.w();
+        quaternionResult.x() = -quaternionResult.x();
+        quaternionResult.y() = -quaternionResult.y();
+        quaternionResult.z() = -quaternionResult.z();
+    }
+
+    rotationPeak4D peak{};
+    peak.x = quaternionResult.x();
+    peak.y = quaternionResult.y();
+    peak.z = quaternionResult.z();
+    peak.w = quaternionResult.w();
+    peak.persistence = 1.0;
+    peak.correlationHeight = maxCorrelation;
     peak.levelPotential = 1.0;
     tmpRotations.push_back(peak);
     return tmpRotations;

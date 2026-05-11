@@ -70,6 +70,26 @@ struct transformationPeakfs3D {
     rotationPeak4D potentialRotation;
 };
 
+struct BenchmarkTimings3D {
+    double spectrumTime;
+    double softDescriptorTime;
+    double rotationCorrelationTime;
+    double overheadTime;
+    double peakDetectionTime;
+    double plottingTime;
+    double totalAllTransTime;
+    double transVoxelRotationTime;
+    double transFft1Time;
+    double transFft2Time;
+    double transCorrelationTime;
+    double transIfftTime;
+    double transFftshiftTime;
+    double transPeakDetectionTime;
+    std::vector<double> transPerSolutionTimes;
+    int numSolutions;
+    int totalTransPeaks;
+    double totalTime;
+};
 
 class softRegistrationClass3D {
 public:
@@ -260,15 +280,16 @@ public:
                                          bool debug = false);
 
    std::vector<transformationPeakfs3D>
-    sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[], double voxelData2Input[],
-                                                            bool debug = false, bool useClahe = true,
-                                                            bool benchmark = false, double sizeVoxel = 1,
-                                                            double r_min = 0.0,
-                                                            double r_max = 0.0,
-                                                            double level_potential_rotation = 0.01,
-                                                            double level_potential_translation = 0.1,
-                                                            bool set_r_manual = false, int normalization = 0,
-                                                            bool useSimpleRotationPeak = false, bool useSimpleTranslationPeak = false);
+     sofftRegistrationVoxel3DListOfPossibleTransformations(double voxelData1Input[], double voxelData2Input[],
+                                                             bool debug = false, bool useClahe = true,
+                                                             bool benchmark = false, double sizeVoxel = 1,
+                                                             double r_min = 0.0,
+                                                             double r_max = 0.0,
+                                                             double level_potential_rotation = 0.01,
+                                                             double level_potential_translation = 0.1,
+                                                             bool set_r_manual = false, int normalization = 0,
+                                                             bool useSimpleRotationPeak = false, bool useSimpleTranslationPeak = false,
+                                                             BenchmarkTimings3D* timings = nullptr);
     transformationPeakfs3D
     sofftRegistrationVoxel3DOneSolution(double voxelData1Input[], double voxelData2Input[], tf2::Quaternion initGuessOrientation,tf2::Vector3 initGuessPosition,
                                                             bool debug = false, bool useClahe = true,
@@ -304,6 +325,9 @@ public:
 
     static std::vector<rotationPeak4D>
     peakDetectionOf4DCorrelationSimpleMax(std::vector<My4DPoint> listOfQuaternionCorrelation);
+
+    static std::vector<rotationPeak4D>
+    peakDetectionOf4DCorrelationSimpleMaxRaw(fftw_complex* resultingCorrelationComplex, int bwOut, int N);
 
     std::vector<translationPeak3D>
     peakDetectionOf3DCorrelationSimpleMax(const double *inputcorrelation, int dimensionN, double cellSize) const;
