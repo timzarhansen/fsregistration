@@ -3,6 +3,7 @@
 //
 
 #include "softRegistrationClass3D.h"
+#include <filesystem>
 
 #define DEBUG_RESULTS_3D "/home/tim-external/volumeROS/src/fsregistration/debug_results/3d/data/"
 
@@ -71,15 +72,8 @@ softRegistrationClass3D::getSpectrumFromVoxelData3D(const double voxelData[], do
 }
 
 double
-softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(const double voxelData[], double magnitude[],
-                                                               double phase[],
-                                                               bool gaussianBlur) {
-    //    double *voxelDataTMP;
-    //    voxelDataTMP = (double *) malloc(sizeof(double) * N * N * N);
-    //    for (int i = 0; i < this->N * this->N * this->N; i++) {
-    //        voxelDataTMP[i] = voxelData[i];
-    //    }
-
+softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(const double voxelData[], fftw_complex *complexOut,
+                                                                bool gaussianBlur) {
     for (int i = 0; i < this->correlationN * this->correlationN * this->correlationN; i++) {
         inputSpacialDataCorrelation[i][0] = 0;
         inputSpacialDataCorrelation[i][1] = 0;
@@ -93,36 +87,23 @@ softRegistrationClass3D::getSpectrumFromVoxelData3DCorrelation(const double voxe
                                                                      j + (int) (this->correlationN / 4),
                                                                      k + (int) (this->correlationN / 4),
                                                                      this->correlationN);
-                inputSpacialDataCorrelation[indexNCorrelation][0] = voxelData[indexN]; // real part
-                inputSpacialDataCorrelation[indexNCorrelation][1] = 0; // imaginary part
+                inputSpacialDataCorrelation[indexNCorrelation][0] = voxelData[indexN];
+                inputSpacialDataCorrelation[indexNCorrelation][1] = 0;
             }
         }
     }
 
     fftw_execute(planVoxelToFourier3DCorrelation);
 
-
-    double maximumMagnitude = 0;
-
-
-    for (int i = 0; i < this->correlationN; i++) {
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int k = 0; k < this->correlationN; k++) {
-                int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
-                magnitude[index] = sqrt(
-                    spectrumOutCorrelation[index][0] * spectrumOutCorrelation[index][0] + spectrumOutCorrelation[index][
-                        1] * spectrumOutCorrelation[index][1]);
-                if (maximumMagnitude < magnitude[index]) {
-                    maximumMagnitude = magnitude[index];
-                }
-                phase[index] = atan2(spectrumOutCorrelation[index][1], spectrumOutCorrelation[index][0]);
-            }
+    if (complexOut) {
+        int total = this->correlationN * this->correlationN * this->correlationN;
+        for (int i = 0; i < total; i++) {
+            complexOut[i][0] = spectrumOutCorrelation[i][0];
+            complexOut[i][1] = spectrumOutCorrelation[i][1];
         }
     }
 
-
-    //    free(voxelDataTMP);
-    return maximumMagnitude;
+    return 0;
 }
 transformationPeakfs3D
 softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1Input[], double voxelData2Input[], tf2::Quaternion initGuessOrientation,
@@ -162,6 +143,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
         myFile1.open(
             DEBUG_RESULTS_3D "magnitudeFFTW1.csv");
@@ -326,6 +308,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     }
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2;
         myFile1.open(
             DEBUG_RESULTS_3D "resampledMagnitudeSO3_1.csv");
@@ -360,6 +343,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     }
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2;
         myFile1.open(
             DEBUG_RESULTS_3D "resultingCorrelationReal.csv");
@@ -522,11 +506,10 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         voxelRotationTime = std::chrono::duration<double, std::milli>(voxelRotationEnd - voxelRotationStart).count();
     }
 
-    auto fft1Start = std::chrono::high_resolution_clock::now();
+   auto fft1Start = std::chrono::high_resolution_clock::now();
     this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
-                                                this->magnitude1Correlation,
-                                                this->phase1Correlation,
-                                                false);
+                                                 this->complexSpectrum1Correlation,
+                                                 false);
     if (benchmark) {
         auto fft1End = std::chrono::high_resolution_clock::now();
         fft1Time = std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
@@ -534,28 +517,28 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
     auto fft2Start = std::chrono::high_resolution_clock::now();
     this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
-                                                this->magnitude2Correlation,
-                                                this->phase2Correlation,
-                                                false);
+                                                 this->complexSpectrum2Correlation,
+                                                 false);
     if (benchmark) {
         auto fft2End = std::chrono::high_resolution_clock::now();
         fft2Time = std::chrono::duration<double, std::milli>(fft2End - fft2Start).count();
     }
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2, myFile3;
         myFile1.open(
-            DEBUG_RESULTS_3D "magnitudeFFTW2Rotated.csv");
+            DEBUG_RESULTS_3D "spectrumRealFFTW2Rotated.csv");
         myFile2.open(
-            DEBUG_RESULTS_3D "phaseFFTW2Rotated.csv");
+            DEBUG_RESULTS_3D "spectrumImagFFTW2Rotated.csv");
 
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
                 for (int k = 0; k < this->correlationN; k++) {
                     int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
-                    myFile1 << this->magnitude2Correlation[index];
+                    myFile1 << this->complexSpectrum2Correlation[index][0];
                     myFile1 << "\n";
-                    myFile2 << this->phase2Correlation[index];
+                    myFile2 << this->complexSpectrum2Correlation[index][1];
                     myFile2 << "\n";
                 }
             }
@@ -578,24 +561,16 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
     }
 
     auto correlationStart = std::chrono::high_resolution_clock::now();
-    //calculate correlation of spectrums
     for (int i = 0; i < this->correlationN; i++) {
         for (int j = 0; j < this->correlationN; j++) {
             for (int k = 0; k < this->correlationN; k++) {
-                int indexX = i;
-                int indexY = j;
-                int indexZ = k;
-                int index = generalHelpfulTools::index3D(indexX, indexY, indexZ, this->correlationN);
-
-                std::complex<double> tmpComplex1 =
-                        magnitude1Correlation[index] *
-                        std::exp(std::complex<double>(0, phase1Correlation[index]));
-                std::complex<double> tmpComplex2 =
-                        magnitude2Correlation[index] *
-                        std::exp(std::complex<double>(0, phase2Correlation[index]));
-                std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2)); // cross correlation
-                resultingPhaseDiff3DCorrelation[index][0] = resultComplex.real();
-                resultingPhaseDiff3DCorrelation[index][1] = resultComplex.imag();
+                int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
+                double r1 = complexSpectrum1Correlation[index][0];
+                double i1 = complexSpectrum1Correlation[index][1];
+                double r2 = complexSpectrum2Correlation[index][0];
+                double i2 = complexSpectrum2Correlation[index][1];
+                resultingPhaseDiff3DCorrelation[index][0] = r1 * r2 + i1 * i2;
+                resultingPhaseDiff3DCorrelation[index][1] = i1 * r2 - r1 * i2;
             }
         }
     }
@@ -668,6 +643,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         }
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile10;
         myFile10.open(
             DEBUG_RESULTS_3D "resultingCorrelationShift.csv");
@@ -795,6 +771,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2, myFile3, myFile4, myFile5, myFile6;
         myFile1.open(
             DEBUG_RESULTS_3D "magnitudeFFTW1.csv");
@@ -952,6 +929,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         }
     }
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2;
         myFile1.open(
             DEBUG_RESULTS_3D "resampledMagnitudeSO3_1.csv");
@@ -986,6 +964,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
     }
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
         std::ofstream myFile1, myFile2;
         myFile1.open(
             DEBUG_RESULTS_3D "resultingCorrelationReal.csv");
@@ -1105,6 +1084,18 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         plottingTime = std::chrono::duration<double, std::milli>(plottingEnd - plottingStart).count();
     }
 
+    // FFT voxelData1 once before the rotation loop (invariant across solutions)
+    {
+        auto fft1PreStart = std::chrono::high_resolution_clock::now();
+        this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
+                                                     this->complexSpectrum1Correlation,
+                                                     false);
+        if (benchmark || timings) {
+            auto fft1PreEnd = std::chrono::high_resolution_clock::now();
+            transFft1Time += std::chrono::duration<double, std::milli>(fft1PreEnd - fft1PreStart).count();
+        }
+    }
+
     auto totalAllTransStart = std::chrono::high_resolution_clock::now();
     std::vector<transformationPeakfs3D> allSolutions;
     for (int p = 0; p < potentialRotationsTMP.size(); p++) {
@@ -1147,41 +1138,32 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             transVoxelRotationTime += std::chrono::duration<double, std::milli>(voxelRotEnd - voxelRotStart).count();
         }
 
-        auto fft1Start = std::chrono::high_resolution_clock::now();
-       this->getSpectrumFromVoxelData3DCorrelation(voxelData1Input,
-                                                     this->magnitude1Correlation,
-                                                     this->phase1Correlation,
-                                                     false);
-        if (benchmark || timings) {
-            auto fft1End = std::chrono::high_resolution_clock::now();
-            transFft1Time += std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
-            fft1Start = std::chrono::high_resolution_clock::now();
-        }
+       auto fft2Start = std::chrono::high_resolution_clock::now();
         this->getSpectrumFromVoxelData3DCorrelation(voxelData2Rotated,
-                                                     this->magnitude2Correlation,
-                                                     this->phase2Correlation,
-                                                     false);
+                                                      this->complexSpectrum2Correlation,
+                                                      false);
         if (benchmark || timings) {
             auto fft2End = std::chrono::high_resolution_clock::now();
-            transFft2Time += std::chrono::duration<double, std::milli>(fft2End - fft1Start).count();
+            transFft2Time += std::chrono::duration<double, std::milli>(fft2End - fft2Start).count();
         }
 
         if (debug) {
+            generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
             std::ofstream myFile1, myFile2, myFile3;
             myFile1.open(
-                DEBUG_RESULTS_3D "magnitudeFFTW2Rotated" +
+                DEBUG_RESULTS_3D "spectrumRealFFTW2Rotated" +
                 std::to_string(p) + ".csv");
             myFile2.open(
-                DEBUG_RESULTS_3D "phaseFFTW2Rotated" +
+                DEBUG_RESULTS_3D "spectrumImagFFTW2Rotated" +
                 std::to_string(p) + ".csv");
 
             for (int i = 0; i < this->correlationN; i++) {
                 for (int j = 0; j < this->correlationN; j++) {
                     for (int k = 0; k < this->correlationN; k++) {
                         int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
-                        myFile1 << this->magnitude2Correlation[index];
+                        myFile1 << this->complexSpectrum2Correlation[index][0];
                         myFile1 << "\n";
-                        myFile2 << this->phase2Correlation[index];
+                        myFile2 << this->complexSpectrum2Correlation[index][1];
                         myFile2 << "\n";
                     }
                 }
@@ -1204,25 +1186,18 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             myFile3.close();
         }
 
-        //calculate correlation of spectrums
+        //calculate correlation of spectrums (direct complex multiply, no exp)
         auto corrStart = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < this->correlationN; i++) {
             for (int j = 0; j < this->correlationN; j++) {
                 for (int k = 0; k < this->correlationN; k++) {
-                    int indexX = i;
-                    int indexY = j;
-                    int indexZ = k;
-                    int index = generalHelpfulTools::index3D(indexX, indexY, indexZ, this->correlationN);
-
-                    std::complex<double> tmpComplex1 =
-                            magnitude1Correlation[index] *
-                            std::exp(std::complex<double>(0, phase1Correlation[index]));
-                    std::complex<double> tmpComplex2 =
-                            magnitude2Correlation[index] *
-                            std::exp(std::complex<double>(0, phase2Correlation[index]));
-                    std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2)); // cross correlation
-                    resultingPhaseDiff3DCorrelation[index][0] = resultComplex.real();
-                    resultingPhaseDiff3DCorrelation[index][1] = resultComplex.imag();
+                    int index = generalHelpfulTools::index3D(i, j, k, this->correlationN);
+                    double r1 = complexSpectrum1Correlation[index][0];
+                    double i1 = complexSpectrum1Correlation[index][1];
+                    double r2 = complexSpectrum2Correlation[index][0];
+                    double i2 = complexSpectrum2Correlation[index][1];
+                    resultingPhaseDiff3DCorrelation[index][0] = r1 * r2 + i1 * i2;
+                    resultingPhaseDiff3DCorrelation[index][1] = i1 * r2 - r1 * i2;
                 }
             }
         }
@@ -1296,6 +1271,7 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         }
 
         if (debug) {
+            generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_3D);
             std::ofstream myFile10;
             myFile10.open(
                 DEBUG_RESULTS_3D "resultingCorrelationShift" +

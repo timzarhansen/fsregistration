@@ -88,11 +88,12 @@ def merge_batches(output_dir='outputFiles', noise_level='high', data_type='train
     
     # Save final output
     output_path = os.path.join(output_dir, f'outfile_{model_type}_{noise_level}_{data_type}.csv')
-    
-    # Write header and data
-    fieldnames = ['index', 'overlap%', 'GT_roll', 'GT_pitch', 'GT_yaw', 'GT_x', 'GT_y', 'GT_z',
-                  'Est_roll', 'Est_pitch', 'Est_yaw', 'Est_x', 'Est_y', 'Est_z']
-    
+
+    # Dynamic fieldnames from first batch file
+    with open(sorted(batch_files)[0], 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+
     with open(output_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -129,8 +130,8 @@ if __name__ == '__main__':
                         choices=['train', 'val'],
                         help='Dataset type')
     parser.add_argument('--model-type', type=str, default='fpfh',
-                         choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp'],
-                         help='Model type for output filename')
+                        choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp', 'soft'],
+                        help='Model type for output filename')
     
     args = parser.parse_args()
     

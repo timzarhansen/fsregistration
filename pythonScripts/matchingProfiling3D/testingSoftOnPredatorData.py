@@ -9,10 +9,7 @@ Usage:
 
 import os
 import sys
-import torch
-import json
 import argparse
-import shutil
 import csv
 import gc
 import time
@@ -31,6 +28,30 @@ sys.path.insert(0, fsregistration_src)
 from pybind_registration_3d import SoftRegistrationWrapper
 
 from dataloader_utils import PredatorDataLoader
+
+
+def init_retry_log(noise_level, type_data, output_dir):
+    """Initialize retry log file."""
+    log_path = os.path.join(output_dir, f'retry_log_{noise_level}_{type_data}.txt')
+    with open(log_path, 'w') as f:
+        f.write(f"Retry Log - Noise: {noise_level}, Data: {type_data}\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    return log_path
+
+
+def log_retry(sample_idx, attempt, max_retries, error_msg, log_path):
+    """Log retry attempt."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | Retry {attempt + 1}/{max_retries} | Error: {error_msg}\n")
+    print(f"  [RETRY {attempt + 1}/{max_retries}] Sample {sample_idx}: {error_msg[:100]}")
+
+
+def log_max_retries_exceeded(sample_idx, error_msg, log_path):
+    """Log when max retries exceeded."""
+    with open(log_path, 'a') as f:
+        f.write(f"Sample {sample_idx} | MAX RETRIES EXCEEDED | Error: {error_msg}\n\n")
+    print(f"  [FAILED] Sample {sample_idx}: Max retries exceeded, skipping with zeros")
 
 
 def draw_registration_result(source, target, transformation, nameOfFile):
@@ -199,16 +220,15 @@ def main():
     reg = SoftRegistrationWrapper(N, N // 2, N // 2, N // 2 - 1)
     print(f"Registration object created.")
 
-    output_dir = 'outputFiles'
+    output_dir = os.path.join('outputFiles', 'soft')
     os.makedirs(output_dir, exist_ok=True)
+
+    retry_log_path = init_retry_log(noise_level, type_data, output_dir)
 
     if args.output_file:
         csv_path = args.output_file
     else:
-        csv_path = os.path.join(
-            output_dir,
-            f'results_{N}_{int(use_clahe)}_{r_min}_{r_max}_{level_potential_rotation}_{level_potential_translation}_{normalization_factor}_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv'
-        )
+        csv_path = os.path.join(output_dir, f'batch_soft_{noise_level}_{type_data}_{start_index:05d}_{end_index:05d}.csv')
 
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -282,22 +302,51 @@ def main():
         voxelArray1 = pointToVoxel(pcd1_noisy, N, voxelSize, mean1).astype(np.float64)
         voxelArray2 = pointToVoxel(pcd2_noisy, N, voxelSize, mean2).astype(np.float64)
 
-        listPeaks = reg.registerVoxels(
-            voxelArray1, voxelArray2,
-            debug=False,
-            useClahe=use_clahe,
-            timeStuff=False,
-            sizeVoxel=voxelSize,
-            r_min=float(r_min),
-            r_max=float(r_max),
-            level_potential_rotation=level_potential_rotation,
-            level_potential_translation=level_potential_translation,
-            set_r_manual=set_r_manual,
-            normalization=normalization_factor
-        )
+        max_retries = 3
+        retry_delay = 1.0
+        listPeaks = []
+
+        for attempt in range(max_retries + 1):
+            try:
+                listPeaks = reg.registerVoxels(
+                    voxelArray1, voxelArray2,
+                    debug=False,
+                    useClahe=use_clahe,
+                    timeStuff=False,
+                    sizeVoxel=voxelSize,
+                    r_min=float(r_min),
+                    r_max=float(r_max),
+                    level_potential_rotation=level_potential_rotation,
+                    level_potential_translation=level_potential_translation,
+                    set_r_manual=set_r_manual,
+                    normalization=normalization_factor
+                )
+                break
+            except (MemoryError, RuntimeError) as e:
+                error_str = str(e).lower()
+                if "malloc" in error_str or "heap" in error_str or "corruption" in error_str:
+                    if attempt < max_retries:
+                        log_retry(indexDataLoader, attempt, max_retries, str(e), retry_log_path)
+                        time.sleep(retry_delay)
+                        gc.collect()
+                        continue
+                    else:
+                        log_max_retries_exceeded(indexDataLoader, str(e), retry_log_path)
+                        listPeaks = []
+                        break
+                else:
+                    raise
+            except Exception as e:
+                print(f"Error processing sample {indexDataLoader}: {e}")
+                listPeaks = []
+                break
 
         overlapPercentage = compute_overlap_ratio(pcd1, pcd2, gtTransformation, voxelSize)
         numberOfSolutions = len(listPeaks)
+
+        if numberOfSolutions == 0:
+            print(f"Sample {indexDataLoader}: NO SOLUTIONS, skipping CSV write")
+            continue
 
         highestPeakCorrelation = 0.0
         indexHighestPeak = 0
@@ -323,18 +372,24 @@ def main():
 
         print(f"Sample {indexDataLoader}: solutions={numberOfSolutions}, overlap={overlapPercentage:.4f}")
 
-        with open(csv_path, 'a', newline='') as f:
+        temp_csv_path = csv_path + '.tmp'
+        with open(temp_csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             inputWriter = [indexDataLoader, numberOfSolutions, overlapPercentage]
             inputWriter.extend(transform_to_rpyxyz(gtTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimatedHighestTransformation))
             inputWriter.extend(transform_to_rpyxyz(estimatedBestTransformation))
             writer.writerow(inputWriter)
+        with open(csv_path, 'a', newline='') as main_f:
+            with open(temp_csv_path, 'r') as temp_f:
+                main_f.write(temp_f.read())
+        os.remove(temp_csv_path)
 
         if (indexDataLoader + 1) % 50 == 0:
             gc.collect()
 
-    print(f"Completed! Results saved to {csv_path}")
+    print("Completed!")
+    print(f"Batch {start_index}-{end_index} finished. Results saved to {csv_path}")
 
     expected_rows = end_index - start_index + 1
     with open(csv_path, 'r') as f:

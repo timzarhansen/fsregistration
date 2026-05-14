@@ -43,6 +43,8 @@ public:
     static int index2D(int x, int y,int NInput);
     static double angleDifferenceQuaternion(const Eigen::Quaterniond& q1, const Eigen::Quaterniond& q2);
 
+    static void ensureDirectoryExists(const std::string& path);
+
 };
 
 

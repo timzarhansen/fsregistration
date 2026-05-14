@@ -58,20 +58,39 @@ def create_batches(total_samples, batch_size):
 
 def process_batch(args):
     """Process a single batch."""
-    batch_id, start_idx, end_idx, config, noise_level, data_type, script_path, model_type, output_dir = args
-    
+    batch_id, start_idx, end_idx, config, noise_level, data_type, script_path, model_type, output_dir, soft_params = args
+
     output_file = os.path.join(output_dir, f'batch_{model_type}_{noise_level}_{data_type}_{start_idx:05d}_{end_idx:05d}.csv')
-    
-    cmd = [
-        sys.executable,
-        script_path,
-        config,
-        noise_level,
-        data_type,
-        '--start-index', str(start_idx),
-        '--end-index', str(end_idx),
-        '--output-file', output_file
-    ]
+
+    if model_type == 'soft':
+        cmd = [
+            sys.executable,
+            script_path,
+            config,
+            str(soft_params['N']),
+            str(soft_params['use_clahe']),
+            str(soft_params['r_min']),
+            str(soft_params['r_max']),
+            str(soft_params['level_rotation']),
+            str(soft_params['level_translation']),
+            str(soft_params['normalization']),
+            noise_level,
+            data_type,
+            '--start-index', str(start_idx),
+            '--end-index', str(end_idx),
+            '--output-file', output_file
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            script_path,
+            config,
+            noise_level,
+            data_type,
+            '--start-index', str(start_idx),
+            '--end-index', str(end_idx),
+            '--output-file', output_file
+        ]
     
     print(f"[Batch {batch_id}] Processing samples {start_idx}-{end_idx}")
     
@@ -114,12 +133,27 @@ def main():
     parser.add_argument('--max-retries', type=int, default=3,
                           help='Max retries per failed batch')
     parser.add_argument('--model-type', type=str, default='fpfh',
-                         choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp'],
-                         help='Model type (auto-selects script)')
+                        choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp', 'soft'],
+                        help='Model type (auto-selects script)')
     parser.add_argument('--script-path', type=str, default=None,
-                          help='Path to testing script (auto-detected if not provided)')
+                        help='Path to testing script (auto-detected if not provided)')
     parser.add_argument('--output-dir', type=str, default=None,
-                          help='Output directory (default: outputFiles/{model_type})')
+                        help='Output directory (default: outputFiles/{model_type})')
+    # SOFT-specific parameters
+    parser.add_argument('--soft-N', type=int, default=128,
+                        help='SOFT voxel grid dimension (default: 128)')
+    parser.add_argument('--soft-use-clahe', type=int, default=0,
+                        help='SOFT use CLAHE 0/1 (default: 0)')
+    parser.add_argument('--soft-r-min', type=int, default=16,
+                        help='SOFT minimum radius (default: 16)')
+    parser.add_argument('--soft-r-max', type=int, default=48,
+                        help='SOFT maximum radius (default: 48)')
+    parser.add_argument('--soft-level-rotation', type=float, default=0.001,
+                        help='SOFT rotation potential level (default: 0.001)')
+    parser.add_argument('--soft-level-translation', type=float, default=0.001,
+                        help='SOFT translation potential level (default: 0.001)')
+    parser.add_argument('--soft-normalization', type=int, default=2,
+                        help='SOFT normalization factor (default: 2)')
     
     args = parser.parse_args()
     
@@ -132,7 +166,8 @@ def main():
             'pointreggpt': 'testingPointRegGPTOnPredatorData.py',
             'geotransformer': 'testingGeoTransformerOnPredatorData.py',
             'regtr': 'testingRegTROnPredatorData.py',
-            'icp': 'testingICPOnPredatorData.py'
+            'icp': 'testingICPOnPredatorData.py',
+            'soft': 'testingSoftOnPredatorData.py'
         }
         args.script_path = os.path.join(script_dir, '..', script_map[args.model_type])
     
@@ -180,9 +215,20 @@ def main():
         print(f"WAVE {wave}: Processing {len(pending_batches)} batches")
         print(f"{'='*60}")
         
+        # Prepare SOFT-specific parameters
+        soft_params = {
+            'N': args.soft_N,
+            'use_clahe': args.soft_use_clahe,
+            'r_min': args.soft_r_min,
+            'r_max': args.soft_r_max,
+            'level_rotation': args.soft_level_rotation,
+            'level_translation': args.soft_level_translation,
+            'normalization': args.soft_normalization
+        }
+
         # Prepare batch arguments
         batch_args = [
-            (batch_id, start, end, args.config, args.noise_level, args.data_type, args.script_path, args.model_type, args.output_dir)
+            (batch_id, start, end, args.config, args.noise_level, args.data_type, args.script_path, args.model_type, args.output_dir, soft_params)
             for batch_id, start, end in pending_batches
         ]
         

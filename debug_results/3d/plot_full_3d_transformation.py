@@ -13,7 +13,7 @@ save_figs = True                # save figures to disk
 figs_subdir = "figs"            # subdirectory for saved figures
 
 # --- DATA DIR ---
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 FIGS_DIR = os.path.join(DATA_DIR, figs_subdir)
 os.makedirs(FIGS_DIR, exist_ok=True)
 
@@ -59,8 +59,8 @@ magnitude_fftw2 = load_csv("magnitudeFFTW2.csv")
 phase_fftw2 = load_csv("phaseFFTW2.csv")
 voxel_data_used2 = load_csv("voxelDataFFTW2.csv")
 
-magnitude_fftw2_rotated = load_csv(f"magnitudeFFTW2Rotated{rot_suffix}.csv")
-phase_fftw2_rotated = load_csv(f"phaseFFTW2Rotated{rot_suffix}.csv")
+spectrum_real_fftw2_rotated = load_csv(f"spectrumRealFFTW2Rotated{rot_suffix}.csv")
+spectrum_imag_fftw2_rotated = load_csv(f"spectrumImagFFTW2Rotated{rot_suffix}.csv")
 voxel_data_used2_rotated = load_csv(f"voxelDataFFTW2Rotated{rot_suffix}.csv")
 
 # --- Infer N and correlationN ---
@@ -70,6 +70,8 @@ if voxel_data_used1 is not None:
 else:
     raise ValueError("Cannot determine N: voxelDataFFTW1.csv not found")
 
+magnitude_fftw2_rotated = np.sqrt(spectrum_real_fftw2_rotated ** 2 + spectrum_imag_fftw2_rotated ** 2)
+phase_fftw2_rotated = np.arctan2(spectrum_imag_fftw2_rotated, spectrum_real_fftw2_rotated)
 correlationN = int(round(len(magnitude_fftw2_rotated) ** (1.0 / 3.0)))
 print(f"Inferred correlationN = {correlationN}  (expected N*2-1 = {N*2-1})")
 

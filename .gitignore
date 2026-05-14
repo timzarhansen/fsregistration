@@ -7,3 +7,10 @@
 build/
 *.log
 *.csv
+build
+build_test
+cmake-build-test
+cmake-build-debug
+install
+log
+

@@ -2,7 +2,7 @@
 // Test full 3D registration: Speed comparison of peak detection strategies
 //
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 
 #include "softRegistrationClass3D.h"
 #include "generalHelpfulTools.h"

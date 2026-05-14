@@ -126,14 +126,10 @@ public:
         this->phase2 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude1 = (double *) malloc(sizeof(double) * N * N * N);
         this->magnitude2 = (double *) malloc(sizeof(double) * N * N * N);
-        this->phase1Correlation = (double *) malloc(
-            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
-        this->phase2Correlation = (double *) malloc(
-            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
-        this->magnitude1Correlation = (double *) malloc(
-            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
-        this->magnitude2Correlation = (double *) malloc(
-            sizeof(double) * this->correlationN * this->correlationN * this->correlationN);
+        this->complexSpectrum1Correlation = (fftw_complex *) fftw_malloc(
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+        this->complexSpectrum2Correlation = (fftw_complex *) fftw_malloc(
+            sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         resampledMagnitudeSO3_1 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_1TMP = (double *) malloc(sizeof(double) * N * N);
@@ -270,9 +266,9 @@ public:
     double
     getSpectrumFromVoxelData3D(const double voxelData[], double magnitude[], double phase[], bool gaussianBlur = false);
 
-    double
-    getSpectrumFromVoxelData3DCorrelation(const double voxelData[], double magnitude[], double phase[],
-                                          bool gaussianBlur = false);
+   double
+    getSpectrumFromVoxelData3DCorrelation(const double voxelData[], fftw_complex *complexOut,
+                                           bool gaussianBlur = false);
 
     double
     sofftRegistrationVoxel2DRotationOnly(double voxelData1Input[], double voxelData2Input[], double goodGuessAlpha,
@@ -351,12 +347,10 @@ private: //here everything is created. malloc is done in the constructor
     fftw_complex *spectrumOutCorrelation;
     double *magnitude1;
     double *magnitude2;
-    double *magnitude1Correlation;
-    double *magnitude2Correlation;
     double *phase1;
     double *phase2;
-    double *phase1Correlation;
-    double *phase2Correlation;
+    fftw_complex *complexSpectrum1Correlation;
+    fftw_complex *complexSpectrum2Correlation;
     double *magnitude1Shifted;
     double *magnitude2Shifted;
     double *resampledMagnitudeSO3_1;

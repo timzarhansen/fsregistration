@@ -1,15 +1,12 @@
 
 
 #include "generalHelpfulTools.h"
+#include <filesystem>
 
 Eigen::Vector3d generalHelpfulTools::getRollPitchYaw(Eigen::Quaterniond quat) {
-    tf2::Quaternion tmp(quat.x(), quat.y(), quat.z(), quat.w());
-    tmp.normalize();
-    tf2::Matrix3x3 m(tmp);
-    double r, p, y;
-    m.getRPY(r, p, y);
-    Eigen::Vector3d returnVector(r, p, y);
-    return returnVector;
+    Eigen::Matrix3d m = quat.toRotationMatrix();
+    Eigen::Vector3d rpy = m.eulerAngles(0, 1, 2);  // intrinsic XYZ, same as tf2::Matrix3x3::getRPY()
+    return rpy;
 }
 
 Eigen::Matrix4d generalHelpfulTools::getTransformationMatrixFromRPY(double roll, double pitch, double yaw) {
@@ -20,21 +17,12 @@ Eigen::Matrix4d generalHelpfulTools::getTransformationMatrixFromRPY(double roll,
 }
 
 Eigen::Quaterniond generalHelpfulTools::getQuaternionFromRPY(double roll, double pitch, double yaw) {
-//        tf2::Matrix3x3 m;
-//        m.setRPY(roll,pitch,yaw);
-//        Eigen::Matrix3d m2;
-    tf2::Quaternion qtf2;
-    qtf2.setRPY(roll, pitch, yaw);
-    Eigen::Quaterniond q;
-    q.x() = qtf2.x();
-    q.y() = qtf2.y();
-    q.z() = qtf2.z();
-    q.w() = qtf2.w();
-
-//        q = Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())
-//            * Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY())
-//            * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ());
-    return q;
+    // Equivalent to tf2::Quaternion::setRPY(r, p, y) which is intrinsic XYZ = extrinsic ZYX
+    // Order is Z * Y * X  (NOT X * Y * Z)
+    Eigen::Quaterniond qx(Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX()));
+    Eigen::Quaterniond qy(Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()));
+    Eigen::Quaterniond qz(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
+    return qz * qy * qx;  // intrinsic XYZ = extrinsic ZYX
 }
 
 double generalHelpfulTools::angleDiff(double first, double second) {//first-second
@@ -216,4 +204,12 @@ double generalHelpfulTools::angleDifferenceQuaternion(const Eigen::Quaterniond& 
     Eigen::Quaterniond q2n = q2.normalized();
     double dot = std::abs(q1n.dot(q2n));
     return 2.0 * std::acos( std::min(dot, 1.0) ); // Clamp to avoid precision errors
+}
+
+void generalHelpfulTools::ensureDirectoryExists(const std::string& path) {
+    try {
+        std::filesystem::create_directories(path);
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "[Warning] Could not create directory '" << path << "': " << e.what() << std::endl;
+    }
 }

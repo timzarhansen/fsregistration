@@ -4,6 +4,7 @@
 
 #include "softRegistrationClass.h"
 #include <chrono>
+#include <filesystem>
 
 #define DEBUG_RESULTS_2D "/home/tim-external/volumeROS/src/fsregistration/debug_results/2d/"
 
@@ -108,21 +109,11 @@ softRegistrationClass::getSpectrumFromVoxelData2D(double voxelData[], double mag
 }
 
 double
-softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[], double magnitude[],
-                                                             double phase[],
-                                                             bool gaussianBlur, double normalizationFactor) {
-
-//    double *voxelDataTMP;
-//    voxelDataTMP = (double *) malloc(sizeof(double) * correlationN * correlationN);
-//    for (int i = 0; i < this->correlationN * this->correlationN; i++) {
-//        voxelDataTMP[i] = voxelData[i];
-//    }
+softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
+                                                              bool gaussianBlur, double normalizationFactor) {
     if (gaussianBlur) {
         cv::Mat magTMP1(this->correlationN, this->correlationN, CV_64F, voxelData);
-        //add gaussian blur
         cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-//        cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-//        cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
     }
 
     for (int i = 0; i < this->correlationN; i++) {
@@ -130,46 +121,25 @@ softRegistrationClass::getSpectrumFromVoxelData2DCorrelation(double voxelData[],
         inputSpacialDataCorrelation[i][1] = 0;
     }
 
-
-    //from voxel data to row and input for fftw
     for (int j = 0; j < N; j++) {
         for (int i = 0; i < N; i++) {
             inputSpacialDataCorrelation[(j + (int) (this->correlationN / 4)) +
                                         this->correlationN * (i + (int) (this->correlationN / 4))][0] =
-                    normalizationFactor * voxelData[j +
-                                                    N *
-                                                    i]; // real part
-//            inputSpacialDataCorrelation[j + N * i][1] = 0; // imaginary part
+                    normalizationFactor * voxelData[j + N * i];
         }
     }
-//    for (int j = 0; j < this->correlationN*this->correlationN; j++) {
-//        std::cout << inputSpacialDataCorrelation[j][0] << std::endl;
-//    }
+
     fftw_execute(planVoxelToFourier2DCorrelation);
 
-    //calc magnitude and phase
-    double maximumMagnitude = 0;
-
-    //get magnitude and find maximum
-    for (int j = 0; j < this->correlationN; j++) {
-        for (int i = 0; i < this->correlationN; i++) {
-            magnitude[j + this->correlationN * i] = sqrt(
-                    spectrumOutCorrelation[j + this->correlationN * i][0] *
-                    spectrumOutCorrelation[j + this->correlationN * i][0] +
-                    spectrumOutCorrelation[j + this->correlationN * i][1] *
-                    spectrumOutCorrelation[j + this->correlationN * i][1]); // real part;
-            if (maximumMagnitude < magnitude[j + this->correlationN * i]) {
-                maximumMagnitude = magnitude[j + this->correlationN * i];
-            }
-
-            phase[j + this->correlationN * i] = atan2(spectrumOutCorrelation[j + this->correlationN * i][1],
-                                                      spectrumOutCorrelation[j + this->correlationN * i][0]);
-
+    if (complexOut) {
+        int total = this->correlationN * this->correlationN;
+        for (int i = 0; i < total; i++) {
+            complexOut[i][0] = spectrumOutCorrelation[i][0];
+            complexOut[i][1] = spectrumOutCorrelation[i][1];
         }
     }
 
-//    free(voxelDataTMP);
-    return maximumMagnitude;
+    return 0;
 }
 
 
@@ -246,6 +216,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile1, myFile2, myFile3,myFile4,myFile5,myFile6;
         myFile1.open(
                 DEBUG_RESULTS_2D "magnitudeFFTW1.csv");
@@ -372,6 +343,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile7, myFile8;
         myFile7.open(
                 DEBUG_RESULTS_2D "resampledVoxel1.csv");
@@ -394,6 +366,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     this->sofftCorrelationObject.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
                                                               resultingCorrelationComplex);
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         FILE *fp;
         fp = fopen(
                 DEBUG_RESULTS_2D "resultCorrelation3D.csv",
@@ -405,6 +378,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         double minimumCorrelation = INFINITY;
         double maximumCorrelation = 0;
         for (int i = 0; i < 8 * bwOut * bwOut * bwOut; i++) {
@@ -554,6 +528,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
     angleList.push_back((float) currentAverageAngle);
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile9;
         myFile9.open(
                 DEBUG_RESULTS_2D "resultingCorrelation1D.csv");
@@ -734,6 +709,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
 
     // Debug: Save spherical harmonic coefficients
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream coef1R, coef1I, coef2R, coef2I;
         coef1R.open(DEBUG_RESULTS_2D "sigCoefR_1angle.csv");
         coef1I.open(DEBUG_RESULTS_2D "sigCoefI_1angle.csv");
@@ -808,6 +784,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
 
     // Debug: Save 1D correlation and Pm values
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream corrFile, PmFile;
         corrFile.open(DEBUG_RESULTS_2D "correlation1D_1angle.csv");
         PmFile.open(DEBUG_RESULTS_2D "Pm_1angle.csv");
@@ -1014,6 +991,7 @@ softRegistrationClass::compute1AngleCorrelationArraySO3(double voxelData1Input[]
 
     // Save debug output
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile;
         myFile.open(DEBUG_RESULTS_2D "correlation1D_SO3.csv");
         for (size_t i = 0; i < correlationAveraged.size(); i++) {
@@ -1201,6 +1179,7 @@ softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Inpu
 
     // Save debug output
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile;
         myFile.open(DEBUG_RESULTS_2D "correlation1D_Direct.csv");
         for (size_t i = 0; i < correlationAveraged.size(); i++) {
@@ -1537,34 +1516,29 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     double fft1Time = 0, fft2Time = 0, correlationTime = 0, ifftTime = 0;
     double fftshiftTime = 0, peakDetectionTime = 0, covarianceTime = 0;
 
-    if (benchmark) {
+   if (benchmark) {
         auto fft1Start = std::chrono::high_resolution_clock::now();
-  // create padding in translation voxelData
-        double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
-                                                                             this->phase1Correlation, false,
-                                                                             normalizationFactor);
+        this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->complexSpectrum1Correlation,
+                                                      false, normalizationFactor);
         auto fft1End = std::chrono::high_resolution_clock::now();
         fft1Time = std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
 
         auto fft2Start = std::chrono::high_resolution_clock::now();
-        double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
-                                                                             this->phase2Correlation, false,
-                                                                             normalizationFactor);
+        this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->complexSpectrum2Correlation,
+                                                      false, normalizationFactor);
         auto fft2End = std::chrono::high_resolution_clock::now();
         fft2Time = std::chrono::duration<double, std::milli>(fft2End - fft2Start).count();
 
         auto correlationStart = std::chrono::high_resolution_clock::now();
         for (int j = 0; j < this->correlationN; j++) {
             for (int i = 0; i < this->correlationN; i++) {
-                std::complex<double> tmpComplex1 =
-                        magnitude1Correlation[j + this->correlationN * i] *
-                        std::exp(std::complex<double>(0, phase1Correlation[j + this->correlationN * i]));
-                std::complex<double> tmpComplex2 =
-                        magnitude2Correlation[j + this->correlationN * i] *
-                        std::exp(std::complex<double>(0, phase2Correlation[j + this->correlationN * i]));
-                std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
-                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
-                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
+                int idx = j + this->correlationN * i;
+                double r1 = complexSpectrum1Correlation[idx][0];
+                double i1 = complexSpectrum1Correlation[idx][1];
+                double r2 = complexSpectrum2Correlation[idx][0];
+                double i2 = complexSpectrum2Correlation[idx][1];
+                resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
+                resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
             }
         }
         auto correlationEnd = std::chrono::high_resolution_clock::now();
@@ -1596,25 +1570,21 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
         auto fftshiftEnd = std::chrono::high_resolution_clock::now();
         fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
     } else {
-        double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->magnitude1Correlation,
-                                                                             this->phase1Correlation, false,
-                                                                             normalizationFactor);
+        this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->complexSpectrum1Correlation,
+                                                      false, normalizationFactor);
 
-        double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->magnitude2Correlation,
-                                                                             this->phase2Correlation, false,
-                                                                             normalizationFactor);
+        this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->complexSpectrum2Correlation,
+                                                      false, normalizationFactor);
 
         for (int j = 0; j < this->correlationN; j++) {
             for (int i = 0; i < this->correlationN; i++) {
-                std::complex<double> tmpComplex1 =
-                        magnitude1Correlation[j + this->correlationN * i] *
-                        std::exp(std::complex<double>(0, phase1Correlation[j + this->correlationN * i]));
-                std::complex<double> tmpComplex2 =
-                        magnitude2Correlation[j + this->correlationN * i] *
-                        std::exp(std::complex<double>(0, phase2Correlation[j + this->correlationN * i]));
-                std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
-                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][0] = resultComplex.real();
-                resultingPhaseDiff2DCorrelation[j + this->correlationN * i][1] = resultComplex.imag();
+                int idx = j + this->correlationN * i;
+                double r1 = complexSpectrum1Correlation[idx][0];
+                double i1 = complexSpectrum1Correlation[idx][1];
+                double r2 = complexSpectrum2Correlation[idx][0];
+                double i2 = complexSpectrum2Correlation[idx][1];
+                resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
+                resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
             }
         }
 
@@ -1861,6 +1831,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
     // save list of transformations
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
 
         std::ofstream myFile12;
         myFile12.open(
@@ -1879,6 +1850,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     }
     //save every transformation in files.
     if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
 
         int numberOfTransformations = 0;
         for (auto &listOfTransformation: listOfTransformations) {
@@ -2629,7 +2601,7 @@ int softRegistrationClass::getSizeOfRegistration() {
 }
 
 double softRegistrationClass::getSpectrumFromVoxelData2DCorrelationThreadSafe(
-    double voxelData[], double magnitude[], double phase[],
+    double voxelData[], fftw_complex *complexOut,
     bool gaussianBlur, double normalizationFactor,
     int correlationN,
     fftw_complex* inputSpacialDataCorrelation_local,
@@ -2652,28 +2624,15 @@ double softRegistrationClass::getSpectrumFromVoxelData2DCorrelationThreadSafe(
 
     fftw_execute(planVoxelToFourier2D_local);
 
-    double maximum = 0;
-    fftw_complex* spectrum = inputSpacialDataCorrelation_local;
-
-    for (int j = 0; j < correlationN; j++) {
-        for (int i = 0; i < correlationN; i++) {
-            int indexX = (correlationN / 2 + i) % correlationN;
-            int indexY = (correlationN / 2 + j) % correlationN;
-
-            magnitude[indexY + correlationN * indexX] = sqrt(
-                    spectrum[j + correlationN * i][0] * spectrum[j + correlationN * i][0] +
-                    spectrum[j + correlationN * i][1] * spectrum[j + correlationN * i][1]) / normalizationFactor;
-
-            phase[indexY + correlationN * indexX] = atan2(
-                    spectrum[j + correlationN * i][1], spectrum[j + correlationN * i][0]);
-
-            if (maximum < magnitude[indexY + correlationN * indexX]) {
-                maximum = magnitude[indexY + correlationN * indexX];
-            }
+    if (complexOut) {
+        int total = correlationN * correlationN;
+        for (int i = 0; i < total; i++) {
+            complexOut[i][0] = inputSpacialDataCorrelation_local[i][0];
+            complexOut[i][1] = inputSpacialDataCorrelation_local[i][1];
         }
     }
 
-    return maximum;
+    return 0;
 }
 
 std::vector<translationPeakfs2D>
@@ -2742,50 +2701,44 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutionsTh
     double cellSize, double normalizationFactor, bool debug,
     int numberOfRotationForDebug, double potentialNecessaryForPeak) {
 
-    int correlationN = this->N * 2 - 1;
+  int correlationN = this->N * 2 - 1;
 
-    std::vector<double> magnitude1Correlation(correlationN * correlationN * correlationN);
-    std::vector<double> magnitude2Correlation(correlationN * correlationN * correlationN);
-    std::vector<double> phase1Correlation(correlationN * correlationN * correlationN);
-    std::vector<double> phase2Correlation(correlationN * correlationN * correlationN);
+    std::vector<fftw_complex> complexSpectrum1Correlation(correlationN * correlationN);
+    std::vector<fftw_complex> complexSpectrum2Correlation(correlationN * correlationN);
     std::vector<fftw_complex> resultingPhaseDiff2DCorrelation(correlationN * correlationN);
     std::vector<fftw_complex> resultingShiftPeaks2DCorrelation(correlationN * correlationN);
     std::vector<double> resultingCorrelationDouble(correlationN * correlationN);
     std::vector<fftw_complex> inputSpacialDataCorrelation(correlationN * correlationN);
-    std::vector<fftw_complex> spectrumOutCorrelation(correlationN * correlationN * correlationN);
+    std::vector<fftw_complex> spectrumOutCorrelation(correlationN * correlationN);
 
     fftw_plan planVoxelToFourier2D = fftw_plan_dft_2d(correlationN, correlationN,
-                                                       inputSpacialDataCorrelation.data(),
-                                                       spectrumOutCorrelation.data(),
-                                                       FFTW_FORWARD, FFTW_ESTIMATE);
+                                                        inputSpacialDataCorrelation.data(),
+                                                        spectrumOutCorrelation.data(),
+                                                        FFTW_FORWARD, FFTW_ESTIMATE);
     fftw_plan planFourierToVoxel2D = fftw_plan_dft_2d(correlationN, correlationN,
-                                                       resultingPhaseDiff2DCorrelation.data(),
-                                                       resultingShiftPeaks2DCorrelation.data(),
-                                                       FFTW_BACKWARD, FFTW_ESTIMATE);
+                                                        resultingPhaseDiff2DCorrelation.data(),
+                                                        resultingShiftPeaks2DCorrelation.data(),
+                                                        FFTW_BACKWARD, FFTW_ESTIMATE);
 
-    double maximumScan1 = this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
-            voxelData1Input, magnitude1Correlation.data(), phase1Correlation.data(),
+    this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
+            voxelData1Input, complexSpectrum1Correlation.data(),
             false, normalizationFactor, correlationN,
             inputSpacialDataCorrelation.data(), planVoxelToFourier2D);
 
-    double maximumScan2 = this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
-            voxelData2Input, magnitude2Correlation.data(), phase2Correlation.data(),
+    this->getSpectrumFromVoxelData2DCorrelationThreadSafe(
+            voxelData2Input, complexSpectrum2Correlation.data(),
             false, normalizationFactor, correlationN,
             inputSpacialDataCorrelation.data(), planVoxelToFourier2D);
 
     for (int j = 0; j < correlationN; j++) {
         for (int i = 0; i < correlationN; i++) {
-            int indexX = i;
-            int indexY = j;
-            std::complex<double> tmpComplex1 =
-                    magnitude1Correlation[indexY + correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase1Correlation[indexY + correlationN * indexX]));
-            std::complex<double> tmpComplex2 =
-                    magnitude2Correlation[indexY + correlationN * indexX] *
-                    std::exp(std::complex<double>(0, phase2Correlation[indexY + correlationN * indexX]));
-            std::complex<double> resultComplex = ((tmpComplex1) * conj(tmpComplex2));
-            resultingPhaseDiff2DCorrelation[j + correlationN * i][0] = resultComplex.real();
-            resultingPhaseDiff2DCorrelation[j + correlationN * i][1] = resultComplex.imag();
+            int idx = j + correlationN * i;
+            double r1 = complexSpectrum1Correlation[idx][0];
+            double i1 = complexSpectrum1Correlation[idx][1];
+            double r2 = complexSpectrum2Correlation[idx][0];
+            double i2 = complexSpectrum2Correlation[idx][1];
+            resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
+            resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
         }
     }
 

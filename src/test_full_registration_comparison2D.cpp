@@ -9,21 +9,32 @@
 #include <chrono>
 #include <iostream>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 // Forward declaration
 extern double angleDifference(double angle1, double angle2);
 
+struct TestResult {
+    std::string name;
+    double totalTimeMs;
+    int numRotationPeaks;
+    int numTranslationPeaks;
+    Eigen::Matrix4d bestTransformation;
+};
+
 void printTransformationMatrix(const std::string& label, const Eigen::Matrix4d& transformation, double timeMs) {
     std::cout << "\n" << label << std::endl;
-    
+
     // Extract rotation angle (around Z axis for 2D)
     double rotationAngle = std::atan2(transformation(1, 0), transformation(0, 0));
     double rotationAngleDeg = rotationAngle * 180.0 / M_PI;
-    
+
     // Extract translation
     double transX = transformation(0, 3);
     double transY = transformation(1, 3);
-    
+
     std::cout << "  Rotation: " << rotationAngle << " rad (" << rotationAngleDeg << "°)" << std::endl;
     std::cout << "  Translation: (" << transX << ", " << transY << ") pixels" << std::endl;
     std::cout << "  Total time: " << timeMs << " ms" << std::endl;
@@ -87,15 +98,22 @@ int main(int argc, char** argv) {
     // Method 1: OLD (Full SO(3))
     // ========================================
     std::cout << "\n\n--- OLD Method (Full SO(3)) ---" << std::endl;
-    
+
     auto startTotalOld = std::chrono::steady_clock::now();
-    
+
     std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSO3(
         voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
-    
+
     auto endTotalOld = std::chrono::steady_clock::now();
     double totalTimeOld = std::chrono::duration<double, std::milli>(endTotalOld - startTotalOld).count();
-    
+
+    // Count peaks
+    int numRotPeaksOld = allTransformationsOld.size();
+    int numTransPeaksOld = 0;
+    for (const auto& sol : allTransformationsOld) {
+        numTransPeaksOld += sol.potentialTranslations.size();
+    }
+
     // Find best transformation (closest to initial guess)
     transformationPeakfs2D bestTransformationOld;
     double bestDistanceOld = 100000;
@@ -113,7 +131,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    
+
     // Build transformation matrix
     Eigen::Matrix4d resultOld = Eigen::Matrix4d::Identity();
     Eigen::AngleAxisd rotation_vectorOld(bestTransformationOld.potentialRotation.angle, Eigen::Vector3d(0, 0, 1));
@@ -121,22 +139,32 @@ int main(int argc, char** argv) {
     resultOld.block<3, 3>(0, 0) = rotMatrixOld;
     resultOld(0, 3) = bestTransformationOld.potentialTranslations[0].translationSI.x();
     resultOld(1, 3) = bestTransformationOld.potentialTranslations[0].translationSI.y();
-    
+
+    std::cout << "\n  Rotation peaks found:    " << numRotPeaksOld << std::endl;
+    std::cout << "  Translation peaks found: " << numTransPeaksOld << std::endl;
+
     printTransformationMatrix("Result:", resultOld, totalTimeOld);
-    
+
     // ========================================
     // Method 2: NEW (1-Angle Direct)
     // ========================================
     std::cout << "\n\n--- NEW Method (1-Angle Direct) ---" << std::endl;
-    
+
     auto startTotalNew = std::chrono::steady_clock::now();
-    
+
     std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsDirect(
         voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
-    
+
     auto endTotalNew = std::chrono::steady_clock::now();
     double totalTimeNew = std::chrono::duration<double, std::milli>(endTotalNew - startTotalNew).count();
-    
+
+    // Count peaks
+    int numRotPeaksNew = allTransformationsNew.size();
+    int numTransPeaksNew = 0;
+    for (const auto& sol : allTransformationsNew) {
+        numTransPeaksNew += sol.potentialTranslations.size();
+    }
+
     // Find best transformation (closest to initial guess)
     transformationPeakfs2D bestTransformationNew;
     double bestDistanceNew = 100000;
@@ -153,7 +181,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    
+
     // Build transformation matrix
     Eigen::Matrix4d resultNew = Eigen::Matrix4d::Identity();
     Eigen::AngleAxisd rotation_vectorNew(bestTransformationNew.potentialRotation.angle, Eigen::Vector3d(0, 0, 1));
@@ -161,18 +189,67 @@ int main(int argc, char** argv) {
     resultNew.block<3, 3>(0, 0) = rotMatrixNew;
     resultNew(0, 3) = bestTransformationNew.potentialTranslations[0].translationSI.x();
     resultNew(1, 3) = bestTransformationNew.potentialTranslations[0].translationSI.y();
-    
+
+    std::cout << "\n  Rotation peaks found:    " << numRotPeaksNew << std::endl;
+    std::cout << "  Translation peaks found: " << numTransPeaksNew << std::endl;
+
     printTransformationMatrix("Result:", resultNew, totalTimeNew);
     
+    // ========================================
+    // Summary table
+    // ========================================
+    std::cout << "\n\n================================================================" << std::endl;
+    std::cout << "Summary" << std::endl;
+    std::cout << "================================================================" << std::endl;
+
+    std::vector<TestResult> results;
+    {
+        TestResult r;
+        r.name = "Full SO(3)";
+        r.totalTimeMs = totalTimeOld;
+        r.numRotationPeaks = numRotPeaksOld;
+        r.numTranslationPeaks = numTransPeaksOld;
+        r.bestTransformation = resultOld;
+        results.push_back(r);
+    }
+    {
+        TestResult r;
+        r.name = "1-Angle Direct";
+        r.totalTimeMs = totalTimeNew;
+        r.numRotationPeaks = numRotPeaksNew;
+        r.numTranslationPeaks = numTransPeaksNew;
+        r.bestTransformation = resultNew;
+        results.push_back(r);
+    }
+
+    std::cout << std::left << std::setw(28) << "Test"
+              << std::right << std::setw(12) << "Time ms"
+              << std::setw(10) << "Rot"
+              << std::setw(10) << "Trans"
+              << std::setw(14) << "Speedup" << std::endl;
+    std::cout << std::string(74, '-') << std::endl;
+
+    double baselineTime = results[0].totalTimeMs;
+    for (const auto& r : results) {
+        double speedup = (baselineTime > 0) ? (baselineTime / r.totalTimeMs) : 0;
+        std::cout << std::left << std::setw(28) << r.name
+                  << std::right << std::setw(12) << std::fixed << std::setprecision(1) << r.totalTimeMs
+                  << std::setw(10) << r.numRotationPeaks
+                  << std::setw(10) << r.numTranslationPeaks
+                  << std::setw(14) << std::fixed << std::setprecision(2) << speedup << "x" << std::endl;
+    }
+    std::cout << std::string(74, '-') << std::endl;
+
     // ========================================
     // Comparison
     // ========================================
     std::cout << "\n\n=== Comparison ===" << std::endl;
-    
+
     // Timing comparison
     std::cout << "\nTiming:" << std::endl;
-    std::cout << "  Total: OLD=" << totalTimeOld << " ms, NEW=" << totalTimeNew << " ms, speedup=" 
-              << (totalTimeOld / totalTimeNew) << "x" << std::endl;
+    std::cout << "  Total: OLD=" << std::fixed << std::setprecision(1) << totalTimeOld << " ms, NEW="
+              << std::fixed << std::setprecision(1) << totalTimeNew << " ms, speedup="
+              << std::fixed << std::setprecision(2) << (totalTimeOld / totalTimeNew) << "x" << std::endl;
     
     // Result comparison
     std::cout << "\nResult comparison:" << std::endl;
