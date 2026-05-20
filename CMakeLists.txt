@@ -90,12 +90,12 @@ target_link_libraries(findpeaks INTERFACE UNION_FIND)
 # executables
 ################################################################################
 
-add_executable(registration3DVoxels src/registrationOf3DVoxels.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
-        src/softCorrelationClass3D.cpp
-        src/softRegistrationClass3D.cpp)
-ament_target_dependencies(registration3DVoxels PCL)
-target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
-target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+#add_executable(registration3DVoxels src/registrationOf3DVoxels.cpp src/softRegistrationClass.cpp src/softCorrelationClass.cpp src/PeakFinder.cpp include/PeakFinder.h
+#        src/softCorrelationClass3D.cpp
+#        src/softRegistrationClass3D.cpp)
+#ament_target_dependencies(registration3DVoxels PCL)
+#target_link_libraries(registration3DVoxels fftw3  generalhelpfullib soft20::soft20 findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES} OpenMP::OpenMP_CXX)
+#target_include_directories(registration3DVoxels PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
 
 
@@ -121,12 +121,12 @@ target_link_libraries(ros2ServiceRegistrationFS3D "${cpp_typesupport_target}")
 
 
 
-add_executable(servicecall3D src/callingServiceExample3D.cpp )
-ament_target_dependencies(servicecall3D rclcpp  cv_bridge tf2_geometry_msgs PCL)
-target_link_libraries(servicecall3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
-target_include_directories(servicecall3D PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(servicecall3D "${cpp_typesupport_target}")
+#add_executable(servicecall3D src/callingServiceExample3D.cpp )
+#ament_target_dependencies(servicecall3D rclcpp  cv_bridge tf2_geometry_msgs PCL)
+#target_link_libraries(servicecall3D soft20::soft20 generalhelpfullib findpeaks ${OpenCV_LIBS} ${PCL_LIBRARIES})
+#target_include_directories(servicecall3D PUBLIC  ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+#rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+#target_link_libraries(servicecall3D "${cpp_typesupport_target}")
 
 #add_executable(servicecall2D src/callingServiceExample2D.cpp )
 #ament_target_dependencies(servicecall2D rclcpp  cv_bridge tf2_geometry_msgs PCL)
