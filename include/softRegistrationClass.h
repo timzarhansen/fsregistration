@@ -48,6 +48,26 @@ struct transformationPeakfs2D {
     rotationPeakfs2D potentialRotation;
 };
 
+struct BenchmarkTimings2D {
+    double spectrumTime = 0;
+    double softDescriptorTime = 0;
+    double rotationCorrelationTime = 0;
+    double rotationExtractionTime = 0;
+    double rotationPeakDetectionTime = 0;
+    double totalTranslationTime = 0;
+    double transFft1Time = 0;
+    double transFft2Time = 0;
+    double transCorrelationTime = 0;
+    double transIfftTime = 0;
+    double transFftshiftTime = 0;
+    double transPeakDetectionTime = 0;
+    double transPreprocessingTime = 0;
+    std::vector<double> transPerAngleTimes;
+    int numAngles = 0;
+    int totalTransPeaks = 0;
+    double totalTime = 0;
+};
+
 class softRegistrationClass {
 public:
     softRegistrationClass(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject(N, bwOut, bwIn,
@@ -113,11 +133,46 @@ public:
         this->correlation1D = (double *) malloc(sizeof(double) * N);
         this->PmR = (double *) malloc(sizeof(double) * (2 * bwIn));
         this->PmI = (double *) malloc(sizeof(double) * (2 * bwIn));
+
+        // Precompute spherical projection lookup tables
+        int bandwidth = N / 2;
+        sinTheta = (double*) malloc(sizeof(double) * N);
+        cosPhi = (double*) malloc(sizeof(double) * N);
+        sinPhi = (double*) malloc(sizeof(double) * N);
+        hammingCoeffs = (double*) malloc(sizeof(double) * N);
+        xAngle = (double*) malloc(sizeof(double) * N * N);
+        yAngle = (double*) malloc(sizeof(double) * N * N);
+
+        for (int j = 0; j < N; j++) {
+            sinTheta[j] = std::sin(M_PI * j / (double) N);
+        }
+        for (int k = 0; k < N; k++) {
+            cosPhi[k] = std::cos(M_PI * k / (double) bandwidth);
+            sinPhi[k] = std::sin(M_PI * k / (double) bandwidth);
+            hammingCoeffs[k] = 25.0/46.0 - (1.0 - 25.0/46.0) * std::cos(2.0 * M_PI * k / (double) N);
+        }
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                xAngle[j * N + k] = sinTheta[j] * cosPhi[k];
+                yAngle[j * N + k] = sinTheta[j] * sinPhi[k];
+            }
+        }
+
+        // CLAHE + reusable Mats
+        clahe = cv::createCLAHE();
+        clahe->setClipLimit(3);
+        magCLAHE1 = cv::Mat(N, N, CV_8UC1);
+        magCLAHE2 = cv::Mat(N, N, CV_8UC1);
     }
 
         ~softRegistrationClass() {
         sofftCorrelationObject.~softCorrelationClass();
-
+        free(sinTheta);
+        free(cosPhi);
+        free(sinPhi);
+        free(hammingCoeffs);
+        free(xAngle);
+        free(yAngle);
     }
 
 
@@ -136,12 +191,14 @@ public:
     std::vector<rotationPeakfs2D>
     sofftRegistrationVoxel2DListOfPossibleRotations(double voxelData1Input[], double voxelData2Input[],
                                                     bool debug = false, bool multipleRadii = false,
-                                                    bool useClahe = true, bool useHamming = true);
+                                                    bool useClahe = true, bool useHamming = true,
+                                                    BenchmarkTimings2D* timings = nullptr);
 
     std::vector<rotationPeakfs2D>
     sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[], double voxelData2Input[],
                                                           bool debug = false, bool multipleRadii = false,
-                                                          bool useClahe = true, bool useHamming = true);
+                                                          bool useClahe = true, bool useHamming = true,
+                                                          BenchmarkTimings2D* timings = nullptr);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -172,14 +229,15 @@ public:
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
 
-   std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                              double voxelData2Input[],
-                                                                                              double cellSize,
-                                                                                              double normalizationFactor,
-                                                                                              bool debug = false,
-                                                                                              int numberOfRotationForDebug = 0,
-                                                                                              double potentialNecessaryForPeak = 0.1,
-                                                                                              bool benchmark = false);
+ std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
+                                                                                               double voxelData2Input[],
+                                                                                               double cellSize,
+                                                                                               double normalizationFactor,
+                                                                                               bool debug = false,
+                                                                                               int numberOfRotationForDebug = 0,
+                                                                                               double potentialNecessaryForPeak = 0.1,
+                                                                                               bool benchmark = false,
+                                                                                               BenchmarkTimings2D* timings = nullptr);
 
     double sofftRegistrationVoxel2DRotationOnlySO3(double voxelData1Input[], double voxelData2Input[],
                                                     double goodGuessAlpha, double &covariance,
@@ -201,27 +259,29 @@ public:
                                          bool useClahe = true, bool useHamming = true,
                                          bool debug = false);
 
-    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSO3(double voxelData1Input[],
-                                                                    double voxelData2Input[],
-                                                                    double cellSize,
-                                                                    bool useGauss,
-                                                                    bool debug = false,
-                                                                    double potentialNecessaryForPeak = 0.1,
-                                                                    bool multipleRadii = false,
-                                                                    bool useClahe = true,
-                                                                    bool useHamming = true,
-                                                                    bool benchmark = false);
+   std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSO3(double voxelData1Input[],
+                                                                     double voxelData2Input[],
+                                                                     double cellSize,
+                                                                     bool useGauss,
+                                                                     bool debug = false,
+                                                                     double potentialNecessaryForPeak = 0.1,
+                                                                     bool multipleRadii = false,
+                                                                     bool useClahe = true,
+                                                                     bool useHamming = true,
+                                                                     bool benchmark = false,
+                                                                     BenchmarkTimings2D* timings = nullptr);
 
-    std::vector<transformationPeakfs2D> registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                       double voxelData2Input[],
-                                                                       double cellSize,
-                                                                       bool useGauss,
-                                                                       bool debug = false,
-                                                                       double potentialNecessaryForPeak = 0.1,
-                                                                       bool multipleRadii = false,
-                                                                       bool useClahe = true,
-                                                                       bool useHamming = true,
-                                                                       bool benchmark = false);
+  std::vector<transformationPeakfs2D> registrationOfTwoVoxelsDirect(double voxelData1Input[],
+                                                                        double voxelData2Input[],
+                                                                        double cellSize,
+                                                                        bool useGauss,
+                                                                        bool debug = false,
+                                                                        double potentialNecessaryForPeak = 0.1,
+                                                                        bool multipleRadii = false,
+                                                                        bool useClahe = true,
+                                                                        bool useHamming = true,
+                                                                        bool benchmark = false,
+                                                                        BenchmarkTimings2D* timings = nullptr);
 
     std::vector<translationPeakfs2D>
     peakDetectionOf2DCorrelationOptimized(double cellSize, double potentialNecessaryForPeak = 0.1,
@@ -315,6 +375,19 @@ private://here everything is created. malloc is done in the constructor
     double *correlation1D;
     double *PmR;
     double *PmI;
+
+    // Precomputed spherical projection lookup tables
+    double* sinTheta;
+    double* cosPhi;
+    double* sinPhi;
+    double* hammingCoeffs;
+    double* xAngle;
+    double* yAngle;
+
+    // Reusable OpenCV objects
+    cv::Ptr<cv::CLAHE> clahe;
+    cv::Mat magCLAHE1;
+    cv::Mat magCLAHE2;
 };
 
 

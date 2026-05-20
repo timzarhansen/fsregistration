@@ -99,20 +99,19 @@ int main(int argc, char** argv) {
     // ========================================
     std::cout << "\n\n--- OLD Method (Full SO(3)) ---" << std::endl;
 
+    BenchmarkTimings2D timingsOld;
     auto startTotalOld = std::chrono::steady_clock::now();
 
     std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSO3(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true, &timingsOld);
 
     auto endTotalOld = std::chrono::steady_clock::now();
     double totalTimeOld = std::chrono::duration<double, std::milli>(endTotalOld - startTotalOld).count();
 
+
     // Count peaks
-    int numRotPeaksOld = allTransformationsOld.size();
-    int numTransPeaksOld = 0;
-    for (const auto& sol : allTransformationsOld) {
-        numTransPeaksOld += sol.potentialTranslations.size();
-    }
+    int numRotPeaksOld = timingsOld.numAngles;
+    int numTransPeaksOld = timingsOld.totalTransPeaks;
 
     // Find best transformation (closest to initial guess)
     transformationPeakfs2D bestTransformationOld;
@@ -143,6 +142,57 @@ int main(int argc, char** argv) {
     std::cout << "\n  Rotation peaks found:    " << numRotPeaksOld << std::endl;
     std::cout << "  Translation peaks found: " << numTransPeaksOld << std::endl;
 
+    // Print per-angle translation times
+    for (size_t i = 0; i < timingsOld.transPerAngleTimes.size(); i++) {
+        std::cout << "  Translation angle [" << i << "]: " << std::fixed << std::setprecision(3)
+                  << timingsOld.transPerAngleTimes[i] << " ms" << std::endl;
+    }
+
+    // Print benchmark summary
+    int numSolOld = timingsOld.numAngles;
+    double perSolOld = (numSolOld > 0) ? 1.0 / numSolOld : 0;
+    std::cout << "  --- 2D All Solutions Summary ---" << std::endl;
+    std::cout << "    Rotation peaks found:           " << numSolOld << std::endl;
+    std::cout << "    Translation peaks found:        " << timingsOld.totalTransPeaks << std::endl;
+    std::cout << "    2D Spectrum (FFT):              " << std::fixed << std::setprecision(3)
+              << timingsOld.spectrumTime << " ms" << std::endl;
+    std::cout << "    SOFT descriptor projection:     " << std::fixed << std::setprecision(3)
+              << timingsOld.softDescriptorTime << " ms" << std::endl;
+    std::cout << "    SOFT correlation:               " << std::fixed << std::setprecision(3)
+              << timingsOld.rotationCorrelationTime << " ms" << std::endl;
+    std::cout << "    1D curve extraction:            " << std::fixed << std::setprecision(3)
+              << timingsOld.rotationExtractionTime << " ms" << std::endl;
+    std::cout << "    Rotation peak detection:        " << std::fixed << std::setprecision(3)
+              << timingsOld.rotationPeakDetectionTime << " ms" << std::endl;
+    std::cout << "    --- Translation breakdown (" << numSolOld << " angles) ---" << std::endl;
+    if (numSolOld > 0) {
+        std::cout << "      Preprocessing (copy+rotate): " << std::fixed << std::setprecision(3)
+                  << timingsOld.transPreprocessingTime << " ms (" << std::setprecision(4)
+                  << (timingsOld.transPreprocessingTime * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      Translation FFT1:           " << std::fixed << std::setprecision(3)
+                  << timingsOld.transFft1Time << " ms (" << std::setprecision(4)
+                  << (timingsOld.transFft1Time * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      Translation FFT2:           " << std::fixed << std::setprecision(3)
+                  << timingsOld.transFft2Time << " ms (" << std::setprecision(4)
+                  << (timingsOld.transFft2Time * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      Complex correlation:        " << std::fixed << std::setprecision(3)
+                  << timingsOld.transCorrelationTime << " ms (" << std::setprecision(4)
+                  << (timingsOld.transCorrelationTime * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      IFFT:                       " << std::fixed << std::setprecision(3)
+                  << timingsOld.transIfftTime << " ms (" << std::setprecision(4)
+                  << (timingsOld.transIfftTime * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      fftshift + magnitude:       " << std::fixed << std::setprecision(3)
+                  << timingsOld.transFftshiftTime << " ms (" << std::setprecision(4)
+                  << (timingsOld.transFftshiftTime * perSolOld) << " ms/angle)" << std::endl;
+        std::cout << "      Translation peak detection: " << std::fixed << std::setprecision(1)
+                  << timingsOld.transPeakDetectionTime << " ms (" << std::setprecision(4)
+                  << (timingsOld.transPeakDetectionTime * perSolOld) << " ms/angle)" << std::endl;
+    }
+    std::cout << "    Total translation:            " << std::fixed << std::setprecision(1)
+              << timingsOld.totalTranslationTime << " ms" << std::endl;
+    std::cout << "    Total time:                   " << std::fixed << std::setprecision(1)
+              << timingsOld.totalTime << " ms" << std::endl;
+
     printTransformationMatrix("Result:", resultOld, totalTimeOld);
 
     // ========================================
@@ -150,20 +200,18 @@ int main(int argc, char** argv) {
     // ========================================
     std::cout << "\n\n--- NEW Method (1-Angle Direct) ---" << std::endl;
 
+    BenchmarkTimings2D timingsNew;
     auto startTotalNew = std::chrono::steady_clock::now();
 
     std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsDirect(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true);
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true, &timingsNew);
 
     auto endTotalNew = std::chrono::steady_clock::now();
     double totalTimeNew = std::chrono::duration<double, std::milli>(endTotalNew - startTotalNew).count();
 
     // Count peaks
-    int numRotPeaksNew = allTransformationsNew.size();
-    int numTransPeaksNew = 0;
-    for (const auto& sol : allTransformationsNew) {
-        numTransPeaksNew += sol.potentialTranslations.size();
-    }
+    int numRotPeaksNew = timingsNew.numAngles;
+    int numTransPeaksNew = timingsNew.totalTransPeaks;
 
     // Find best transformation (closest to initial guess)
     transformationPeakfs2D bestTransformationNew;
@@ -192,6 +240,57 @@ int main(int argc, char** argv) {
 
     std::cout << "\n  Rotation peaks found:    " << numRotPeaksNew << std::endl;
     std::cout << "  Translation peaks found: " << numTransPeaksNew << std::endl;
+
+    // Print per-angle translation times
+    for (size_t i = 0; i < timingsNew.transPerAngleTimes.size(); i++) {
+        std::cout << "  Translation angle [" << i << "]: " << std::fixed << std::setprecision(3)
+                  << timingsNew.transPerAngleTimes[i] << " ms" << std::endl;
+    }
+
+    // Print benchmark summary
+    int numSolNew = timingsNew.numAngles;
+    double perSolNew = (numSolNew > 0) ? 1.0 / numSolNew : 0;
+    std::cout << "  --- 2D All Solutions Summary ---" << std::endl;
+    std::cout << "    Rotation peaks found:           " << numSolNew << std::endl;
+    std::cout << "    Translation peaks found:        " << timingsNew.totalTransPeaks << std::endl;
+    std::cout << "    2D Spectrum (FFT):              " << std::fixed << std::setprecision(3)
+              << timingsNew.spectrumTime << " ms" << std::endl;
+    std::cout << "    SOFT descriptor projection:     " << std::fixed << std::setprecision(3)
+              << timingsNew.softDescriptorTime << " ms" << std::endl;
+    std::cout << "    SOFT correlation:               " << std::fixed << std::setprecision(3)
+              << timingsNew.rotationCorrelationTime << " ms" << std::endl;
+    std::cout << "    1D curve extraction:            " << std::fixed << std::setprecision(3)
+              << timingsNew.rotationExtractionTime << " ms" << std::endl;
+    std::cout << "    Rotation peak detection:        " << std::fixed << std::setprecision(3)
+              << timingsNew.rotationPeakDetectionTime << " ms" << std::endl;
+    std::cout << "    --- Translation breakdown (" << numSolNew << " angles) ---" << std::endl;
+    if (numSolNew > 0) {
+        std::cout << "      Preprocessing (copy+rotate): " << std::fixed << std::setprecision(3)
+                  << timingsNew.transPreprocessingTime << " ms (" << std::setprecision(4)
+                  << (timingsNew.transPreprocessingTime * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      Translation FFT1:           " << std::fixed << std::setprecision(3)
+                  << timingsNew.transFft1Time << " ms (" << std::setprecision(4)
+                  << (timingsNew.transFft1Time * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      Translation FFT2:           " << std::fixed << std::setprecision(3)
+                  << timingsNew.transFft2Time << " ms (" << std::setprecision(4)
+                  << (timingsNew.transFft2Time * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      Complex correlation:        " << std::fixed << std::setprecision(3)
+                  << timingsNew.transCorrelationTime << " ms (" << std::setprecision(4)
+                  << (timingsNew.transCorrelationTime * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      IFFT:                       " << std::fixed << std::setprecision(3)
+                  << timingsNew.transIfftTime << " ms (" << std::setprecision(4)
+                  << (timingsNew.transIfftTime * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      fftshift + magnitude:       " << std::fixed << std::setprecision(3)
+                  << timingsNew.transFftshiftTime << " ms (" << std::setprecision(4)
+                  << (timingsNew.transFftshiftTime * perSolNew) << " ms/angle)" << std::endl;
+        std::cout << "      Translation peak detection: " << std::fixed << std::setprecision(1)
+                  << timingsNew.transPeakDetectionTime << " ms (" << std::setprecision(4)
+                  << (timingsNew.transPeakDetectionTime * perSolNew) << " ms/angle)" << std::endl;
+    }
+    std::cout << "    Total translation:            " << std::fixed << std::setprecision(1)
+              << timingsNew.totalTranslationTime << " ms" << std::endl;
+    std::cout << "    Total time:                   " << std::fixed << std::setprecision(1)
+              << timingsNew.totalTime << " ms" << std::endl;
 
     printTransformationMatrix("Result:", resultNew, totalTimeNew);
     

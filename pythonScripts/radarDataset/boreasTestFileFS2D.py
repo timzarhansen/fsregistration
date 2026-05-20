@@ -17,42 +17,21 @@ from sdk.radar import load_radar, radar_polar_to_cartesian
 from pyboreas import BoreasDataset
 import csv
 from scipy.spatial.transform import Rotation as R
-import os, argparse
+import os, argparse, sys
 
 import cv2
-# ros include stuff
-import rclpy
-from rclpy.node import Node
 import numpy as np
-from fsregistration.srv import RequestListPotentialSolution2D
-from scipy.spatial.transform import Rotation as R
 # import open3d as o3d
 from pathlib import Path
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.dirname(os.path.dirname(script_dir))
+fsregistration_src = os.path.join(root_dir, 'src')
+sys.path.insert(0, fsregistration_src)
+
+from pybind_registration_2d import SoftRegistrationWrapper2D
 
 
-class MinimalClientAsync(Node):
-
-    def __init__(self, node_name):
-        super().__init__('client_' + node_name)
-        self.cli = self.create_client(RequestListPotentialSolution2D, 'fs2d/registration/all_solutions')
-        while not self.cli.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('service not available, waiting again...')
-        self.req = RequestListPotentialSolution2D.Request()
-
-    def send_request(self, scan1, scan2, N, PixelSize, use_clahe):
-        self.req.size_of_pixel = PixelSize
-        self.req.potential_for_necessary_peak = 0.5
-        self.req.size_image = N
-        self.req.sonar_scan_1 = scan1.tolist()
-        self.req.sonar_scan_2 = scan2.tolist()
-        self.req.multiple_radii = True
-        self.req.use_clahe = use_clahe
-        self.req.use_hamming = True
-
-        self.future = self.cli.call_async(self.req)
-        rclpy.spin_until_future_complete(self, self.future)
-        return self.future.result()
 
 def fuse_images(imagesOverTime, estimatedTransformations):
     """
@@ -267,12 +246,8 @@ if __name__ == '__main__':
     sequence_number = args.sequence
     matching_every_nth_image = args.matching_every_nth_image
     print(args)
-    # ROS2 Node
-    rclpy.init()
 
-    minimal_client = MinimalClientAsync(
-        str(N) + '_' + str(int(use_clahe)) + '_' + str(
-            int(size_of_pixel * 1000)) + '_' + str(int(potential_for_necessary_peak * 1000)))
+    reg = SoftRegistrationWrapper2D(N)
 
     bd = BoreasDataset(radar_file_path, split=None, verbose=True)
     seq = bd.sequences[sequence_number]# this is which sequence number is chosen
@@ -338,32 +313,35 @@ if __name__ == '__main__':
                 image_1 = normalize_image(cart_img1)
                 image_2 = normalize_image(cart_img2)
 
-                response = RequestListPotentialSolution2D.Response()
-                response = minimal_client.send_request(image_1, image_2, N, size_of_pixel, use_clahe)
-                heightFirstPotentialSolution = response.list_potential_solutions[0].transformation_peak_height
+                listPeaks = reg.register_all_solutions(
+                    image_1, image_2,
+                    cellSize=size_of_pixel,
+                    useGauss=False,
+                    debug=False,
+                    potentialNecessaryForPeak=potential_for_necessary_peak,
+                    multipleRadii=True,
+                    useClahe=use_clahe,
+                    useHamming=True
+                )
 
                 highestPeak = 0.0
                 indexHighestPeak = 0
 
-                for index_solutions, peak in enumerate(response.list_potential_solutions):
+                for index_solutions, peak in enumerate(listPeaks):
                     # find peak
-                    if peak.transformation_peak_height > highestPeak:
-                        highestPeak = peak.transformation_peak_height
+                    if peak.potentialTranslations[0].peakHeight > highestPeak:
+                        highestPeak = peak.potentialTranslations[0].peakHeight
                         indexHighestPeak = index_solutions
 
-                peak = response.list_potential_solutions[indexHighestPeak]
-                currentQuaternion = [peak.resulting_transformation.orientation.w,
-                                     peak.resulting_transformation.orientation.x,
-                                     peak.resulting_transformation.orientation.y,
-                                     peak.resulting_transformation.orientation.z]
+                peak = listPeaks[indexHighestPeak]
 
                 np.set_printoptions(suppress=True)
 
                 resultingTransformation = np.eye(4)
-                resultingTransformation[:3, :3] = R.from_quat(currentQuaternion,scalar_first=True).as_matrix()
-                resultingTransformation[:3, 3] = np.squeeze(np.asarray(
-                    [peak.resulting_transformation.position.x, peak.resulting_transformation.position.y,
-                     peak.resulting_transformation.position.z]))
+                yaw = peak.potentialRotation.angle
+                resultingTransformation[:3, :3] = R.from_euler('z', yaw).as_matrix()
+                tx, ty = peak.potentialTranslations[0].translationSI
+                resultingTransformation[:3, 3] = [tx, ty, 0.0]
                 estimatedTransformationList.append(np.matmul(estimatedTransformationList[-1],resultingTransformation))
                 absoluteTransformationListForImagePrint.append(np.matmul(absoluteTransformationListForImagePrint[-1],transformation_matrix_gt))
 

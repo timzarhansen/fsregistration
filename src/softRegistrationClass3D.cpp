@@ -237,13 +237,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         double maxValue = 0;
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
-                double theta = thetaIncrement3D((double) i, bandwidth);
-                double phi = phiIncrement3D((double) j, bandwidth);
-                double radius = r;
-
-                int xIndex = int(std::round(radius * std::sin(theta) * std::cos(phi) + N / 2.0 + 0.1));
-                int yIndex = int(std::round(radius * std::sin(theta) * std::sin(phi) + N / 2.0 + 0.1));
-                int zIndex = int(std::round(radius * std::cos(theta) + N / 2.0 + 0.1));
+                int xIndex = int(std::round(r * xAngle3D[i * N + j] + N / 2.0 + 0.1));
+                int yIndex = int(std::round(r * yAngle3D[i * N + j] + N / 2.0 + 0.1));
+                int zIndex = int(std::round(r * zAngle3D[i * N + j] + N / 2.0 + 0.1));
 
 
                 resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)] =
@@ -280,16 +276,15 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
+        magTMP1.convertTo(magCLAHE1_3D, CV_8UC1);
+        magTMP2.convertTo(magCLAHE2_3D, CV_8UC1);
 
         //        cv::imshow("b1", magTMP1);
         //        cv::imshow("b2", magTMP2);
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
         //        clahe->setClipLimit(1);
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            clahe3D->apply(magCLAHE1_3D, magCLAHE1_3D);
+            clahe3D->apply(magCLAHE2_3D, magCLAHE2_3D);
         }
         //        cv::imshow("a1", magTMP1);
         //        cv::imshow("a2", magTMP2);
@@ -298,10 +293,10 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
                 resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magTMP1.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        ((double) magCLAHE1_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
                         255.0;
                 resampledMagnitudeSO3_2[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magTMP2.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        ((double) magCLAHE2_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
                         255.0;
             }
         }
@@ -389,39 +384,32 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
 
         double correlationCurrent;
         std::vector<My4DPoint> listOfQuaternionCorrelation;
-        for (int i = 0; i < bwOut * 2; i++) {
-            for (int j = 0; j < bwOut * 2; j++) {
-                for (int k = 0; k < bwOut * 2; k++) {
+        int S = bwOut * 2;
+        listOfQuaternionCorrelation.reserve(S * S * S);
+        double invRange = 1.0 / (maximumCorrelation - minimumCorrelation);
+        int flatIdx = 0;
+        for (int i = 0; i < S; i++) {
+            double cb = quatCosBeta2[i];
+            double sb = quatSinBeta2[i];
+            for (int j = 0; j < S; j++) {
+                double cosSA = quatCosSum[j + i];
+                double sinSA = quatSinSum[j + i];
+                for (int k = 0; k < S; k++) {
                     correlationCurrent =
-                            (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
-                             minimumCorrelation) /
-                            (maximumCorrelation - minimumCorrelation);
-                    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-                    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
-                    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-
-                    Eigen::Matrix3d tmpMatrix3d =
-                            rotation_vectorz1.toRotationMatrix().inverse() *
-                            rotation_vectory.toRotationMatrix().inverse() *
-                            rotation_vectorz2.toRotationMatrix().inverse();
-                    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
-                    quaternionResult.normalize();
-
-                    if (quaternionResult.w() < 0) {
-                        Eigen::Quaterniond tmpQuad = quaternionResult;
-                        quaternionResult.w() = -tmpQuad.w();
-                        quaternionResult.x() = -tmpQuad.x();
-                        quaternionResult.y() = -tmpQuad.y();
-                        quaternionResult.z() = -tmpQuad.z();
+                            (NORM(resultingCorrelationComplex[flatIdx]) -
+                             minimumCorrelation) * invRange;
+                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
+                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
+                    double qy = -sb * cosSA;
+                    double qz = -cb * sinSA;
+                    if (qw < 0) {
+                        qw = -qw;
+                        qx = -qx;
+                        qy = -qy;
+                        qz = -qz;
                     }
-                    My4DPoint currentPoint;
-                    currentPoint.correlation = correlationCurrent;
-                    currentPoint[0] = quaternionResult.w();
-                    currentPoint[1] = quaternionResult.x();
-                    currentPoint[2] = quaternionResult.y();
-                    currentPoint[3] = quaternionResult.z();
-
-                    listOfQuaternionCorrelation.push_back(currentPoint);
+                    listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, correlationCurrent);
+                    flatIdx++;
                 }
             }
         }
@@ -865,13 +853,9 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         double maxValue = 0;
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
-                double theta = thetaIncrement3D((double) i, bandwidth);
-                double phi = phiIncrement3D((double) j, bandwidth);
-                double radius = r;
-
-                int xIndex = int(std::round(radius * std::sin(theta) * std::cos(phi) + N / 2.0 + 0.1));
-                int yIndex = int(std::round(radius * std::sin(theta) * std::sin(phi) + N / 2.0 + 0.1));
-                int zIndex = int(std::round(radius * std::cos(theta) + N / 2.0 + 0.1));
+                int xIndex = int(std::round(r * xAngle3D[i * N + j] + N / 2.0 + 0.1));
+                int yIndex = int(std::round(r * yAngle3D[i * N + j] + N / 2.0 + 0.1));
+                int zIndex = int(std::round(r * zAngle3D[i * N + j] + N / 2.0 + 0.1));
 
 
                 resampledMagnitudeSO3_1TMP[generalHelpfulTools::index2D(i, j, bandwidth * 2)] =
@@ -908,22 +892,21 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
+        magTMP1.convertTo(magCLAHE1_3D, CV_8UC1);
+        magTMP2.convertTo(magCLAHE2_3D, CV_8UC1);
 
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            clahe3D->apply(magCLAHE1_3D, magCLAHE1_3D);
+            clahe3D->apply(magCLAHE2_3D, magCLAHE2_3D);
         }
         //transform signal back to 0-1
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
                 resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magTMP1.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        ((double) magCLAHE1_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
                         255.0;
                 resampledMagnitudeSO3_2[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magTMP2.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
+                        ((double) magCLAHE2_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
                         255.0;
             }
         }
@@ -1010,39 +993,32 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
         double correlationCurrent;
         std::vector<My4DPoint> listOfQuaternionCorrelation;
-        for (int i = 0; i < bwOut * 2; i++) {
-            for (int j = 0; j < bwOut * 2; j++) {
-                for (int k = 0; k < bwOut * 2; k++) {
+        int S = bwOut * 2;
+        listOfQuaternionCorrelation.reserve(S * S * S);
+        double invRange = 1.0 / (maximumCorrelation - minimumCorrelation);
+        int flatIdx = 0;
+        for (int i = 0; i < S; i++) {
+            double cb = quatCosBeta2[i];
+            double sb = quatSinBeta2[i];
+            for (int j = 0; j < S; j++) {
+                double cosSA = quatCosSum[j + i];
+                double sinSA = quatSinSum[j + i];
+                for (int k = 0; k < S; k++) {
                     correlationCurrent =
-                            (NORM(resultingCorrelationComplex[generalHelpfulTools::index3D(i, j, k, 2 * bwOut)]) -
-                             minimumCorrelation) /
-                            (maximumCorrelation - minimumCorrelation);
-                    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-                    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
-                    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-
-                    Eigen::Matrix3d tmpMatrix3d =
-                            rotation_vectorz1.toRotationMatrix().inverse() *
-                            rotation_vectory.toRotationMatrix().inverse() *
-                            rotation_vectorz2.toRotationMatrix().inverse();
-                    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
-                    quaternionResult.normalize();
-
-                    if (quaternionResult.w() < 0) {
-                        Eigen::Quaterniond tmpQuad = quaternionResult;
-                        quaternionResult.w() = -tmpQuad.w();
-                        quaternionResult.x() = -tmpQuad.x();
-                        quaternionResult.y() = -tmpQuad.y();
-                        quaternionResult.z() = -tmpQuad.z();
+                            (NORM(resultingCorrelationComplex[flatIdx]) -
+                             minimumCorrelation) * invRange;
+                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
+                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
+                    double qy = -sb * cosSA;
+                    double qz = -cb * sinSA;
+                    if (qw < 0) {
+                        qw = -qw;
+                        qx = -qx;
+                        qy = -qy;
+                        qz = -qz;
                     }
-                    My4DPoint currentPoint;
-                    currentPoint.correlation = correlationCurrent;
-                    currentPoint[0] = quaternionResult.w();
-                    currentPoint[1] = quaternionResult.x();
-                    currentPoint[2] = quaternionResult.y();
-                    currentPoint[3] = quaternionResult.z();
-
-                    listOfQuaternionCorrelation.push_back(currentPoint);
+                    listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, correlationCurrent);
+                    flatIdx++;
                 }
             }
         }

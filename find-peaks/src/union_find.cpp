@@ -22,6 +22,7 @@
 #include <findpeaks/union_find.hpp>
 #include <stdexcept>
 #include <limits>
+#include <cstddef>
 
 namespace findpeaks {
 

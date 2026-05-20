@@ -181,14 +181,17 @@ double softRegistrationClass::sofftRegistrationVoxel2DRotationOnlyDirect(double 
 
 std::vector<rotationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double voxelData1Input[],
-                                                                       double voxelData2Input[], bool debug,
+                                                                        double voxelData2Input[], bool debug,
  bool multipleRadii, bool useClahe,
-                                                                                bool useHamming) {
+                                                                                 bool useHamming,
+                                                                                 BenchmarkTimings2D* timings) {
 
+   auto spectrumStart = std::chrono::high_resolution_clock::now();
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
-                                                                      this->phase1, false);
+                                                                       this->phase1, false);
     double maximumScan2Magnitude = this->getSpectrumFromVoxelData2D(voxelData2Input, this->magnitude2,
-                                                                      this->phase2, false);
+                                                                       this->phase2, false);
+    auto spectrumEnd = std::chrono::high_resolution_clock::now();
 
 
     double globalMaximumMagnitude;
@@ -198,6 +201,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
         globalMaximumMagnitude = maximumScan2Magnitude;
     }
 
+    auto descriptorStart = std::chrono::high_resolution_clock::now();
     //normalize and fftshift
     for (int j = 0; j < N; j++) {
         for (int i = 0; i < N; i++) {
@@ -270,20 +274,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     //CHANGE HERE HAPPEND TESTS
     for (int r = minRNumber; r < maxRNumber; r++) {
 //    for (int r = minRNumber; r < maxRNumber; r++) {
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-//                int zIndex =
-//                        std::round((double) r * std::cos(thetaIncrement((double) j + 1, bandwidth)) + bandwidth) - 1;
-//                double hammingCoeff = 25.0/46.0-(1.0-25.0/46.0)*cos(2*M_PI*k/(2*bandwidth));
-                double hammingCoeff = 1;
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                int xIndex = std::round((double) r * xAngle[j * N + k] + bandwidth) - 1;
+                int yIndex = std::round((double) r * yAngle[j * N + k] + bandwidth) - 1;
                 resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
-                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude1Shifted[yIndex + N * xIndex];
                 resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
-                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude2Shifted[yIndex + N * xIndex];
             }
         }
 //        int removeLines = 20;
@@ -310,36 +308,30 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-        clahe->setClipLimit(3);
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
+            clahe->apply(magCLAHE1, magCLAHE1);
+            clahe->apply(magCLAHE2, magCLAHE2);
+        } else {
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
         }
 
-
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-//                double hammingCoeff = 1;
-
-                double hammingCoeff = 1;
-                if (useHamming) {
-                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
-                }
-
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
                 resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE1.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
                 resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE2.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
             }
         }
 //        std::cout << resampledMagnitudeSO3_1[100 + 100 * bandwidth * 2] << std::endl;
 //        std::cout << resampledMagnitudeSO3_1[100 + 100 * bandwidth * 2] << std::endl;
     }
+    auto descriptorEnd = std::chrono::high_resolution_clock::now();
 
 
     if (debug) {
@@ -363,8 +355,10 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
     }
 
     //use soft descriptor to calculate the correlation
+    auto correlationStart = std::chrono::high_resolution_clock::now();
     this->sofftCorrelationObject.correlationOfTwoSignalsInSO3(resampledMagnitudeSO3_1, resampledMagnitudeSO3_2,
                                                               resultingCorrelationComplex);
+    auto correlationEnd = std::chrono::high_resolution_clock::now();
     if (debug) {
         generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         FILE *fp;
@@ -461,7 +455,8 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
 
 
-    //calcs the rotation angle around z axis for 2D scans
+   //calcs the rotation angle around z axis for 2D scans
+    auto extractionStart = std::chrono::high_resolution_clock::now();
     double z1;
     double z2;
     double maxCorrelation = 0;
@@ -478,10 +473,11 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
             }
             // test on dataset with N and N/2 and 0   first test + n/2
             tmpHolding.angle = std::fmod(-(z1 + z2) + 6 * M_PI + 0.0 * M_PI / (N),
-                                         2 * M_PI);
+                                          2 * M_PI);
             correlationOfAngle.push_back(tmpHolding);
         }
     }
+    auto extractionEnd = std::chrono::high_resolution_clock::now();
 
     std::sort(correlationOfAngle.begin(), correlationOfAngle.end(), compareTwoAngleCorrelation);
 
@@ -548,7 +544,9 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
 
     std::vector<int> out;
 
+    auto peakDetStart = std::chrono::high_resolution_clock::now();
     PeakFinder::findPeaks(correlationAveraged, out, true, 8.0);//was 4.0
+    auto peakDetEnd = std::chrono::high_resolution_clock::now();
 
 
 
@@ -587,6 +585,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
         returnVectorWithPotentialAngles.push_back(tmpPeak);
     }
 
+    if (timings) {
+        timings->spectrumTime = std::chrono::duration<double, std::milli>(spectrumEnd - spectrumStart).count();
+        timings->softDescriptorTime = std::chrono::duration<double, std::milli>(descriptorEnd - descriptorStart).count();
+        timings->rotationCorrelationTime = std::chrono::duration<double, std::milli>(correlationEnd - correlationStart).count();
+        timings->rotationExtractionTime = std::chrono::duration<double, std::milli>(extractionEnd - extractionStart).count();
+        timings->rotationPeakDetectionTime = std::chrono::duration<double, std::milli>(peakDetEnd - peakDetStart).count();
+    }
+
     return returnVectorWithPotentialAngles;
 }
 
@@ -594,12 +600,15 @@ std::vector<rotationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(double voxelData1Input[],
                                                                                double voxelData2Input[], bool debug,
                                                                                bool multipleRadii, bool useClahe,
-                                                                               bool useHamming) {
+                                                                               bool useHamming,
+                                                                               BenchmarkTimings2D* timings) {
 
+    auto spectrumStart = std::chrono::high_resolution_clock::now();
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
-                                                                     this->phase1, false);
+                                                                      this->phase1, false);
     double maximumScan2Magnitude = this->getSpectrumFromVoxelData2D(voxelData2Input, this->magnitude2,
-                                                                     this->phase2, false);
+                                                                      this->phase2, false);
+    auto spectrumEnd = std::chrono::high_resolution_clock::now();
 
 
     double globalMaximumMagnitude;
@@ -609,6 +618,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
         globalMaximumMagnitude = maximumScan2Magnitude;
     }
 
+    auto descriptorStart = std::chrono::high_resolution_clock::now();
     //normalize and fftshift
     for (int j = 0; j < N; j++) {
         for (int i = 0; i < N; i++) {
@@ -639,49 +649,42 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
         minRNumber = maxRNumber - 1;
     }
 
-    for (int r = minRNumber; r < maxRNumber; r++) {
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                double hammingCoeff = 1;
+      for (int r = minRNumber; r < maxRNumber; r++) {
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                int xIndex = std::round((double) r * xAngle[j * N + k] + bandwidth) - 1;
+                int yIndex = std::round((double) r * yAngle[j * N + k] + bandwidth) - 1;
                 resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
-                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude1Shifted[yIndex + N * xIndex];
                 resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
-                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude2Shifted[yIndex + N * xIndex];
             }
         }
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-        clahe->setClipLimit(3);
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
+            clahe->apply(magCLAHE1, magCLAHE1);
+            clahe->apply(magCLAHE2, magCLAHE2);
+        } else {
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
         }
 
-
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                double hammingCoeff = 1;
-                if (useHamming) {
-                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
-                }
-
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
                 resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE1.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
                 resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE2.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
             }
         }
     }
+    auto descriptorEnd = std::chrono::high_resolution_clock::now();
 
 
     // Step 1: Compute spherical harmonic coefficients (identical to correlationOfTwoSignalsInSO3)
@@ -700,12 +703,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
         this->sofftCorrelationObject.sigR[i] = resampledMagnitudeSO3_2[i];
         this->sofftCorrelationObject.sigI[i] = 0;
     }
+    auto correlationStart = std::chrono::high_resolution_clock::now();
     FST_semi_memo(this->sofftCorrelationObject.sigR, this->sofftCorrelationObject.sigI,
                   this->sofftCorrelationObject.patCoefR, this->sofftCorrelationObject.patCoefI,
                   bwIn, this->sofftCorrelationObject.seminaive_naive_table,
                   (double *) this->sofftCorrelationObject.workspace2, 0, bwIn,
                   &this->sofftCorrelationObject.dctPlan, &this->sofftCorrelationObject.fftPlan,
                   this->sofftCorrelationObject.weights);
+    auto correlationEnd = std::chrono::high_resolution_clock::now();
 
     // Debug: Save spherical harmonic coefficients
     if (debug) {
@@ -730,6 +735,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
 
     // Step 2: Compute 1D correlation as function of alpha (z-axis rotation)
     // C(alpha) = sum_{l,m} sigCoef*_lm * patCoef_lm * exp(-i*m*alpha)
+    auto extractionStart = std::chrono::high_resolution_clock::now();
 
     int nAlpha = N;
 
@@ -781,6 +787,7 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
 
         this->correlation1D[k] = corrR;
     }
+    auto extractionEnd = std::chrono::high_resolution_clock::now();
 
     // Debug: Save 1D correlation and Pm values
     if (debug) {
@@ -827,7 +834,9 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
     
     // Find peaks on rotated array
     std::vector<int> out;
+    auto peakDetStart = std::chrono::high_resolution_clock::now();
     PeakFinder::findPeaks(correlationAveraged, out, true, 8.0);
+    auto peakDetEnd = std::chrono::high_resolution_clock::now();
     
     // Rotate back and adjust peak indices
     std::rotate(correlationAveraged.begin(),
@@ -848,6 +857,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations1Angle(dou
         tmpPeak.peakCorrelation = correlationAveraged[out[i]];
         tmpPeak.covariance = 0.05;
         returnVectorWithPotentialAngles.push_back(tmpPeak);
+    }
+
+    if (timings) {
+        timings->spectrumTime = std::chrono::duration<double, std::milli>(spectrumEnd - spectrumStart).count();
+        timings->softDescriptorTime = std::chrono::duration<double, std::milli>(descriptorEnd - descriptorStart).count();
+        timings->rotationCorrelationTime = std::chrono::duration<double, std::milli>(correlationEnd - correlationStart).count();
+        timings->rotationExtractionTime = std::chrono::duration<double, std::milli>(extractionEnd - extractionStart).count();
+        timings->rotationPeakDetectionTime = std::chrono::duration<double, std::milli>(peakDetEnd - peakDetStart).count();
     }
 
     return returnVectorWithPotentialAngles;
@@ -899,44 +916,37 @@ softRegistrationClass::compute1AngleCorrelationArraySO3(double voxelData1Input[]
     }
 
     for (int r = minRNumber; r < maxRNumber; r++) {
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                double hammingCoeff = 1;
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                int xIndex = std::round((double) r * xAngle[j * N + k] + bandwidth) - 1;
+                int yIndex = std::round((double) r * yAngle[j * N + k] + bandwidth) - 1;
                 resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
-                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude1Shifted[yIndex + N * xIndex];
                 resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
-                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude2Shifted[yIndex + N * xIndex];
             }
         }
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-        clahe->setClipLimit(3);
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
+            clahe->apply(magCLAHE1, magCLAHE1);
+            clahe->apply(magCLAHE2, magCLAHE2);
+        } else {
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
         }
 
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                double hammingCoeff = 1;
-                if (useHamming) {
-                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
-                }
-
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
                 resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE1.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
                 resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE2.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
             }
         }
     }
@@ -1048,45 +1058,38 @@ softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Inpu
         minRNumber = maxRNumber - 1;
     }
 
-    for (int r = minRNumber; r < maxRNumber; r++) {
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                int xIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::cos(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                int yIndex = std::round((double) r * std::sin(thetaIncrement((double) j, bandwidth)) *
-                                        std::sin(phiIncrement((double) k, bandwidth)) + bandwidth) - 1;
-                double hammingCoeff = 1;
+   for (int r = minRNumber; r < maxRNumber; r++) {
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
+                int xIndex = std::round((double) r * xAngle[j * N + k] + bandwidth) - 1;
+                int yIndex = std::round((double) r * yAngle[j * N + k] + bandwidth) - 1;
                 resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] =
-                        255 * magnitude1Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude1Shifted[yIndex + N * xIndex];
                 resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] =
-                        255 * magnitude2Shifted[yIndex + N * xIndex] * hammingCoeff;
+                        255 * magnitude2Shifted[yIndex + N * xIndex];
             }
         }
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magTMP1, CV_8UC1);
-        magTMP2.convertTo(magTMP2, CV_8UC1);
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-        clahe->setClipLimit(3);
         if (useClahe) {
-            clahe->apply(magTMP1, magTMP1);
-            clahe->apply(magTMP2, magTMP2);
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
+            clahe->apply(magCLAHE1, magCLAHE1);
+            clahe->apply(magCLAHE2, magCLAHE2);
+        } else {
+            magTMP1.convertTo(magCLAHE1, CV_8UC1);
+            magTMP2.convertTo(magCLAHE2, CV_8UC1);
         }
 
-        for (int j = 0; j < 2 * bandwidth; j++) {
-            for (int k = 0; k < 2 * bandwidth; k++) {
-                double hammingCoeff = 1;
-                if (useHamming) {
-                    hammingCoeff = 25.0 / 46.0 - (1.0 - 25.0 / 46.0) * cos(2 * M_PI * k / (2 * bandwidth));
-                }
-
+        for (int j = 0; j < N; j++) {
+            for (int k = 0; k < N; k++) {
                 resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP1.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE1.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
                 resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
-                                                                 ((double) magTMP2.data[j + k * bandwidth * 2]) /
-                                                                 255.0 * hammingCoeff;
+                                                                  ((double) magCLAHE2.data[j + k * bandwidth * 2]) /
+                                                                  255.0 * hammingCoeffs[k];
             }
         }
     }
@@ -1502,13 +1505,14 @@ softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Inpu
 
 std::vector<translationPeakfs2D>
 softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                 double voxelData2Input[],
-                                                                                 double cellSize,
-                                                                                 double normalizationFactor,
-                                                                                 bool debug,
-                                                                                 int numberOfRotationForDebug,
-                                                                                 double potentialNecessaryForPeak,
-                                                                                 bool benchmark) {
+                                                                                  double voxelData2Input[],
+                                                                                  double cellSize,
+                                                                                  double normalizationFactor,
+                                                                                  bool debug,
+                                                                                  int numberOfRotationForDebug,
+                                                                                  double potentialNecessaryForPeak,
+                                                                                  bool benchmark,
+                                                                                  BenchmarkTimings2D* timings) {
     //copy and normalize voxelDataInput
 
     auto totalTransStart = std::chrono::high_resolution_clock::now();
@@ -1516,123 +1520,91 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     double fft1Time = 0, fft2Time = 0, correlationTime = 0, ifftTime = 0;
     double fftshiftTime = 0, peakDetectionTime = 0, covarianceTime = 0;
 
-   if (benchmark) {
-        auto fft1Start = std::chrono::high_resolution_clock::now();
-        this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->complexSpectrum1Correlation,
-                                                      false, normalizationFactor);
-        auto fft1End = std::chrono::high_resolution_clock::now();
+    auto fft1Start = std::chrono::high_resolution_clock::now();
+    this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->complexSpectrum1Correlation,
+                                                  false, normalizationFactor);
+    auto fft1End = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
         fft1Time = std::chrono::duration<double, std::milli>(fft1End - fft1Start).count();
+    }
 
-        auto fft2Start = std::chrono::high_resolution_clock::now();
-        this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->complexSpectrum2Correlation,
-                                                      false, normalizationFactor);
-        auto fft2End = std::chrono::high_resolution_clock::now();
+    auto fft2Start = std::chrono::high_resolution_clock::now();
+    this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->complexSpectrum2Correlation,
+                                                  false, normalizationFactor);
+    auto fft2End = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
         fft2Time = std::chrono::duration<double, std::milli>(fft2End - fft2Start).count();
+    }
 
-        auto correlationStart = std::chrono::high_resolution_clock::now();
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int i = 0; i < this->correlationN; i++) {
-                int idx = j + this->correlationN * i;
-                double r1 = complexSpectrum1Correlation[idx][0];
-                double i1 = complexSpectrum1Correlation[idx][1];
-                double r2 = complexSpectrum2Correlation[idx][0];
-                double i2 = complexSpectrum2Correlation[idx][1];
-                resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
-                resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
-            }
+    auto correlationStart = std::chrono::high_resolution_clock::now();
+    for (int j = 0; j < this->correlationN; j++) {
+        for (int i = 0; i < this->correlationN; i++) {
+            int idx = j + this->correlationN * i;
+            double r1 = complexSpectrum1Correlation[idx][0];
+            double i1 = complexSpectrum1Correlation[idx][1];
+            double r2 = complexSpectrum2Correlation[idx][0];
+            double i2 = complexSpectrum2Correlation[idx][1];
+            resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
+            resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
         }
-        auto correlationEnd = std::chrono::high_resolution_clock::now();
+    }
+    auto correlationEnd = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
         correlationTime = std::chrono::duration<double, std::milli>(correlationEnd - correlationStart).count();
+    }
 
-        auto ifftStart = std::chrono::high_resolution_clock::now();
-        fftw_execute(planFourierToVoxel2DCorrelation);
-        auto ifftEnd = std::chrono::high_resolution_clock::now();
+    auto ifftStart = std::chrono::high_resolution_clock::now();
+    fftw_execute(planFourierToVoxel2DCorrelation);
+    auto ifftEnd = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
         ifftTime = std::chrono::duration<double, std::milli>(ifftEnd - ifftStart).count();
+    }
 
-        auto fftshiftStart = std::chrono::high_resolution_clock::now();
-        double maximumCorrelation = 0;
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int i = 0; i < this->correlationN; i++) {
-                int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
-                int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
-                double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
-                normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
-                resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
-                if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
-                    maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
-                }
-            }
-        }
-        auto fftshiftEnd = std::chrono::high_resolution_clock::now();
-        fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
-    } else {
-        this->getSpectrumFromVoxelData2DCorrelation(voxelData1Input, this->complexSpectrum1Correlation,
-                                                      false, normalizationFactor);
-
-        this->getSpectrumFromVoxelData2DCorrelation(voxelData2Input, this->complexSpectrum2Correlation,
-                                                      false, normalizationFactor);
-
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int i = 0; i < this->correlationN; i++) {
-                int idx = j + this->correlationN * i;
-                double r1 = complexSpectrum1Correlation[idx][0];
-                double i1 = complexSpectrum1Correlation[idx][1];
-                double r2 = complexSpectrum2Correlation[idx][0];
-                double i2 = complexSpectrum2Correlation[idx][1];
-                resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
-                resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
-            }
-        }
-
-        fftw_execute(planFourierToVoxel2DCorrelation);
-
-        double maximumCorrelation = 0;
-        for (int j = 0; j < this->correlationN; j++) {
-            for (int i = 0; i < this->correlationN; i++) {
-                int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
-                int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
-                double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
-                normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
-                resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
-                        resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
-                if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
-                    maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
-                }
+    auto fftshiftStart = std::chrono::high_resolution_clock::now();
+    double maximumCorrelation = 0;
+    for (int j = 0; j < this->correlationN; j++) {
+        for (int i = 0; i < this->correlationN; i++) {
+            int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
+            int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
+            double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
+            normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+            resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
+                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
+                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
+                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1] *
+                    resultingShiftPeaks2DCorrelation[j + this->correlationN * i][1]);
+            if (maximumCorrelation < resultingCorrelationDouble[indexY + this->correlationN * indexX]) {
+                maximumCorrelation = resultingCorrelationDouble[indexY + this->correlationN * indexX];
             }
         }
     }
+    auto fftshiftEnd = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
+        fftshiftTime = std::chrono::duration<double, std::milli>(fftshiftEnd - fftshiftStart).count();
+    }
 
-    if (benchmark) {
-        auto peakDetectionStart = std::chrono::high_resolution_clock::now();
-        std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
-                cellSize, potentialNecessaryForPeak, 0.05, benchmark);
-        auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+    auto peakDetectionStart = std::chrono::high_resolution_clock::now();
+    std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
+            cellSize, potentialNecessaryForPeak, 0.05, benchmark);
+    auto peakDetectionEnd = std::chrono::high_resolution_clock::now();
+    if (benchmark || timings) {
         peakDetectionTime = std::chrono::duration<double, std::milli>(peakDetectionEnd - peakDetectionStart).count();
+    }
 
+    if (benchmark || timings) {
         auto totalTransEnd = std::chrono::high_resolution_clock::now();
         double totalTransTime = std::chrono::duration<double, std::milli>(totalTransEnd - totalTransStart).count();
 
-        std::cerr << "  FFT1: " << fft1Time << " ms" << std::endl;
-        std::cerr << "  FFT2: " << fft2Time << " ms" << std::endl;
-        std::cerr << "  Complex correlation: " << correlationTime << " ms" << std::endl;
-        std::cerr << "  IFFT: " << ifftTime << " ms" << std::endl;
-        std::cerr << "  fftshift + magnitude: " << fftshiftTime << " ms" << std::endl;
-        std::cerr << "  Peak detection: " << peakDetectionTime << " ms" << std::endl;
-        std::cerr << "  Total translation: " << totalTransTime << " ms" << std::endl;
-
-        return potentialTranslations;
-    } else {
-        std::vector<translationPeakfs2D> potentialTranslations = this->peakDetectionOf2DCorrelationFindPeaksLibrary(
-                cellSize, potentialNecessaryForPeak, 0.05, false);
-        return potentialTranslations;
+        timings->transFft1Time += fft1Time;
+        timings->transFft2Time += fft2Time;
+        timings->transCorrelationTime += correlationTime;
+        timings->transIfftTime += ifftTime;
+        timings->transFftshiftTime += fftshiftTime;
+        timings->transPeakDetectionTime += peakDetectionTime;
+        timings->totalTranslationTime += totalTransTime;
     }
+
+    return potentialTranslations;
 }
 
 Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
@@ -1895,26 +1867,27 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 }
 
 std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxelsSO3(double voxelData1Input[],
-                                                                                         double voxelData2Input[],
-                                                                                         double cellSize,
-                                                                                         bool useGauss,
-                                                                                         bool debug,
-                                                                                         double potentialNecessaryForPeak,
-                                                                                         bool multipleRadii,
-                                                                                         bool useClahe,
-                                                                                         bool useHamming,
-                                                                                         bool benchmark) {
+                                                                                          double voxelData2Input[],
+                                                                                          double cellSize,
+                                                                                          bool useGauss,
+                                                                                          bool debug,
+                                                                                          double potentialNecessaryForPeak,
+                                                                                          bool multipleRadii,
+                                                                                          bool useClahe,
+                                                                                          bool useHamming,
+                                                                                          bool benchmark,
+                                                                                          BenchmarkTimings2D* timings) {
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
 
+    BenchmarkTimings2D localTimings;
+    BenchmarkTimings2D* pTimings = (benchmark || timings) ? &localTimings : nullptr;
+
     auto totalStart = std::chrono::high_resolution_clock::now();
 
-    auto rotationStart = std::chrono::high_resolution_clock::now();
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
-                                                                                  debug, multipleRadii, useClahe,
-                                                                                  useHamming);
-    auto rotationEnd = std::chrono::high_resolution_clock::now();
-    double rotationTime = std::chrono::duration<double, std::milli>(rotationEnd - rotationStart).count();
+                                                                                   debug, multipleRadii, useClahe,
+                                                                                   useHamming, pTimings);
 
     int numAngles = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAngles);
@@ -1924,6 +1897,7 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
 
     double totalPreprocessingTime = 0;
     double totalTranslationTime = 0;
+    std::vector<double> transPerAngleTimes;
 
     for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
         auto &estimatedAngle = estimatedAnglePeak[angleIndex];
@@ -1950,13 +1924,15 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         auto preprocessEnd = std::chrono::high_resolution_clock::now();
         totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
 
-        auto translationStart = std::chrono::high_resolution_clock::now();
+        auto angleStart = std::chrono::high_resolution_clock::now();
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
-                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark);
-        auto translationEnd = std::chrono::high_resolution_clock::now();
-        totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
+                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings);
+        auto angleEnd = std::chrono::high_resolution_clock::now();
+        double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
+        totalTranslationTime += angleTime;
+        transPerAngleTimes.push_back(angleTime);
 
         transformationPeakfs2D transformationPeakTMP;
         transformationPeakTMP.potentialRotation = estimatedAngle;
@@ -1968,41 +1944,82 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
     auto totalEnd = std::chrono::high_resolution_clock::now();
     double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
 
-    if (benchmark) {
-        std::cerr << "=== BENCHMARK: OLD Method (SO3) ===" << std::endl;
-        std::cerr << "Rotation detection: " << rotationTime << " ms" << std::endl;
-        std::cerr << "Translation detection: " << totalTranslationTime << " ms (" 
-                  << (numAngles > 0 ? (totalTranslationTime / numAngles) : 0) << " ms/angle, " << numAngles << " angles)" << std::endl;
-        std::cerr << "Image preprocessing: " << totalPreprocessingTime << " ms (" 
-                  << (numAngles > 0 ? (totalPreprocessingTime / numAngles) : 0) << " ms/angle)" << std::endl;
-        std::cerr << "Total time: " << totalTime << " ms" << std::endl;
-        std::cerr << std::endl;
+    int totalTransPeaks = 0;
+    for (const auto& sol : listOfTransformations) {
+        totalTransPeaks += sol.potentialTranslations.size();
+    }
+
+    if (benchmark || timings) {
+        localTimings.numAngles = numAngles;
+        localTimings.totalTransPeaks = totalTransPeaks;
+        localTimings.totalTranslationTime = totalTranslationTime;
+        localTimings.transPreprocessingTime = totalPreprocessingTime;
+        localTimings.transPerAngleTimes = transPerAngleTimes;
+        localTimings.totalTime = totalTime;
+
+        if (timings) {
+            *timings = localTimings;
+        }
+
+        if (benchmark) {
+            std::cerr << "\n=== BENCHMARK: OLD Method (SO3) ===" << std::endl;
+            std::cerr << "  --- 2D All Solutions Summary ---" << std::endl;
+            std::cerr << "    Rotation peaks found:           " << numAngles << std::endl;
+            std::cerr << "    Translation peaks found:        " << totalTransPeaks << std::endl;
+            std::cerr << "    2D Spectrum (FFT):              " << localTimings.spectrumTime << " ms" << std::endl;
+            std::cerr << "    SOFT descriptor projection:     " << localTimings.softDescriptorTime << " ms" << std::endl;
+            std::cerr << "    SOFT correlation:               " << localTimings.rotationCorrelationTime << " ms" << std::endl;
+            std::cerr << "    1D curve extraction:            " << localTimings.rotationExtractionTime << " ms" << std::endl;
+            std::cerr << "    Rotation peak detection:        " << localTimings.rotationPeakDetectionTime << " ms" << std::endl;
+            std::cerr << "    --- Translation breakdown (" << numAngles << " angles) ---" << std::endl;
+            if (numAngles > 0) {
+                double perAngle = 1.0 / numAngles;
+                std::cerr << "      Preprocessing (copy+rotate): " << localTimings.transPreprocessingTime << " ms ("
+                          << (localTimings.transPreprocessingTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation FFT1:           " << localTimings.transFft1Time << " ms ("
+                          << (localTimings.transFft1Time * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation FFT2:           " << localTimings.transFft2Time << " ms ("
+                          << (localTimings.transFft2Time * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Complex correlation:        " << localTimings.transCorrelationTime << " ms ("
+                          << (localTimings.transCorrelationTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      IFFT:                       " << localTimings.transIfftTime << " ms ("
+                          << (localTimings.transIfftTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      fftshift + magnitude:       " << localTimings.transFftshiftTime << " ms ("
+                          << (localTimings.transFftshiftTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation peak detection: " << localTimings.transPeakDetectionTime << " ms ("
+                          << (localTimings.transPeakDetectionTime * perAngle) << " ms/angle)" << std::endl;
+            }
+            std::cerr << "    Total translation:            " << localTimings.totalTranslationTime << " ms" << std::endl;
+            std::cerr << "    Total time:                   " << localTimings.totalTime << " ms" << std::endl;
+            std::cerr << std::endl;
+        }
     }
 
     return listOfTransformations;
 }
 
 std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxelsDirect(double voxelData1Input[],
-                                                                                            double voxelData2Input[],
-                                                                                            double cellSize,
-                                                                                            bool useGauss,
-                                                                                            bool debug,
-                                                                                            double potentialNecessaryForPeak,
-                                                                                            bool multipleRadii,
-                                                                                            bool useClahe,
-                                                                                            bool useHamming,
-                                                                                            bool benchmark) {
-   std::vector<transformationPeakfs2D> listOfTransformations;
+                                                                                             double voxelData2Input[],
+                                                                                             double cellSize,
+                                                                                             bool useGauss,
+                                                                                             bool debug,
+                                                                                             double potentialNecessaryForPeak,
+                                                                                             bool multipleRadii,
+                                                                                             bool useClahe,
+                                                                                             bool useHamming,
+                                                                                             bool benchmark,
+                                                                                             BenchmarkTimings2D* timings) {
+    std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
+
+    BenchmarkTimings2D localTimings;
+    BenchmarkTimings2D* pTimings = (benchmark || timings) ? &localTimings : nullptr;
 
     auto totalStart = std::chrono::high_resolution_clock::now();
 
-    auto rotationStart = std::chrono::high_resolution_clock::now();
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations1Angle(voxelData1Input, voxelData2Input,
-                                                                                          debug, multipleRadii, useClahe,
-                                                                                          useHamming);
-    auto rotationEnd = std::chrono::high_resolution_clock::now();
-    double rotationTime = std::chrono::duration<double, std::milli>(rotationEnd - rotationStart).count();
+                                                                                           debug, multipleRadii, useClahe,
+                                                                                           useHamming, pTimings);
 
     int numAngles = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAngles);
@@ -2012,6 +2029,7 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
 
     double totalPreprocessingTime = 0;
     double totalTranslationTime = 0;
+    std::vector<double> transPerAngleTimes;
 
     for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
         auto &estimatedAngle = estimatedAnglePeak[angleIndex];
@@ -2038,13 +2056,15 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
         auto preprocessEnd = std::chrono::high_resolution_clock::now();
         totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
 
-        auto translationStart = std::chrono::high_resolution_clock::now();
+        auto angleStart = std::chrono::high_resolution_clock::now();
         std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                         voxelData1_local.data(), voxelData2_local.data(),
-                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark);
-        auto translationEnd = std::chrono::high_resolution_clock::now();
-        totalTranslationTime += std::chrono::duration<double, std::milli>(translationEnd - translationStart).count();
+                        cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings);
+        auto angleEnd = std::chrono::high_resolution_clock::now();
+        double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
+        totalTranslationTime += angleTime;
+        transPerAngleTimes.push_back(angleTime);
 
         transformationPeakfs2D transformationPeakTMP;
         transformationPeakTMP.potentialRotation = estimatedAngle;
@@ -2056,15 +2076,55 @@ std::vector<transformationPeakfs2D> softRegistrationClass::registrationOfTwoVoxe
     auto totalEnd = std::chrono::high_resolution_clock::now();
     double totalTime = std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
 
-    if (benchmark) {
-        std::cerr << "=== BENCHMARK: NEW Method (Direct) ===" << std::endl;
-        std::cerr << "Rotation detection: " << rotationTime << " ms" << std::endl;
-        std::cerr << "Translation detection: " << totalTranslationTime << " ms (" 
-                  << (numAngles > 0 ? (totalTranslationTime / numAngles) : 0) << " ms/angle, " << numAngles << " angles)" << std::endl;
-        std::cerr << "Image preprocessing: " << totalPreprocessingTime << " ms (" 
-                  << (numAngles > 0 ? (totalPreprocessingTime / numAngles) : 0) << " ms/angle)" << std::endl;
-        std::cerr << "Total time: " << totalTime << " ms" << std::endl;
-        std::cerr << std::endl;
+    int totalTransPeaks = 0;
+    for (const auto& sol : listOfTransformations) {
+        totalTransPeaks += sol.potentialTranslations.size();
+    }
+
+    if (benchmark || timings) {
+        localTimings.numAngles = numAngles;
+        localTimings.totalTransPeaks = totalTransPeaks;
+        localTimings.totalTranslationTime = totalTranslationTime;
+        localTimings.transPreprocessingTime = totalPreprocessingTime;
+        localTimings.transPerAngleTimes = transPerAngleTimes;
+        localTimings.totalTime = totalTime;
+
+        if (timings) {
+            *timings = localTimings;
+        }
+
+        if (benchmark) {
+            std::cerr << "\n=== BENCHMARK: NEW Method (Direct) ===" << std::endl;
+            std::cerr << "  --- 2D All Solutions Summary ---" << std::endl;
+            std::cerr << "    Rotation peaks found:           " << numAngles << std::endl;
+            std::cerr << "    Translation peaks found:        " << totalTransPeaks << std::endl;
+            std::cerr << "    2D Spectrum (FFT):              " << localTimings.spectrumTime << " ms" << std::endl;
+            std::cerr << "    SOFT descriptor projection:     " << localTimings.softDescriptorTime << " ms" << std::endl;
+            std::cerr << "    SOFT correlation:               " << localTimings.rotationCorrelationTime << " ms" << std::endl;
+            std::cerr << "    1D curve extraction:            " << localTimings.rotationExtractionTime << " ms" << std::endl;
+            std::cerr << "    Rotation peak detection:        " << localTimings.rotationPeakDetectionTime << " ms" << std::endl;
+            std::cerr << "    --- Translation breakdown (" << numAngles << " angles) ---" << std::endl;
+            if (numAngles > 0) {
+                double perAngle = 1.0 / numAngles;
+                std::cerr << "      Preprocessing (copy+rotate): " << localTimings.transPreprocessingTime << " ms ("
+                          << (localTimings.transPreprocessingTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation FFT1:           " << localTimings.transFft1Time << " ms ("
+                          << (localTimings.transFft1Time * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation FFT2:           " << localTimings.transFft2Time << " ms ("
+                          << (localTimings.transFft2Time * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Complex correlation:        " << localTimings.transCorrelationTime << " ms ("
+                          << (localTimings.transCorrelationTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      IFFT:                       " << localTimings.transIfftTime << " ms ("
+                          << (localTimings.transIfftTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      fftshift + magnitude:       " << localTimings.transFftshiftTime << " ms ("
+                          << (localTimings.transFftshiftTime * perAngle) << " ms/angle)" << std::endl;
+                std::cerr << "      Translation peak detection: " << localTimings.transPeakDetectionTime << " ms ("
+                          << (localTimings.transPeakDetectionTime * perAngle) << " ms/angle)" << std::endl;
+            }
+            std::cerr << "    Total translation:            " << localTimings.totalTranslationTime << " ms" << std::endl;
+            std::cerr << "    Total time:                   " << localTimings.totalTime << " ms" << std::endl;
+            std::cerr << std::endl;
+        }
     }
 
     return listOfTransformations;
@@ -2464,12 +2524,6 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
     }
         auto filteringEnd = std::chrono::high_resolution_clock::now();
         filteringTime = std::chrono::duration<double, std::milli>(filteringEnd - filteringStart).count();
-
-        std::cerr << "    Copy + find max: " << copyTime << " ms" << std::endl;
-        std::cerr << "    Normalize: " << normalizeTime << " ms" << std::endl;
-        std::cerr << "    Persistence calculation: " << persistenceTime << " ms" << std::endl;
-        std::cerr << "    Peak filtering: " << filteringTime << " ms" << std::endl;
-        std::cerr << "    Peaks found: " << tmpTranslations.size() << std::endl;
 
         free(current2DCorrelation);
         return tmpTranslations;

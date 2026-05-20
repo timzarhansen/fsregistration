@@ -151,37 +151,54 @@ public:
         planVoxelToFourier3DCorrelation = fftw_plan_dft_3d(this->correlationN, this->correlationN, this->correlationN,
                                                            inputSpacialDataCorrelation,
                                                            spectrumOutCorrelation, FFTW_FORWARD, FFTW_ESTIMATE);
-        //precalculating KD tree for faster neighbour calculation
+        // Precompute quaternion tables for direct z-y-z formula
+        int S = bwOut * 2;
+        quatTableSizeBeta = S;
+        quatTableSizeSum = 4 * bwOut;
+        quatTableDiffOffset = 2 * bwOut - 1;
+
+        quatCosBeta2 = (double*) malloc(sizeof(double) * S);
+        quatSinBeta2 = (double*) malloc(sizeof(double) * S);
+        quatCosSum = (double*) malloc(sizeof(double) * quatTableSizeSum);
+        quatSinSum = (double*) malloc(sizeof(double) * quatTableSizeSum);
+        quatCosDiff = (double*) malloc(sizeof(double) * quatTableSizeSum);
+        quatSinDiff = (double*) malloc(sizeof(double) * quatTableSizeSum);
+
+        for (int i = 0; i < S; i++) {
+            double beta2 = i * M_PI / (2.0 * N);
+            quatCosBeta2[i] = std::cos(beta2);
+            quatSinBeta2[i] = std::sin(beta2);
+        }
+        for (int s = 0; s < quatTableSizeSum; s++) {
+            double sa = s * M_PI / N;
+            quatCosSum[s] = std::cos(sa);
+            quatSinSum[s] = std::sin(sa);
+        }
+        for (int d = -(2 * bwOut - 1); d <= 2 * bwOut - 1; d++) {
+            double da = d * M_PI / N;
+            quatCosDiff[d + quatTableDiffOffset] = std::cos(da);
+            quatSinDiff[d + quatTableDiffOffset] = std::sin(da);
+        }
+
+        // Precompute KD tree using direct quaternion formula
         std::vector<My4DPoint> listOfQuaternionCorrelation;
-        for (int i = 0; i < bwOut * 2; i++) {
-            for (int j = 0; j < bwOut * 2; j++) {
-                for (int k = 0; k < bwOut * 2; k++) {
-                    Eigen::AngleAxisd rotation_vectorz1(k * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-                    Eigen::AngleAxisd rotation_vectory(i * M_PI / (N), Eigen::Vector3d(0, 1, 0));
-                    Eigen::AngleAxisd rotation_vectorz2(j * 2 * M_PI / (N), Eigen::Vector3d(0, 0, 1));
-
-                    Eigen::Matrix3d tmpMatrix3d =
-                            rotation_vectorz1.toRotationMatrix().inverse() *
-                            rotation_vectory.toRotationMatrix().inverse() *
-                            rotation_vectorz2.toRotationMatrix().inverse();
-                    Eigen::Quaterniond quaternionResult(tmpMatrix3d);
-                    quaternionResult.normalize();
-
-                    if (quaternionResult.w() < 0) {
-                        Eigen::Quaterniond tmpQuad = quaternionResult;
-                        quaternionResult.w() = -tmpQuad.w();
-                        quaternionResult.x() = -tmpQuad.x();
-                        quaternionResult.y() = -tmpQuad.y();
-                        quaternionResult.z() = -tmpQuad.z();
+        listOfQuaternionCorrelation.reserve(S * S * S);
+        for (int i = 0; i < S; i++) {
+            double cb = quatCosBeta2[i];
+            double sb = quatSinBeta2[i];
+            for (int j = 0; j < S; j++) {
+                for (int k = 0; k < S; k++) {
+                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
+                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
+                    double qy = -sb * quatCosSum[j + k];
+                    double qz = -cb * quatSinSum[j + k];
+                    if (qw < 0) {
+                        qw = -qw;
+                        qx = -qx;
+                        qy = -qy;
+                        qz = -qz;
                     }
-                    My4DPoint currentPoint;
-                    currentPoint.correlation = 0;
-                    currentPoint[0] = quaternionResult.w();
-                    currentPoint[1] = quaternionResult.x();
-                    currentPoint[2] = quaternionResult.y();
-                    currentPoint[3] = quaternionResult.z();
-
-                    listOfQuaternionCorrelation.push_back(currentPoint);
+                    listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, 0.0);
                 }
             }
         }
@@ -233,10 +250,56 @@ public:
             //            std::cout << ni.size() << std::endl;
             this->lookupTableForCorrelations.push_back(ni);
         }
+
+        // Precompute spherical projection lookup tables for 3D descriptor projection
+        int bandwidth = N / 2;
+        sinTheta3D = (double*) malloc(sizeof(double) * N);
+        cosTheta3D = (double*) malloc(sizeof(double) * N);
+        sinPhi3D = (double*) malloc(sizeof(double) * N);
+        cosPhi3D = (double*) malloc(sizeof(double) * N);
+        xAngle3D = (double*) malloc(sizeof(double) * N * N);
+        yAngle3D = (double*) malloc(sizeof(double) * N * N);
+        zAngle3D = (double*) malloc(sizeof(double) * N * N);
+
+        for (int i = 0; i < N; i++) {
+            double theta = M_PI * i / (2.0 * (bandwidth - 1));
+            sinTheta3D[i] = std::sin(theta);
+            cosTheta3D[i] = std::cos(theta);
+        }
+        for (int j = 0; j < N; j++) {
+            double phi = M_PI * j / bandwidth;
+            sinPhi3D[j] = std::sin(phi);
+            cosPhi3D[j] = std::cos(phi);
+        }
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                xAngle3D[i * N + j] = sinTheta3D[i] * cosPhi3D[j];
+                yAngle3D[i * N + j] = sinTheta3D[i] * sinPhi3D[j];
+                zAngle3D[i * N + j] = cosTheta3D[i];
+            }
+        }
+
+        // Reusable OpenCV objects
+        clahe3D = cv::createCLAHE();
+        magCLAHE1_3D = cv::Mat(N, N, CV_8UC1);
+        magCLAHE2_3D = cv::Mat(N, N, CV_8UC1);
     }
 
     ~softRegistrationClass3D() {
         sofftCorrelationObject3D.~softCorrelationClass3D();
+        free(sinTheta3D);
+        free(cosTheta3D);
+        free(sinPhi3D);
+        free(cosPhi3D);
+        free(xAngle3D);
+        free(yAngle3D);
+        free(zAngle3D);
+        free(quatCosBeta2);
+        free(quatSinBeta2);
+        free(quatCosSum);
+        free(quatSinSum);
+        free(quatCosDiff);
+        free(quatSinDiff);
 
 
         //        free(this->resultingCorrelationDouble);
@@ -372,6 +435,31 @@ private: //here everything is created. malloc is done in the constructor
     fftw_plan planFourierToVoxel3DCorrelation;
     //    kdt::KDTree<My4DPoint> *rotationKDTree;
     std::vector<std::vector<int> > lookupTableForCorrelations;
+
+    // Precomputed spherical projection lookup tables
+    double* sinTheta3D;
+    double* cosTheta3D;
+    double* sinPhi3D;
+    double* cosPhi3D;
+    double* xAngle3D;
+    double* yAngle3D;
+    double* zAngle3D;
+
+    // Reusable OpenCV objects
+    cv::Ptr<cv::CLAHE> clahe3D;
+    cv::Mat magCLAHE1_3D;
+    cv::Mat magCLAHE2_3D;
+
+    // Precomputed quaternion tables for direct z-y-z formula
+    int quatTableSizeBeta;
+    int quatTableSizeSum;
+    int quatTableDiffOffset;
+    double* quatCosBeta2;
+    double* quatSinBeta2;
+    double* quatCosSum;
+    double* quatSinSum;
+    double* quatCosDiff;
+    double* quatSinDiff;
 };
 
 #endif //FSREGISTRATION_SOFTREGISTRATIONCLASS3D_H
