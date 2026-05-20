@@ -13,4 +13,5 @@ cmake-build-test
 cmake-build-debug
 install
 log
+weights/
 

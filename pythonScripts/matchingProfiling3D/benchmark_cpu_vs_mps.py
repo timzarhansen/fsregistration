@@ -189,9 +189,10 @@ def main():
     geo_cfg = make_geo_cfg()
     geo_cfg.coarse_matching.num_correspondences = 512
 
-    weights_path = os.path.join(ml_registration_path, 'hybridpoint/weights_for_hybrid/3dmatch.tar')
+    weights_path = os.path.join(root_dir, 'weights', 'hybridpoint', 'hybridpoint-3dmatch.pth')
     if not os.path.exists(weights_path):
         print(f"Error: HybridPoint pretrained weights not found at {weights_path}")
+        print("See src/fsregistration/weights/README.md for download instructions.")
         sys.exit(1)
 
     device_cpu = torch.device('cpu')

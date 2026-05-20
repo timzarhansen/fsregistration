@@ -179,10 +179,11 @@ def main():
     model = RegTR(regtr_cfg).to(device)
 
     # Load pretrained weights
-    weights_path = project_root / 'ml_registration' / 'regtr' / 'trained_models' / '3dmatch' / 'ckpt' / 'model-best.pth'
+    weights_path = project_root / 'weights' / 'regtr' / 'regtr-3dmatch.pth'
     if not os.path.exists(weights_path):
         print(f"Warning: Pretrained weights not found at {weights_path}")
         print("Please download from: https://github.com/yewzijian/RegTR/releases")
+        print("See src/fsregistration/weights/README.md for details.")
         print("Continuing without loading weights...")
     else:
         state = torch.load(weights_path, map_location=device)

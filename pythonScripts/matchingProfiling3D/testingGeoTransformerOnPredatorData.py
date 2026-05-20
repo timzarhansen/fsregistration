@@ -163,10 +163,11 @@ def main():
     model = create_geo_model(geo_cfg).to(device)
 
     # Load pretrained weights
-    weights_path = '../../ml_registration/geotransformer/weights/geotransformer-3dmatch.pth.tar'
+    weights_path = os.path.join(root_dir, 'weights', 'geotransformer', 'geotransformer-3dmatch.pth')
     if not os.path.exists(weights_path):
         print(f"Warning: Pretrained weights not found at {weights_path}")
         print("Please download from: https://github.com/qinzheng93/GeoTransformer/releases")
+        print("See src/fsregistration/weights/README.md for details.")
         print("Continuing without loading weights...")
     else:
         state_dict = torch.load(weights_path, map_location=device)

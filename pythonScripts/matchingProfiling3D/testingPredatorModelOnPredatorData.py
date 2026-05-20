@@ -226,9 +226,12 @@ def main():
     model = KPFCNN(config).to(device)
 
     # Load pretrained weights
-    weights_path = '/Users/timhansen/Documents/dataFolder/3dmatch/models/predator/data/weights/indoor.pth'
+    root_dir = str(Path(__file__).resolve().parent.parent)
+    weights_path = os.path.join(root_dir, 'weights', 'predator', 'predator-indoor.pth')
     if not os.path.exists(weights_path):
-        raise FileNotFoundError(f"Pretrained weights not found at {weights_path}")
+        print(f"Warning: Pretrained weights not found at {weights_path}")
+        print("See src/fsregistration/weights/README.md for download instructions.")
+        sys.exit(1)
     state = torch.load(weights_path, map_location=device)
     if isinstance(state, dict) and 'state_dict' in state:
         model.load_state_dict(state['state_dict'])

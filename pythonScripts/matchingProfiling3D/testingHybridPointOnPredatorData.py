@@ -178,15 +178,14 @@ def main():
     
     model = create_model(geo_cfg).to(device)
 
-    # Load HybridPoint pretrained weights (already available locally)
-    weights_path = os.path.join(ml_registration_path, 'hybridpoint/weights_for_hybrid/3dmatch.tar')
+    # Load HybridPoint pretrained weights
+    weights_path = os.path.join(root_dir, 'weights', 'hybridpoint', 'hybridpoint-3dmatch.pth')
     if not os.path.exists(weights_path):
         print(f"Error: HybridPoint pretrained weights not found at {weights_path}")
-        print("Weights should be included in the HybridPoint repository")
+        print("See src/fsregistration/weights/README.md for download instructions.")
         sys.exit(1)
     
     try:
-        # Load weights directly (file is .pth.tar but actually just torch.save() output, not a tar archive)
         state_dict = torch.load(weights_path, map_location=device)
         model.load_state_dict(state_dict["model"], strict=False)
         print(f"Loaded HybridPoint pretrained weights from {weights_path}")
