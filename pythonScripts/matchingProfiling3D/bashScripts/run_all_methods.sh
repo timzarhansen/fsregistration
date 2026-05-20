@@ -10,7 +10,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Available methods
-ALL_METHODS="fpfh icp geotransformer regtr hybridpoint pointreggpt"
+ALL_METHODS="fpfh icp geotransformer regtr hybridpoint pointreggpt soft"
 
 # Parse methods from arguments or use all
 if [ $# -gt 0 ]; then
@@ -62,6 +62,11 @@ run_method() {
             bash "$SCRIPT_DIR/runPointRegGPT_batch.sh" &
             PIDS+=($!)
             ;;
+        soft)
+            echo "[START] SOFT"
+            bash "$SCRIPT_DIR/runSoft_batch.sh" &
+            PIDS+=($!)
+            ;;
         *)
             echo "[ERROR] Unknown method: $method"
             echo "Available methods: $ALL_METHODS"
@@ -97,3 +102,4 @@ echo "  outputFiles/geotransformer/outfile_*.csv"
 echo "  outputFiles/regtr/outfile_*.csv"
 echo "  outputFiles/hybridpoint/outfile_*.csv"
 echo "  outputFiles/pointreggpt/outfile_*.csv"
+echo "  outputFiles/soft/outfile_*.csv"
