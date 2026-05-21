@@ -20,9 +20,11 @@ find_package(Eigen3)
 
 
 find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(soft20 REQUIRED)
 find_package(OpenCV 4.7 REQUIRED )
 find_package(PCL 1.14 REQUIRED )
+find_package(CGAL REQUIRED)
 
 # GPU-accelerated correlation dependencies (optional)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
@@ -32,7 +34,6 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 
 rosidl_generate_interfaces(fsregistration
@@ -211,6 +212,45 @@ install(TARGETS
         DESTINATION lib/${PROJECT_NAME}
 )
 
+
+################################################################################
+# pybind11 Python module for SOFT registration
+################################################################################
+
+pybind11_add_module(pybind_registration_3d
+        src/pybind_registration_3d.cpp
+        src/softRegistrationClass3D.cpp
+        src/softCorrelationClass3D.cpp
+        src/generalHelpfulTools.cpp
+        find-peaks/src/union_find.cpp
+)
+
+target_include_directories(pybind_registration_3d PRIVATE
+        include
+        find-peaks/include
+        ${OpenCV_INCLUDE_DIRS}
+        ${PCL_INCLUDE_DIRS}
+)
+
+target_link_libraries(pybind_registration_3d
+        soft20::soft20
+        findpeaks
+        generalhelpfullib
+        ${OpenCV_LIBS}
+        fftw3
+        ${PCL_LIBRARIES}
+        CGAL::CGAL
+        OpenMP::OpenMP_CXX
+)
+
+ament_target_dependencies(pybind_registration_3d
+        tf2
+        Eigen3
+)
+
+install(TARGETS pybind_registration_3d
+        DESTINATION lib/fsregistration
+)
 
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
