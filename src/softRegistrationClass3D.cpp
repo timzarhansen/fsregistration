@@ -388,26 +388,46 @@ softRegistrationClass3D::sofftRegistrationVoxel3DOneSolution(double voxelData1In
         listOfQuaternionCorrelation.reserve(S * S * S);
         double invRange = 1.0 / (maximumCorrelation - minimumCorrelation);
         int flatIdx = 0;
+
         for (int i = 0; i < S; i++) {
+            // Beta/Y-axis angle depends purely on i
             double cb = quatCosBeta2[i];
             double sb = quatSinBeta2[i];
+
             for (int j = 0; j < S; j++) {
-                double cosSA = quatCosSum[j + i];
-                double sinSA = quatSinSum[j + i];
                 for (int k = 0; k < S; k++) {
                     correlationCurrent =
                             (NORM(resultingCorrelationComplex[flatIdx]) -
                              minimumCorrelation) * invRange;
-                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
-                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
-                    double qy = -sb * cosSA;
-                    double qz = -cb * sinSA;
+
+                    // Z-axis angles depend on j and k. Must be calculated inside the k loop.
+                    double cosSum  = quatCosSum[j + k];
+                    double sinSum  = quatSinSum[j + k];
+                    double cosDiff = quatCosDiff[j - k + quatTableDiffOffset];
+                    double sinDiff = quatSinDiff[j - k + quatTableDiffOffset];
+
+                    // Correct mathematical mappings for Z-Y-Z Euler Inverse sequence
+                    double qw =  cb * cosSum;
+                    double qx =  sb * sinDiff;
+                    double qy = -sb * cosDiff;
+                    double qz = -cb * sinSum;
+
+                    // Optional: Eigen explicitly normalizes. If your lookup tables have
+                    // floating point inaccuracies, replicate Eigen's normalize() here.
+                    double normInv = 1.0 / std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz);
+                    qw *= normInv;
+                    qx *= normInv;
+                    qy *= normInv;
+                    qz *= normInv;
+
+                    // Force hemisphere (w > 0) to match Snippet 2
                     if (qw < 0) {
                         qw = -qw;
                         qx = -qx;
                         qy = -qy;
                         qz = -qz;
                     }
+
                     listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, correlationCurrent);
                     flatIdx++;
                 }
@@ -997,26 +1017,46 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
         listOfQuaternionCorrelation.reserve(S * S * S);
         double invRange = 1.0 / (maximumCorrelation - minimumCorrelation);
         int flatIdx = 0;
+
         for (int i = 0; i < S; i++) {
+            // Beta/Y-axis angle depends purely on i
             double cb = quatCosBeta2[i];
             double sb = quatSinBeta2[i];
+
             for (int j = 0; j < S; j++) {
-                double cosSA = quatCosSum[j + i];
-                double sinSA = quatSinSum[j + i];
                 for (int k = 0; k < S; k++) {
                     correlationCurrent =
                             (NORM(resultingCorrelationComplex[flatIdx]) -
                              minimumCorrelation) * invRange;
-                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
-                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
-                    double qy = -sb * cosSA;
-                    double qz = -cb * sinSA;
+
+                    // Z-axis angles depend on j and k. Must be calculated inside the k loop.
+                    double cosSum  = quatCosSum[j + k];
+                    double sinSum  = quatSinSum[j + k];
+                    double cosDiff = quatCosDiff[j - k + quatTableDiffOffset];
+                    double sinDiff = quatSinDiff[j - k + quatTableDiffOffset];
+
+                    // Correct mathematical mappings for Z-Y-Z Euler Inverse sequence
+                    double qw =  cb * cosSum;
+                    double qx =  sb * sinDiff;
+                    double qy = -sb * cosDiff;
+                    double qz = -cb * sinSum;
+
+                    // Optional: Eigen explicitly normalizes. If your lookup tables have
+                    // floating point inaccuracies, replicate Eigen's normalize() here.
+                    double normInv = 1.0 / std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz);
+                    qw *= normInv;
+                    qx *= normInv;
+                    qy *= normInv;
+                    qz *= normInv;
+
+                    // Force hemisphere (w > 0) to match Snippet 2
                     if (qw < 0) {
                         qw = -qw;
                         qx = -qx;
                         qy = -qy;
                         qz = -qz;
                     }
+
                     listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, correlationCurrent);
                     flatIdx++;
                 }

@@ -15,7 +15,8 @@
 #include <pcl/point_types.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/common/norms.h>
-
+// settings used in test scripts: results32_0_4_12_0.001_0.001_2_None_train.csv
+//                                  results64_0_8_24_0.001_0.001_2_high_val.csv
 // ============================================================
 //  CONFIGURATION — change these to quickly adjust the test
 // ============================================================
