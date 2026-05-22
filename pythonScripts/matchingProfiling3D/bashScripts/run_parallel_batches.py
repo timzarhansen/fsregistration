@@ -97,7 +97,7 @@ def process_batch(args):
     start_time = time.time()
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
         elapsed = time.time() - start_time
         
         if result.returncode == 0:
