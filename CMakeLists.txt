@@ -232,7 +232,7 @@ target_include_directories(pybind_registration_3d PRIVATE
         ${PCL_INCLUDE_DIRS}
 )
 
-target_link_libraries(pybind_registration_3d
+target_link_libraries(pybind_registration_3d PRIVATE
         soft20::soft20
         findpeaks
         generalhelpfullib
