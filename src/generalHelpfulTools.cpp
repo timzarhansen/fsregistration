@@ -4,9 +4,14 @@
 #include <filesystem>
 
 Eigen::Vector3d generalHelpfulTools::getRollPitchYaw(Eigen::Quaterniond quat) {
+    quat.normalize(); // Match tf2 safety
     Eigen::Matrix3d m = quat.toRotationMatrix();
-    Eigen::Vector3d rpy = m.eulerAngles(0, 1, 2);  // intrinsic XYZ, same as tf2::Matrix3x3::getRPY()
-    return rpy;
+
+    double roll  = std::atan2(m(2, 1), m(2, 2));
+    double pitch = std::asin(-m(2, 0));
+    double yaw   = std::atan2(m(1, 0), m(0, 0));
+
+    return Eigen::Vector3d(roll, pitch, yaw);
 }
 
 Eigen::Matrix4d generalHelpfulTools::getTransformationMatrixFromRPY(double roll, double pitch, double yaw) {
