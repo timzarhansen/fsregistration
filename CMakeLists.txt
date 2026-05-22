@@ -232,7 +232,8 @@ target_include_directories(pybind_registration_3d PRIVATE
         ${PCL_INCLUDE_DIRS}
 )
 
-target_link_libraries(pybind_registration_3d PRIVATE
+target_link_libraries(pybind_registration_3d
+        PRIVATE
         soft20::soft20
         findpeaks
         generalhelpfullib
@@ -241,11 +242,8 @@ target_link_libraries(pybind_registration_3d PRIVATE
         ${PCL_LIBRARIES}
         CGAL::CGAL
         OpenMP::OpenMP_CXX
-)
-
-ament_target_dependencies(pybind_registration_3d
-        tf2
-        Eigen3
+        tf2::tf2
+        Eigen3::Eigen3
 )
 
 install(TARGETS pybind_registration_3d
