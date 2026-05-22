@@ -5,7 +5,7 @@ set -euo pipefail
 # ---- CONFIG ----
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="ml"
-CONFIG="configFiles/predatorNothingMac.yaml"
+CONFIG="configFiles/predatorNothingBenchmark.yaml"
 NUM_WORKERS=8
 BATCH_SIZE=100
 TOTAL_SAMPLES_VAL=1331
@@ -21,10 +21,6 @@ SOFT_LEVEL_TRANSLATION=0.001
 SOFT_NORMALIZATION=2
 
 cd "$PROJECT_DIR"
-
-# ---- LOAD CONDA ----
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_NAME"
 
 echo "Starting SOFT batch processing..."
 echo "=============================================="

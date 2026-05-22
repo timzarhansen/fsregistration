@@ -5,17 +5,13 @@ set -euo pipefail
 # ---- CONFIG ----
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="geo_env"
-CONFIG="configFiles/predatorNothingMac.yaml"
+CONFIG="configFiles/predatorNothingBenchmark.yaml"
 NUM_WORKERS=8
 BATCH_SIZE=200
 TOTAL_SAMPLES_VAL=1331
 TOTAL_SAMPLES_TRAIN=20642
 
 cd "$PROJECT_DIR"
-
-# ---- LOAD CONDA ----
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate "$ENV_NAME"
 
 echo "Starting FPFH batch processing..."
 echo "=============================================="
