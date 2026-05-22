@@ -188,9 +188,9 @@ public:
             double sb = quatSinBeta2[i];
             for (int j = 0; j < S; j++) {
                 for (int k = 0; k < S; k++) {
-                    double qw = cb * quatCosDiff[j - k + quatTableDiffOffset];
-                    double qx = sb * quatSinDiff[j - k + quatTableDiffOffset];
-                    double qy = -sb * quatCosSum[j + k];
+                    double qw =  cb * quatCosSum[j + k];
+                    double qx =  sb * quatSinDiff[j - k + quatTableDiffOffset];
+                    double qy = -sb * quatCosDiff[j - k + quatTableDiffOffset];
                     double qz = -cb * quatSinSum[j + k];
                     if (qw < 0) {
                         qw = -qw;
