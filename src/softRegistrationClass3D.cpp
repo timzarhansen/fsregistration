@@ -912,22 +912,24 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
         cv::Mat magTMP1(N, N, CV_64FC1, resampledMagnitudeSO3_1TMP);
         cv::Mat magTMP2(N, N, CV_64FC1, resampledMagnitudeSO3_2TMP);
-        magTMP1.convertTo(magCLAHE1_3D, CV_8UC1);
-        magTMP2.convertTo(magCLAHE2_3D, CV_8UC1);
 
+        // Convert in-place into the local matrices to guarantee contiguous memory bounds
+        magTMP1.convertTo(magTMP1, CV_8UC1);
+        magTMP2.convertTo(magTMP2, CV_8UC1);
+
+        // Create a local CLAHE object to guarantee default unmodified grid bounds
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
         if (useClahe) {
-            clahe3D->apply(magCLAHE1_3D, magCLAHE1_3D);
-            clahe3D->apply(magCLAHE2_3D, magCLAHE2_3D);
+            clahe->apply(magTMP1, magTMP1);
+            clahe->apply(magTMP2, magTMP2);
         }
-        //transform signal back to 0-1
+        //transform signal back to 0-1 using the locally guaranteed contiguous data
         for (int i = 0; i < 2 * bandwidth; i++) {
             for (int j = 0; j < 2 * bandwidth; j++) {
                 resampledMagnitudeSO3_1[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magCLAHE1_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
-                        255.0;
+                        ((double) magTMP1.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) / 255.0;
                 resampledMagnitudeSO3_2[generalHelpfulTools::index2D(i, j, bandwidth * 2)] +=
-                        ((double) magCLAHE2_3D.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) /
-                        255.0;
+                        ((double) magTMP2.data[generalHelpfulTools::index2D(i, j, bandwidth * 2)]) / 255.0;
             }
         }
     }
@@ -1057,7 +1059,14 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
                         qz = -qz;
                     }
 
-                    listOfQuaternionCorrelation.emplace_back(qw, qx, qy, qz, correlationCurrent);
+                    My4DPoint currentPoint;
+                    currentPoint.correlation = correlationCurrent;
+                    currentPoint[0] = qw;
+                    currentPoint[1] = qx;
+                    currentPoint[2] = qy;
+                    currentPoint[3] = qz;
+
+                    listOfQuaternionCorrelation.push_back(currentPoint);
                     flatIdx++;
                 }
             }
