@@ -1,6 +1,6 @@
 misc:
 #  exp_dir: /home/thansen/tensorboard/3dmatch/models/predator/exp1
-  exp_dir: /Users/timhansen/Documents/dataFolder/3dmatch/models/predator/test
+  exp_dir: /home/benchmark/ros_ws/dataFolder/3dmatch/models/predator/test
   mode: train
   gpu_mode: True
   verbose: True
