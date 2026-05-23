@@ -58,7 +58,7 @@ def create_batches(total_samples, batch_size):
 
 def process_batch(args):
     """Process a single batch."""
-    batch_id, start_idx, end_idx, config, noise_level, data_type, script_path, model_type, output_dir, soft_params = args
+    batch_id, start_idx, end_idx, config, noise_level, data_type, script_path, model_type, output_dir, soft_params, verbose = args
 
     output_file = os.path.join(output_dir, f'batch_{model_type}_{noise_level}_{data_type}_{start_idx:05d}_{end_idx:05d}.csv')
 
@@ -97,16 +97,25 @@ def process_batch(args):
     start_time = time.time()
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
+        if verbose:
+            result = subprocess.run(cmd, capture_output=False, text=True, env=os.environ.copy())
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
         elapsed = time.time() - start_time
         
         if result.returncode == 0:
             print(f"[Batch {batch_id}] Completed in {elapsed:.1f}s")
             return (batch_id, start_idx, end_idx, True, elapsed)
         else:
-            print(f"[Batch {batch_id}] FAILED after {elapsed:.1f}s")
+            print(f"[Batch {batch_id}] FAILED after {elapsed:.1f}s (exit code {result.returncode})")
             if result.stderr:
-                print(f"  STDERR: {result.stderr[-500:]}")  # Last 500 chars
+                print(f"--- STDERR START ---")
+                print(result.stderr)
+                print(f"--- STDERR END ---")
+            if result.stdout and not verbose:
+                print(f"--- STDOUT (truncated) ---")
+                print(result.stdout[-2000:])
+                print(f"--- STDOUT END ---")
             return (batch_id, start_idx, end_idx, False, elapsed)
     
     except Exception as e:
@@ -139,6 +148,10 @@ def main():
                         help='Path to testing script (auto-detected if not provided)')
     parser.add_argument('--output-dir', type=str, default=None,
                         help='Output directory (default: outputFiles/{model_type})')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Print stdout from each batch as it runs')
+    parser.add_argument('--show-stderr', action='store_true',
+                        help='Always print full stderr (default: only on failure)')
     # SOFT-specific parameters
     parser.add_argument('--soft-N', type=int, default=128,
                         help='SOFT voxel grid dimension (default: 128)')
@@ -228,7 +241,7 @@ def main():
 
         # Prepare batch arguments
         batch_args = [
-            (batch_id, start, end, args.config, args.noise_level, args.data_type, args.script_path, args.model_type, args.output_dir, soft_params)
+            (batch_id, start, end, args.config, args.noise_level, args.data_type, args.script_path, args.model_type, args.output_dir, soft_params, args.verbose)
             for batch_id, start, end in pending_batches
         ]
         
