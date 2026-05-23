@@ -30,3 +30,4 @@ dependencies:
     - h5py
     - tensorboardX
     - coloredlogs
+    - pyyaml
