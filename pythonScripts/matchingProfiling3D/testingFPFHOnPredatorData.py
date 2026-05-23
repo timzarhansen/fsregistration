@@ -212,6 +212,9 @@ def main():
     if start_index >= dataSetSize:
         raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
 
+    # FPFH Parameters
+    voxel_size = 0.05
+
     print(f"Processing samples {start_index} to {end_index}...")
 
     dataset = config.train_loader.dataset
