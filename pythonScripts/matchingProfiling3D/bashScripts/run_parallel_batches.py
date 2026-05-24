@@ -289,7 +289,7 @@ def main():
         print("\nYou can manually retry failed batches or adjust parameters.")
     
     # Check if we have enough data to merge
-    total_processed = len(successful_batches) * args.batch_size
+    total_processed = sum(end - start + 1 for _, start, end in successful_batches)
     print(f"\nTotal samples processed: ~{total_processed}")
     
     if successful_batches:

@@ -213,7 +213,7 @@ def main():
         raise ValueError(f"start_index {start_index} exceeds dataset size {dataSetSize}")
 
     # FPFH Parameters
-    voxel_size = 0.05
+    voxel_size = 0.025
 
     print(f"Processing samples {start_index} to {end_index}...")
 
