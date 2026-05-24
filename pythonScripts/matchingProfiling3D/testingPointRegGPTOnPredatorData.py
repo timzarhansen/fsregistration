@@ -294,7 +294,7 @@ def main():
         elif noise_level == "low":
             meanNoise = 0.01
             percentageNoise = 0.01
-       elif noise_level == "high":
+        elif noise_level == "high":
             meanNoise = 0.05
             percentageNoise = 0.05
         elif noise_level == "low_gauss":
