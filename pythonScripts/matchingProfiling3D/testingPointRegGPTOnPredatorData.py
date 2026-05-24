@@ -294,13 +294,18 @@ def main():
         elif noise_level == "low":
             meanNoise = 0.01
             percentageNoise = 0.01
-        elif noise_level == "high":
+       elif noise_level == "high":
             meanNoise = 0.05
             percentageNoise = 0.05
+        elif noise_level == "low_gauss":
+            meanNoise = 0.01
+            percentageNoise = 0
+        elif noise_level == "high_gauss":
+            meanNoise = 0.05
+            percentageNoise = 0
         else:
             raise ValueError(f"Unknown noise level: {noise_level}")
 
-        # Add standard noise
         pcd1_noisy = add_gaussian_noise_to_pointcloud(pcd1, mean=0.0, std=meanNoise, seed=None)
         pcd2_noisy = add_gaussian_noise_to_pointcloud(pcd2, mean=0.0, std=meanNoise, seed=None)
 
