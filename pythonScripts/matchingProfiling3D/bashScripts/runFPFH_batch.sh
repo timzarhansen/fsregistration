@@ -7,7 +7,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="geo_env"
 CONFIG="configFiles/predatorNothingBenchmark.yaml"
 NUM_WORKERS=8
-BATCH_SIZE=200
+BATCH_SIZE=100
 TOTAL_SAMPLES_VAL=1331
 TOTAL_SAMPLES_TRAIN=20642
 
@@ -21,8 +21,8 @@ echo "Batch size: $BATCH_SIZE"
 echo "=============================================="
 
 # Process all combinations
-for noise_level in low high; do
-    for data_type in train; do
+for noise_level in None low high; do
+    for data_type in val train; do
         echo ""
         echo "=============================================="
         echo "Processing: $noise_level / $data_type"

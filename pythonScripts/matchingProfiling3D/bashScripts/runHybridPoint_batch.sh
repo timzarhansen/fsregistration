@@ -21,8 +21,8 @@ echo "Batch size: $BATCH_SIZE"
 echo "=============================================="
 
 # Process all combinations
-for noise_level in  high; do
-    for data_type in  train; do
+for noise_level in None low high; do
+    for data_type in val train; do
         echo ""
         echo "=============================================="
         echo "Processing: $noise_level / $data_type"
