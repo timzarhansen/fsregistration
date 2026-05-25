@@ -85,7 +85,8 @@ def point_to_node_partition(
 
     point_to_node = sq_dist_mat.min(dim=0)[1]  # (N,)
     node_masks = torch.zeros(nodes.shape[0], dtype=torch.bool, device=nodes.device)  # (M,)
-    node_masks.scatter_(0, point_to_node, torch.ones_like(node_masks))
+    valid_mask = (point_to_node >= 0) & (point_to_node < node_masks.shape[0])
+    node_masks[point_to_node[valid_mask]] = True
 
     matching_masks = torch.zeros_like(sq_dist_mat, dtype=torch.bool)  # (M, N)
     point_indices = torch.arange(points.shape[0], device=points.device)  # (N,)
@@ -138,7 +139,8 @@ def point_to_node_partition_bug(
 
     point_to_node = sq_dist_mat.min(dim=0)[1]  # (N,)
     node_masks = torch.zeros(nodes.shape[0], dtype=torch.bool, device=nodes.device)  # (M,)
-    node_masks.scatter_(0, point_to_node, torch.ones_like(node_masks))
+    valid_mask = (point_to_node >= 0) & (point_to_node < node_masks.shape[0])
+    node_masks[point_to_node[valid_mask]] = True
 
     node_knn_indices = sq_dist_mat.topk(k=point_limit, dim=1, largest=False)[1]  # (M, K)
     node_knn_node_indices = index_select(point_to_node, node_knn_indices, dim=0)  # (M, K)
