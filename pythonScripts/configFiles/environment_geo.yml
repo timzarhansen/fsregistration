@@ -17,7 +17,7 @@ dependencies:
   - pip:
     - numpy<2
     - --extra-index-url https://download.pytorch.org/whl/cpu
-    - torch==2.6.0+cpu
+    - torch==2.10.0+cpu
     - torchvision==0.25.0+cpu
     - open3d>=0.16.0
     - transforms3d
