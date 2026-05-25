@@ -115,15 +115,15 @@ class LocalGlobalRegistration(nn.Module):
         indices1 = torch.arange(3, device=device).unsqueeze(0).expand(indices.shape[0], 3)  # (3,) -> (total, 3)
 
         batch_ref_corr_points = torch.zeros(batch_size * max_corr, 3, device=device)
-        batch_ref_corr_points.index_put_([indices0, indices1], ref_corr_points)
+        batch_ref_corr_points[indices0, indices1] = ref_corr_points
         batch_ref_corr_points = batch_ref_corr_points.view(batch_size, max_corr, 3)
 
         batch_src_corr_points = torch.zeros(batch_size * max_corr, 3, device=device)
-        batch_src_corr_points.index_put_([indices0, indices1], src_corr_points)
+        batch_src_corr_points[indices0, indices1] = src_corr_points
         batch_src_corr_points = batch_src_corr_points.view(batch_size, max_corr, 3)
 
         batch_corr_scores = torch.zeros(batch_size * max_corr, device=device)
-        batch_corr_scores.index_put_([indices], corr_scores)
+        batch_corr_scores[indices] = corr_scores
         batch_corr_scores = batch_corr_scores.view(batch_size, max_corr)
 
         return batch_ref_corr_points, batch_src_corr_points, batch_corr_scores

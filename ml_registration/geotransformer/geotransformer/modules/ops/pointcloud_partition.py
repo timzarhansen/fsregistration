@@ -85,7 +85,7 @@ def point_to_node_partition(
 
     point_to_node = sq_dist_mat.min(dim=0)[1]  # (N,)
     node_masks = torch.zeros(nodes.shape[0], dtype=torch.bool, device=nodes.device)  # (M,)
-    node_masks.index_fill_(0, point_to_node, True)
+    node_masks.scatter_(0, point_to_node, torch.ones_like(node_masks))
 
     matching_masks = torch.zeros_like(sq_dist_mat, dtype=torch.bool)  # (M, N)
     point_indices = torch.arange(points.shape[0], device=points.device)  # (N,)
@@ -101,7 +101,7 @@ def point_to_node_partition(
     if return_count:
         unique_indices, unique_counts = torch.unique(point_to_node, return_counts=True)
         node_sizes = torch.zeros(nodes.shape[0], dtype=torch.long, device=nodes.device)  # (M,)
-        node_sizes.index_put_([unique_indices], unique_counts)
+        node_sizes[unique_indices] = unique_counts
         return point_to_node, node_sizes, node_masks, node_knn_indices, node_knn_masks
     else:
         return point_to_node, node_masks, node_knn_indices, node_knn_masks
@@ -138,7 +138,7 @@ def point_to_node_partition_bug(
 
     point_to_node = sq_dist_mat.min(dim=0)[1]  # (N,)
     node_masks = torch.zeros(nodes.shape[0], dtype=torch.bool, device=nodes.device)  # (M,)
-    node_masks.index_fill_(0, point_to_node, True)
+    node_masks.scatter_(0, point_to_node, torch.ones_like(node_masks))
 
     node_knn_indices = sq_dist_mat.topk(k=point_limit, dim=1, largest=False)[1]  # (M, K)
     node_knn_node_indices = index_select(point_to_node, node_knn_indices, dim=0)  # (M, K)
@@ -149,7 +149,7 @@ def point_to_node_partition_bug(
     if return_count:
         unique_indices, unique_counts = torch.unique(point_to_node, return_counts=True)
         node_sizes = torch.zeros(nodes.shape[0], dtype=torch.long, device=nodes.device)  # (M,)
-        node_sizes.index_put_([unique_indices], unique_counts)
+        node_sizes[unique_indices] = unique_counts
         return point_to_node, node_sizes, node_masks, node_knn_indices, node_knn_masks
     else:
         return point_to_node, node_masks, node_knn_indices, node_knn_masks
