@@ -297,6 +297,12 @@ def main():
         elif noise_level == "high_gauss":
             meanNoise = 0.05
             percentageNoise = 0
+        elif noise_level == "low_salt_pepper":
+            meanNoise = 0
+            percentageNoise = 0.01
+        elif noise_level == "high_salt_pepper":
+            meanNoise = 0
+            percentageNoise = 0.05
         else:
             raise ValueError(f"Unknown noise level: {noise_level}")
 
