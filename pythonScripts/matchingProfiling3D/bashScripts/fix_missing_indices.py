@@ -215,7 +215,7 @@ def merge_and_validate(output_path, temp_csvs, model_type, noise_level, data_typ
 def main():
     parser = argparse.ArgumentParser(description='Fix missing indices in batch output')
     parser.add_argument('--config', type=str, required=True, help='Path to config file')
-    parser.add_argument('--noise-level', type=str, required=True,                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss'])
+    parser.add_argument('--noise-level', type=str, required=True,                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss', 'low_salt_pepper', 'high_salt_pepper'])
     parser.add_argument('--data-type', type=str, required=True, choices=['train', 'val'])
     parser.add_argument('--model-type', type=str, required=True,
                         choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp', 'soft'])

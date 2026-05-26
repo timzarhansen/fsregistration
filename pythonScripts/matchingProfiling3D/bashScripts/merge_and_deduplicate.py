@@ -124,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--output-dir', type=str, default='outputFiles',
                         help='Directory containing batch files')
     parser.add_argument('--noise-level', type=str, default='high',
-                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss'],
+                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss', 'low_salt_pepper', 'high_salt_pepper'],
                         help='Noise level (must match batch naming)')
     parser.add_argument('--data-type', type=str, default='train',
                         choices=['train', 'val'],

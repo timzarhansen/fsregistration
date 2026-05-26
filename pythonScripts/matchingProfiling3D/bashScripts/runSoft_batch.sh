@@ -32,7 +32,7 @@ echo "SOFT normalization: $SOFT_NORMALIZATION"
 echo "=============================================="
 
 # Process all combinations
-for noise_level in None low high low_gauss high_gauss; do
+for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None low high; do
     for data_type in val train; do
         echo ""
         echo "=============================================="

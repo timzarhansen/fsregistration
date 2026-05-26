@@ -128,7 +128,7 @@ def main():
     parser.add_argument('--config', type=str, required=True,
                         help='Path to config file')
     parser.add_argument('--noise-level', type=str, required=True,
-                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss'],
+                        choices=['None', 'low', 'high', 'low_gauss', 'high_gauss', 'low_salt_pepper', 'high_salt_pepper'],
                         help='Noise level')
     parser.add_argument('--data-type', type=str, required=True,
                         choices=['train', 'val'],
