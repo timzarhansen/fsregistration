@@ -24,10 +24,11 @@ import numpy as np
 # import open3d as o3d
 from pathlib import Path
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.dirname(os.path.dirname(script_dir))
-fsregistration_src = os.path.join(root_dir, 'src')
-sys.path.insert(0, fsregistration_src)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_script_dir))))
+_install_lib = os.path.join(_root_dir, 'install', 'fsregistration', 'lib', 'fsregistration')
+if os.path.isdir(_install_lib):
+    sys.path.insert(0, _install_lib)
 
 from pybind_registration_2d import SoftRegistrationWrapper2D
 

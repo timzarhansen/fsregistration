@@ -14,7 +14,7 @@ import glob
 import sys
 
 
-def merge_batches(output_dir='outputFiles', noise_level='high', data_type='train', model_type='fpfh'):
+def merge_batches(output_dir='outputFiles', noise_level='high', data_type='train', model_type='fpfh', soft_n=None):
     """Merge all batch CSV files into a single deduplicated output."""
     
     # Use method-specific subdirectory if not explicitly set
@@ -87,7 +87,11 @@ def merge_batches(output_dir='outputFiles', noise_level='high', data_type='train
         print(f"Index continuity verified: {min_idx} to {max_idx}")
     
     # Save final output
-    output_path = os.path.join(output_dir, f'outfile_{model_type}_{noise_level}_{data_type}.csv')
+    if soft_n:
+        output_filename = f'outfile_{model_type}_N{soft_n}_{noise_level}_{data_type}.csv'
+    else:
+        output_filename = f'outfile_{model_type}_{noise_level}_{data_type}.csv'
+    output_path = os.path.join(output_dir, output_filename)
 
     # Dynamic fieldnames from first batch file
     with open(sorted(batch_files)[0], 'r', newline='') as f:
@@ -132,8 +136,10 @@ if __name__ == '__main__':
     parser.add_argument('--model-type', type=str, default='fpfh',
                         choices=['fpfh', 'hybridpoint', 'pointreggpt', 'geotransformer', 'regtr', 'icp', 'soft'],
                         help='Model type for output filename')
+    parser.add_argument('--soft-N', type=int, default=None,
+                        help='SOFT N parameter for output filename')
     
     args = parser.parse_args()
     
-    success = merge_batches(args.output_dir, args.noise_level, args.data_type, args.model_type)
+    success = merge_batches(args.output_dir, args.noise_level, args.data_type, args.model_type, args.soft_N)
     sys.exit(0 if success else 1)

@@ -64,7 +64,8 @@ for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None lo
         python3 bashScripts/merge_and_deduplicate.py \
             --noise-level "$noise_level" \
             --data-type "$data_type" \
-            --model-type soft
+            --model-type soft \
+            --soft-N "$SOFT_N"
     done
 done
 

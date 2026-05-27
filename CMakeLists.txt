@@ -246,6 +246,35 @@ target_link_libraries(pybind_registration_3d
         Eigen3::Eigen3
 )
 
+pybind11_add_module(pybind_registration_2d
+        src/pybind_registration_2d.cpp
+        src/softRegistrationClass.cpp
+        src/softCorrelationClass.cpp
+        src/PeakFinder.cpp
+        src/generalHelpfulTools.cpp
+        find-peaks/src/union_find.cpp
+)
+
+target_include_directories(pybind_registration_2d PRIVATE
+        include
+        find-peaks/include
+        ${OpenCV_INCLUDE_DIRS}
+)
+
+target_link_libraries(pybind_registration_2d
+        PRIVATE
+        soft20::soft20
+        findpeaks
+        generalhelpfullib
+        ${OpenCV_LIBS}
+        fftw3
+        OpenMP::OpenMP_CXX
+)
+
+install(TARGETS pybind_registration_2d
+        DESTINATION lib/fsregistration
+)
+
 install(TARGETS pybind_registration_3d
         DESTINATION lib/fsregistration
 )
