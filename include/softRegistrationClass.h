@@ -136,27 +136,32 @@ public:
 
         // Precompute spherical projection lookup tables
         int bandwidth = N / 2;
-        sinTheta = (double*) malloc(sizeof(double) * N);
-        cosPhi = (double*) malloc(sizeof(double) * N);
-        sinPhi = (double*) malloc(sizeof(double) * N);
         hammingCoeffs = (double*) malloc(sizeof(double) * N);
         xAngle = (double*) malloc(sizeof(double) * N * N);
         yAngle = (double*) malloc(sizeof(double) * N * N);
 
+        double* sinThetaLocal = (double*) malloc(sizeof(double) * N);
+        double* cosPhiLocal = (double*) malloc(sizeof(double) * N);
+        double* sinPhiLocal = (double*) malloc(sizeof(double) * N);
+
         for (int j = 0; j < N; j++) {
-            sinTheta[j] = std::sin(M_PI * j / (double) N);
+            sinThetaLocal[j] = std::sin(M_PI * j / (double) N);
         }
         for (int k = 0; k < N; k++) {
-            cosPhi[k] = std::cos(M_PI * k / (double) bandwidth);
-            sinPhi[k] = std::sin(M_PI * k / (double) bandwidth);
+            cosPhiLocal[k] = std::cos(M_PI * k / (double) bandwidth);
+            sinPhiLocal[k] = std::sin(M_PI * k / (double) bandwidth);
             hammingCoeffs[k] = 25.0/46.0 - (1.0 - 25.0/46.0) * std::cos(2.0 * M_PI * k / (double) N);
         }
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                xAngle[j * N + k] = sinTheta[j] * cosPhi[k];
-                yAngle[j * N + k] = sinTheta[j] * sinPhi[k];
+                xAngle[j * N + k] = sinThetaLocal[j] * cosPhiLocal[k];
+                yAngle[j * N + k] = sinThetaLocal[j] * sinPhiLocal[k];
             }
         }
+
+        free(sinThetaLocal);
+        free(cosPhiLocal);
+        free(sinPhiLocal);
 
         // CLAHE + reusable Mats
         clahe = cv::createCLAHE();
@@ -167,9 +172,6 @@ public:
 
         ~softRegistrationClass() {
         sofftCorrelationObject.~softCorrelationClass();
-        free(sinTheta);
-        free(cosPhi);
-        free(sinPhi);
         free(hammingCoeffs);
         free(xAngle);
         free(yAngle);
@@ -377,9 +379,6 @@ private://here everything is created. malloc is done in the constructor
     double *PmI;
 
     // Precomputed spherical projection lookup tables
-    double* sinTheta;
-    double* cosPhi;
-    double* sinPhi;
     double* hammingCoeffs;
     double* xAngle;
     double* yAngle;
