@@ -33,6 +33,15 @@ for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None lo
         else
             TOTAL_SAMPLES=$TOTAL_SAMPLES_TRAIN
         fi
+
+        OUTPUT_FILE="outputFiles/icp/outfile_icp_${noise_level}_${data_type}.csv"
+        if [ -f "$OUTPUT_FILE" ]; then
+            ACTUAL_ROWS=$(($(wc -l < "$OUTPUT_FILE") - 1))
+            if [ "$ACTUAL_ROWS" -eq "$TOTAL_SAMPLES" ]; then
+                echo "SKIP: $noise_level / $data_type (already complete: $ACTUAL_ROWS rows)"
+                continue
+            fi
+        fi
         
         python3 bashScripts/run_parallel_batches.py \
             --config "$CONFIG" \
