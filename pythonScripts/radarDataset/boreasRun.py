@@ -47,7 +47,7 @@ from boreasRegistrationMethods import RegistrationFactory, RegistrationResult
 DEFAULT_CONFIG = {
     "sequences": [0],
     "N": 128,
-    "size_of_pixel": 0.01,
+    "size_of_pixel": 0.1,
     "matching_every_nth_image": 1,
     "max_frames": None,
     "output_dir": "saveResultsBoreas",

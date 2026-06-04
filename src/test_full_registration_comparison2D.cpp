@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     std::cout << "  Image 2 size: " << img2.cols << "x" << img2.rows << std::endl;
     
     // Parameters
-    int N = 512;
+    int N = 256;
     int bwOut = N / 2;
     int bwIn = N / 2;
     int degLim = bwOut - 1;
