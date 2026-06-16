@@ -9,7 +9,7 @@
 // /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_0/00_ForShow.jpg  /home/tim-external/dataFolder/ValentinBunkerData/noNoise305_52/scanNumber_1/00_ForShow.jpg
 #include "generalHelpfulTools.h"
 
-#define DEBUG_RESULTS_2D "/home/tim-external/volumeROS/src/fsregistration/debug_results/2d/"
+#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/debug_results/2d/data/"
 //#include "slamToolsRos.h"
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>

@@ -3,6 +3,7 @@ float64[] sonar_scan_2 # we assume values between 0 and 1
 int32 size_image
 float64 size_of_pixel
 float64 potential_for_necessary_peak  # default mostly 0.1 Higher values less peaks, lower values more peaks
+float64 level_potential_rotation  # default 0.1 Higher values less peaks, lower values more peaks (persistence-based)
 bool multiple_radii
 bool use_clahe
 bool use_hamming

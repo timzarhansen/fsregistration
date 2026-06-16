@@ -3,3 +3,4 @@ venv
 tmp
 cmake-build*
 build
+.DS_Store

@@ -90,6 +90,8 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.potential_for_necessary_peak = config.get("potential_for_necessary_peak", 0.01)
         self.multiple_radii = config.get("multiple_radii", True)
         self.use_gauss = config.get("use_gauss", False)
+        self.use_direct = config.get("use_direct", False)
+        self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -108,7 +110,9 @@ class FS2DRegistration(BaseRegistrationMethod):
             potentialNecessaryForPeak=self.potential_for_necessary_peak,
             multipleRadii=self.multiple_radii,
             useClahe=self.use_clahe,
-            useHamming=self.use_hamming
+            useHamming=self.use_hamming,
+            useDirect=self.use_direct,
+            levelPotentialRotation=self.level_potential_rotation
         )
 
         highest_peak = 0.0

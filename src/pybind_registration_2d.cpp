@@ -117,7 +117,9 @@ public:
         double potentialNecessaryForPeak,
         bool multipleRadii,
         bool useClahe,
-        bool useHamming
+        bool useHamming,
+        bool useDirect,
+        double levelPotentialRotation = 0.1
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -125,7 +127,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation
         );
 
         std::vector<TransformationPeak2D> out;
@@ -181,7 +183,7 @@ public:
         return std::make_tuple(eigen4x4_to_numpy(result), eigen3x3_to_numpy(covarianceMatrix));
     }
 
-    // registrationOfTwoVoxelsSO3
+    // registrationOfTwoVoxelsSOFFTAllSoluations (SO3 rotation method)
     std::vector<TransformationPeak2D> register_so3(
         py::array_t<double, py::array::c_style | py::array::forcecast> scan1,
         py::array_t<double, py::array::c_style | py::array::forcecast> scan2,
@@ -197,10 +199,10 @@ public:
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
 
-        auto results = reg->registrationOfTwoVoxelsSO3(
+        auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, benchmark
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, false, benchmark
         );
 
         std::vector<TransformationPeak2D> out;
@@ -240,10 +242,10 @@ public:
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
 
-        auto results = reg->registrationOfTwoVoxelsDirect(
+        auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, benchmark
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, true, benchmark
         );
 
         std::vector<TransformationPeak2D> out;
@@ -291,15 +293,17 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
 
     py::class_<SoftRegistrationWrapper2D>(m, "SoftRegistrationWrapper2D")
         .def(py::init<int>())
-        .def("register_all_solutions", &SoftRegistrationWrapper2D::register_all_solutions,
-             py::arg("scan1"), py::arg("scan2"),
-             py::arg("cellSize"),
-             py::arg("useGauss") = false,
-             py::arg("debug") = false,
-             py::arg("potentialNecessaryForPeak") = 0.1,
-             py::arg("multipleRadii") = false,
-             py::arg("useClahe") = true,
-             py::arg("useHamming") = true)
+.def("register_all_solutions", &SoftRegistrationWrapper2D::register_all_solutions,
+              py::arg("scan1"), py::arg("scan2"),
+              py::arg("cellSize"),
+              py::arg("useGauss") = false,
+              py::arg("debug") = false,
+              py::arg("potentialNecessaryForPeak") = 0.1,
+              py::arg("multipleRadii") = false,
+              py::arg("useClahe") = true,
+               py::arg("useHamming") = true,
+               py::arg("useDirect") = false,
+               py::arg("levelPotentialRotation") = 0.1)
         .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
              py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
              py::arg("useInitialAngle") = true,

@@ -9,7 +9,7 @@
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
 
-#define DEBUG_RESULTS_2D "/home/tim-external/volumeROS/src/fsregistration/debug_results/2d/"
+#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/debug_results/2d/data/"
 #include <opencv4/opencv2/imgproc.hpp>
 #include <fstream>
 #include <random>
@@ -27,8 +27,8 @@ void saveCorrelationToCSV(const std::vector<float>& correlation, const std::vect
 }
 
 int main(int argc, char** argv) {
-    std::string img1Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan1.jpg";
-    std::string img2Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan2.jpg";
+    std::string img1Path = "/home/tim-external/ros_ws/src/fsregistration/exampleData/voxelScan1.jpg";
+    std::string img2Path = "/home/tim-external/ros_ws/src/fsregistration/exampleData/voxelScan2.jpg";
     
     if (argc > 2) {
         img1Path = argv[1];

@@ -48,7 +48,7 @@
 #define CONFIG_TRANS_TOLERANCE_VOXELS   5.0
 
 // --- Data path ---
-#define CONFIG_PLY_PATH                 "/home/tim-external/volumeROS/src/fsregistration/exampleData/dragon_recon/dragon_vrip.ply"
+#define CONFIG_PLY_PATH                 "/home/tim-external/ros_ws/src/fsregistration/exampleData/dragon_recon/dragon_vrip.ply"
 
 // ============================================================
 

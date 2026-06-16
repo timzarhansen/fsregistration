@@ -37,6 +37,12 @@ import sys
 from pathlib import Path
 from scipy.spatial.transform import Rotation as R
 
+try:
+    import open3d as o3d
+    OPEN3D_AVAILABLE = True
+except ImportError:
+    OPEN3D_AVAILABLE = False
+
 from sdk.radar import load_radar, radar_polar_to_cartesian
 from pyboreas import BoreasDataset
 
@@ -106,6 +112,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.potential_for_necessary_peak = config.get("potential_for_necessary_peak", 0.01)
         self.multiple_radii = config.get("multiple_radii", True)
         self.use_gauss = config.get("use_gauss", False)
+        self.use_direct = config.get("use_direct", False)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -124,7 +131,8 @@ class FS2DRegistration(BaseRegistrationMethod):
             potentialNecessaryForPeak=self.potential_for_necessary_peak,
             multipleRadii=self.multiple_radii,
             useClahe=self.use_clahe,
-            useHamming=self.use_hamming
+            useHamming=self.use_hamming,
+            useDirect=self.use_direct
         )
 
         # Find peak with highest translation peak height
@@ -164,20 +172,95 @@ class FS2DRegistration(BaseRegistrationMethod):
 # ============================================================================
 
 class ICPRegistration(BaseRegistrationMethod):
-    """Open3D point-to-point ICP (placeholder).
+    """Open3D point-to-point ICP.
 
-    Would convert images to 2D point clouds and run registration_icp.
+    Converts images to 3D point clouds and runs registration_icp.
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "icp"
+        if not OPEN3D_AVAILABLE:
+            raise ImportError(
+                "Open3D is required for ICPRegistration. "
+                "Install with: pip install open3d"
+            )
+        self.max_distance = config.get("max_distance", 0.05)
+        self.transformation_estimation = config.get(
+            "transformation_estimation",
+            o3d.pipelines.registration.TransformationEstimationPointToPoint()
+        )
+        self.correspondence_threshold = config.get("correspondence_threshold", 0.05)
+        self.ransac_reproj_threshold = config.get("ransac_reproj_threshold", 0.01)
+        self.max_iteration = config.get("max_iteration", 100)
+        self.scale = config.get("scale", 1.0)
+        self.initial_guess = config.get("initial_guess", np.eye(4))
+
+    def _image_to_pointcloud(self, img: np.ndarray, cell_size: float) -> o3d.geometry.PointCloud:
+        h, w = img.shape
+        y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+        points = np.stack([
+            (x - w / 2) * cell_size,
+            (y - h / 2) * cell_size,
+            img.astype(np.float64) / 255.0 * self.scale
+        ], axis=-1)
+        
+        mask = img > np.percentile(img, 5)
+        point_coords = points[mask]
+        
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(point_coords)
+        return pcd
 
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
-        raise NotImplementedError(
-            "ICPRegistration not yet implemented. "
-            "Plan: extract 2D point cloud from images (threshold-based), "
-            "then use o3d.pipelines.registration.registration_icp."
+        t0 = time.time()
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        
+        source = self._image_to_pointcloud(img1, cell_size)
+        target = self._image_to_pointcloud(img2, cell_size)
+        
+        radius = self.max_distance
+        (
+            reg_p2p,
+            info_p2p,
+        ) = o3d.pipelines.registration.registration_ransac_based_correspondence_estimation(
+            source=source,
+            target=target,
+            max_distance=radius,
+            correspondence_setter=None,
+            estimation_method=self.transformation_estimation,
+            ransac_n=4,
+            checkers=[
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(self.max_distance)
+            ],
+            criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
+                max_iteration=self.max_iteration
+            )
+        )
+        
+        result = o3d.pipelines.registration.registration_icp(
+            source,
+            target,
+            self.correspondence_threshold,
+            self.initial_guess,
+            self.transformation_estimation,
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=self.max_iteration),
+        )
+        
+        transform = result.transformation
+        elapsed = time.time() - t0
+        
+        return RegistrationResult(
+            transform=transform,
+            confidence=float(result.inlier_rmse),
+            method_name="icp",
+            computation_time=elapsed,
+            metadata={
+                "num_inliers": len(result.inliers),
+                "rmse": float(result.inlier_rmse),
+                "num_iterations": result.total_icp_iter
+            }
         )
 
 
@@ -258,7 +341,7 @@ class RegistrationFactory:
 
 # Auto-register available methods
 RegistrationFactory.register("fs2d", FS2DRegistration)
-# RegistrationFactory.register("icp", ICPRegistration)          # uncomment when implemented
+RegistrationFactory.register("icp", ICPRegistration)
 # RegistrationFactory.register("fourier_mellin", FourierMellinRegistration)  # uncomment when implemented
 # RegistrationFactory.register("sift", SIFTRegistration)         # uncomment when implemented
 

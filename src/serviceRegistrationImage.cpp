@@ -162,7 +162,7 @@ private:
                 true, true,
                 req->size_of_pixel,
                 false,
-                DEBUG_MODE,req->potential_for_necessary_peak);
+                DEBUG_MODE,req->potential_for_necessary_peak, false, req->level_potential_rotation);
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();
 
@@ -234,7 +234,7 @@ private:
                 voxelData1,
                 voxelData2,
                 req->size_of_pixel,
-                false, DEBUG_MODE,req->potential_for_necessary_peak);
+                false, DEBUG_MODE,req->potential_for_necessary_peak, req->multiple_radii, req->use_clahe, req->use_hamming, true, false, nullptr, req->level_potential_rotation);
 
         std::chrono::steady_clock::time_point end;
         end = std::chrono::steady_clock::now();

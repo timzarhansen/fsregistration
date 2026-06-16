@@ -20,7 +20,7 @@ and ground truth transforms for registration methods.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import cv2
@@ -28,6 +28,7 @@ from scipy.spatial.transform import Rotation as R
 
 from sdk.radar import load_radar, radar_polar_to_cartesian
 from pyboreas import BoreasDataset
+from pyboreas.data.sequence import Sequence
 
 
 @dataclass
@@ -97,17 +98,31 @@ class BoreasSequence:
 
 
 def load_sequence(data_dir: str, sequence: int) -> BoreasSequence:
-    """Load a Boreas dataset sequence.
+    """Load a Boreas dataset sequence by index.
 
     Args:
         data_dir: Path to Boreas radar data directory.
-        sequence: Sequence number.
+        sequence: Sequence number (index into all sequences).
 
     Returns:
         BoreasSequence instance.
     """
     bd = BoreasDataset(data_dir, split=None, verbose=True)
     seq = bd.sequences[sequence]
+    return BoreasSequence(sequence=seq, data_dir=data_dir)
+
+
+def load_single_sequence(data_dir: str, sequence_name: str) -> BoreasSequence:
+    """Load a single Boreas dataset sequence by name without scanning all sequences.
+
+    Args:
+        data_dir: Path to Boreas radar data directory.
+        sequence_name: Sequence ID string, e.g. 'boreas-2020-11-26-13-58'.
+
+    Returns:
+        BoreasSequence instance.
+    """
+    seq = Sequence(data_dir, [sequence_name])
     return BoreasSequence(sequence=seq, data_dir=data_dir)
 
 

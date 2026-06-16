@@ -322,7 +322,8 @@ if __name__ == '__main__':
                     potentialNecessaryForPeak=potential_for_necessary_peak,
                     multipleRadii=True,
                     useClahe=use_clahe,
-                    useHamming=True
+                    useHamming=True,
+                    useDirect=False
                 )
 
                 highestPeak = 0.0

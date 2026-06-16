@@ -3,6 +3,7 @@
 //
 
 #include "softRegistrationClass.h"
+
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
@@ -44,8 +45,8 @@ int main(int argc, char** argv) {
     std::cout << "=== Full 2D Registration Comparison Test ===" << std::endl;
     
     // Image paths (hardcoded as requested)
-    std::string img1Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan1.jpg";
-    std::string img2Path = "/home/tim-external/volumeROS/src/fsregistration/exampleData/voxelScan2.jpg";
+    std::string img1Path = "/home/tim-external/ros_ws/src/fsregistration/exampleData/voxelScan1.jpg";
+    std::string img2Path = "/home/tim-external/ros_ws/src/fsregistration/exampleData/voxelScan2.jpg";
     
     std::cout << "Loading images..." << std::endl;
     std::cout << "  Image 1: " << img1Path << std::endl;
@@ -102,8 +103,8 @@ int main(int argc, char** argv) {
     BenchmarkTimings2D timingsOld;
     auto startTotalOld = std::chrono::steady_clock::now();
 
-    std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSO3(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true, &timingsOld);
+    std::vector<transformationPeakfs2D> allTransformationsOld = registrar.registrationOfTwoVoxelsSOFFTAllSoluations(
+        voxelData1, voxelData2, cellSize, useGauss, true, potentialNecessaryForPeak, false, true, true, false, true, &timingsOld);
 
     auto endTotalOld = std::chrono::steady_clock::now();
     double totalTimeOld = std::chrono::duration<double, std::milli>(endTotalOld - startTotalOld).count();
@@ -203,8 +204,8 @@ int main(int argc, char** argv) {
     BenchmarkTimings2D timingsNew;
     auto startTotalNew = std::chrono::steady_clock::now();
 
-    std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsDirect(
-        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true, &timingsNew);
+    std::vector<transformationPeakfs2D> allTransformationsNew = registrar.registrationOfTwoVoxelsSOFFTAllSoluations(
+        voxelData1, voxelData2, cellSize, useGauss, false, potentialNecessaryForPeak, false, true, true, true, true, &timingsNew);
 
     auto endTotalNew = std::chrono::steady_clock::now();
     double totalTimeNew = std::chrono::duration<double, std::milli>(endTotalNew - startTotalNew).count();
