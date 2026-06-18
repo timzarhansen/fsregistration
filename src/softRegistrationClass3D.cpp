@@ -5,7 +5,7 @@
 #include "softRegistrationClass3D.h"
 #include <filesystem>
 
-#define DEBUG_RESULTS_3D "/home/tim-external/ros_ws/src/fsregistration/debug_results/3d/data/"
+#define DEBUG_RESULTS_3D "/home/tim-external/ros_ws/src/fsregistration/plotting_results/3d/data/"
 
 //bool compareTwoAngleCorrelation3D(translationPeak3D i1, translationPeak3D i2) {
 //    return (i1.angle < i2.angle);

@@ -268,7 +268,7 @@ class FourierMellinRegistration(BaseRegistrationMethod):
     """Fourier-Mellin Transform registration (placeholder).
 
     Uses log-polar FFT for rotation + translation estimation.
-    Reference: implementation at debug_results/registrationFourier/FMT/register.py
+    Reference: implementation at plotting_results/registrationFourier/FMT/register.py
     """
 
     def __init__(self, config: dict):
@@ -278,7 +278,7 @@ class FourierMellinRegistration(BaseRegistrationMethod):
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
         raise NotImplementedError(
             "FourierMellinRegistration not yet implemented. "
-            "Plan: port the FMT algorithm from debug_results/registrationFourier/FMT/register.py."
+            "Plan: port the FMT algorithm from plotting_results/registrationFourier/FMT/register.py."
         )
 
 

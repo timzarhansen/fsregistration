@@ -6,7 +6,7 @@
 #include <chrono>
 #include <filesystem>
 
-#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/debug_results/2d/data/"
+#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data/"
 
 bool compareTwoAngleCorrelation(rotationPeakfs2D i1, rotationPeakfs2D i2) {
     return (i1.angle < i2.angle);
@@ -198,6 +198,7 @@ std::vector<rotationPeakfs2D> softRegistrationClass::runRotationPeakDetection(
             tmpPeak.angle = angleList[out[i]];
             tmpPeak.peakCorrelation = correlationAveraged[out[i]];
             tmpPeak.covariance = 0.05;
+            tmpPeak.levelPotential = tmpPeak.peakCorrelation * tmpPeak.peakCorrelation;
             returnVector.push_back(tmpPeak);
         }
         if (timings) {
@@ -286,6 +287,7 @@ std::vector<rotationPeakfs2D> softRegistrationClass::runRotationPeakDetection(
             tmpPeak.angle = angleList[val.birth_position.x];
             tmpPeak.peakCorrelation = birthLevel;
             tmpPeak.covariance = 0.05;
+            tmpPeak.levelPotential = levelPotential;
             returnVector.push_back(tmpPeak);
         }
     }
@@ -640,17 +642,19 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
         }
     }
 
-    if (debug && outPeaks) {
+    if (outPeaks) {
         *outPeaks = this->runRotationPeakDetection(result, timings, level_potential_rotation);
-        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
+        if (debug) {
+            generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
 
         std::ofstream peakFile;
         peakFile.open(DEBUG_RESULTS_2D "rotationPeaks.csv");
-        peakFile << "angle\tpeakCorrelation\tcovariance\tindex\n";
+        peakFile << "angle\tpeakCorrelation\tcovariance\tlevelPotential\tindex\n";
         for (int i = 0; i < (int)outPeaks->size(); i++) {
             peakFile << (*outPeaks)[i].angle << "\t"
                 << (*outPeaks)[i].peakCorrelation << "\t"
                 << (*outPeaks)[i].covariance << "\t"
+                << (*outPeaks)[i].levelPotential << "\t"
                 << i << "\n";
         }
         peakFile.close();
@@ -664,6 +668,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
                 << result.correlationAveraged[i] << "\n";
         }
         corrCurveFile.close();
+        }
     }
 
     return result;
@@ -1121,6 +1126,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
                 myFile12 << "\n";
                 myFile12 << potentialTranslation.peakHeight;
                 myFile12 << "\n";
+                myFile12 << potentialTranslation.persistenceValue;
+                myFile12 << "\n";
 
                 for (int i = 0; i < 2; i++) {
                     for (int j = 0; j < 2; j++) {
@@ -1351,7 +1358,7 @@ std::vector<translationPeakfs2D> softRegistrationClass::peakDetectionOf2DCorrela
                 1 - ignoreSidesPercentage) * this->correlationN) {
             inInterestingArea = false;
         }
-        if (p.birth_level > 0.1 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
+        if (p.birth_level > 0.0 && levelPotential > potentialNecessaryForPeak && inInterestingArea) {
             translationPeakfs2D tmpTranslationPeak;
             tmpTranslationPeak.translationSI.x() = -(((int)p.birth_position.x - (int)(this->correlationN / 2.0)) *
                 cellSize);

@@ -40,21 +40,23 @@ from boreasRegistrationMethods import FS2DRegistration
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-N = 128                          # Image grid size (N x N)
-SIZE_OF_PIXEL = 2.0              # Meters per pixel
+N = 256                        # Image grid size (N x N)
+SIZE_OF_PIXEL = 0.5              # Meters per pixel
 DEBUG_MODE = True
-MATCHING_STEP = 1                # Match every Nth frame
+MATCHING_STEP = 5                # Match every Nth frame
+START_FRAME = 45                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
-USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
-LEVEL_POTENTIAL_ROTATION = 0.1  # Persistence threshold for rotation peak filtering
+USE_DIRECT = False               # Use direct registration (1-angle) vs SO3 (multiple angles)
+LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
+POTENTIAL_NECCESSARY_FOR_PEAK = 0.1  # 2D peak detection threshold
 # ============================================================================
 
 
 def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, SIZE_OF_PIXEL
-    global MATCHING_STEP, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION
+    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK
 
     source_file = inspect.getfile(inspect.currentframe())
     source_dir = os.path.dirname(os.path.abspath(source_file))
@@ -92,13 +94,16 @@ def get_config_from_file():
     N = extract_var("N", N)
     SIZE_OF_PIXEL = extract_var("SIZE_OF_PIXEL", SIZE_OF_PIXEL)
     MATCHING_STEP = extract_var("MATCHING_STEP", MATCHING_STEP)
+    START_FRAME = extract_var("START_FRAME", START_FRAME)
     MAX_FRAMES = extract_var("MAX_FRAMES", MAX_FRAMES)
     OUTPUT_DIR = extract_var("OUTPUT_DIR", OUTPUT_DIR)
     USE_DIRECT = extract_var("USE_DIRECT", USE_DIRECT)
     LEVEL_POTENTIAL_ROTATION = extract_var("LEVEL_POTENTIAL_ROTATION", LEVEL_POTENTIAL_ROTATION)
+    POTENTIAL_NECCESSARY_FOR_PEAK = extract_var("POTENTIAL_NECCESSARY_FOR_PEAK", POTENTIAL_NECCESSARY_FOR_PEAK)
 
 
 DISPLAY_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "displayImages"
+PLOT_DATA_DIR = "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data"
 
 
 def run_pair(
@@ -130,7 +135,8 @@ def run_pair(
         multipleRadii=method.multiple_radii,
         useClahe=method.use_clahe,
         useHamming=method.use_hamming,
-        useDirect=method.use_direct
+        useDirect=method.use_direct,
+        levelPotentialRotation=method.level_potential_rotation
     )
 
     # Find highest peak
@@ -148,7 +154,7 @@ def run_pair(
     from scipy.spatial.transform import Rotation as R
     transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
     tx, ty = peak.potentialTranslations[0].translationSI
-    transform[:3, 3] = [tx, ty, 0.0]
+    transform[:3, 3] = [tx, -ty, 0.0]
 
     elapsed = time.time() - t0
 
@@ -190,7 +196,7 @@ def main():
     print(f"  SEQUENCE_NAME: {SEQUENCE_NAME}")
     print(f"  DEBUG_MODE: {DEBUG_MODE}")
     print(f"  N: {N}, SIZE_OF_PIXEL: {SIZE_OF_PIXEL}")
-    print(f"  MATCHING_STEP: {MATCHING_STEP}, MAX_FRAMES: {MAX_FRAMES}")
+    print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
     print(f"  DISPLAY_DIR: {DISPLAY_DIR}")
     print()
@@ -210,7 +216,7 @@ def main():
         "N": N,
         "use_clahe": True,
         "use_hamming": True,
-        "potential_for_necessary_peak": 0.01,
+        "potential_for_necessary_peak": POTENTIAL_NECCESSARY_FOR_PEAK,
         "multiple_radii": True,
         "use_gauss": False,
         "size_of_pixel": SIZE_OF_PIXEL,
@@ -234,13 +240,13 @@ def main():
     length_of_radar_scans = seq.length
     if MAX_FRAMES is not None:
         length_of_radar_scans = min(length_of_radar_scans, MAX_FRAMES)
-    print(f"Matching every {MATCHING_STEP}th image (up to frame {length_of_radar_scans})")
+    print(f"Matching every {MATCHING_STEP}th image (from frame {START_FRAME}, up to {length_of_radar_scans})")
     print(f"Display images saved to: {DISPLAY_DIR}/")
     print("Image files: image1.png, image2.png, blended.png (overwritten each pair)")
     print("=" * 80)
     print()
 
-    idx = MATCHING_STEP
+    idx = START_FRAME + MATCHING_STEP
 
     while idx < length_of_radar_scans:
         prev_idx = idx - MATCHING_STEP
@@ -254,6 +260,33 @@ def main():
         cv2.imwrite(str(DISPLAY_DIR / "image1.png"), cv2.cvtColor((img1 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
         cv2.imwrite(str(DISPLAY_DIR / "image2.png"), cv2.cvtColor((img2 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
         cv2.imwrite(str(DISPLAY_DIR / "blended.png"), blended)
+
+        # Save current pair images and meta to plot data directory
+        try:
+            os.makedirs(PLOT_DATA_DIR, exist_ok=True)
+            gt_trans, gt_rot = gt_error
+            gt_trans_norm = np.linalg.norm(gt_trans)
+            np.savetxt(os.path.join(PLOT_DATA_DIR, "input1.csv"), img1, fmt='%.10f', delimiter=' ')
+            np.savetxt(os.path.join(PLOT_DATA_DIR, "input2.csv"), img2, fmt='%.10f', delimiter=' ')
+            header = "frame1,frame2,rot_angle_deg,tx_m,ty_m,confidence,time_ms,gt_rot_err_deg,gt_trans_err_m,N,n_solutions,pixel_size_m"
+            row = [
+                prev_idx, idx,
+                result.metadata['rotation_angle'] * 180 / np.pi,
+                result.metadata['translation'][0],
+                result.metadata['translation'][1],
+                result.confidence,
+                result.computation_time * 1000,
+                abs(gt_rot),
+                gt_trans_norm,
+                N,
+                result.metadata['num_solutions'],
+                SIZE_OF_PIXEL,
+            ]
+            with open(os.path.join(PLOT_DATA_DIR, "registration_meta.csv"), 'w') as f:
+                f.write(header + '\n')
+                f.write(','.join(f'{v:.10g}' for v in row) + '\n')
+        except Exception as e:
+            print(f"  [WARN] Could not save plot data: {e}")
 
         # Print results
         gt_trans, gt_rot = gt_error

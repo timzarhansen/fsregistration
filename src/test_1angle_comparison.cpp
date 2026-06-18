@@ -9,7 +9,7 @@
 #include <opencv4/opencv2/core.hpp>
 #include <opencv4/opencv2/imgcodecs.hpp>
 
-#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/debug_results/2d/data/"
+#define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data/"
 #include <opencv4/opencv2/imgproc.hpp>
 #include <fstream>
 #include <random>

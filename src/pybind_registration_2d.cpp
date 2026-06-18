@@ -81,6 +81,7 @@ struct RotationPeak2D {
     double angle;
     double peakCorrelation;
     double covariance;
+    double levelPotential;
 };
 
 struct TranslationPeak2D {
@@ -146,6 +147,7 @@ public:
             outTp.potentialRotation.angle = tp.potentialRotation.angle;
             outTp.potentialRotation.peakCorrelation = tp.potentialRotation.peakCorrelation;
             outTp.potentialRotation.covariance = tp.potentialRotation.covariance;
+            outTp.potentialRotation.levelPotential = tp.potentialRotation.levelPotential;
             out.push_back(outTp);
         }
         return out;
@@ -221,6 +223,7 @@ public:
             outTp.potentialRotation.angle = tp.potentialRotation.angle;
             outTp.potentialRotation.peakCorrelation = tp.potentialRotation.peakCorrelation;
             outTp.potentialRotation.covariance = tp.potentialRotation.covariance;
+            outTp.potentialRotation.levelPotential = tp.potentialRotation.levelPotential;
             out.push_back(outTp);
         }
         return out;
@@ -264,6 +267,7 @@ public:
             outTp.potentialRotation.angle = tp.potentialRotation.angle;
             outTp.potentialRotation.peakCorrelation = tp.potentialRotation.peakCorrelation;
             outTp.potentialRotation.covariance = tp.potentialRotation.covariance;
+            outTp.potentialRotation.levelPotential = tp.potentialRotation.levelPotential;
             out.push_back(outTp);
         }
         return out;
@@ -278,7 +282,8 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
     py::class_<RotationPeak2D>(m, "RotationPeak2D")
         .def_readwrite("angle", &RotationPeak2D::angle)
         .def_readwrite("peakCorrelation", &RotationPeak2D::peakCorrelation)
-        .def_readwrite("covariance", &RotationPeak2D::covariance);
+        .def_readwrite("covariance", &RotationPeak2D::covariance)
+        .def_readwrite("levelPotential", &RotationPeak2D::levelPotential);
 
     py::class_<TranslationPeak2D>(m, "TranslationPeak2D")
         .def_readwrite("translationSI", &TranslationPeak2D::translationSI)

@@ -107,7 +107,7 @@ def load_sequence(data_dir: str, sequence: int) -> BoreasSequence:
     Returns:
         BoreasSequence instance.
     """
-    bd = BoreasDataset(data_dir, split=None, verbose=True)
+    bd = BoreasDataset(data_dir, split=None, verbose=False)
     seq = bd.sequences[sequence]
     return BoreasSequence(sequence=seq, data_dir=data_dir)
 

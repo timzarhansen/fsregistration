@@ -33,6 +33,7 @@ struct rotationPeakfs2D {
     double angle;
     double peakCorrelation;
     double covariance;
+    double levelPotential;
 };
 
 struct translationPeakfs2D {
