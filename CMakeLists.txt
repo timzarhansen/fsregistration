@@ -205,6 +205,24 @@ target_link_libraries(test_full_registration_comparison3D
 )
 target_include_directories(test_full_registration_comparison3D PUBLIC ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 
+# Single 3D registration test executable
+add_executable(test_single_registration3D
+    src/test_single_registration3D.cpp
+    src/softRegistrationClass3D.cpp
+    src/softCorrelationClass3D.cpp
+    src/generalHelpfulTools.cpp
+)
+target_link_libraries(test_single_registration3D
+    fftw3
+    generalhelpfullib
+    soft20::soft20
+    findpeaks
+    ${OpenCV_LIBS}
+    ${PCL_LIBRARIES}
+    OpenMP::OpenMP_CXX
+)
+target_include_directories(test_single_registration3D PUBLIC ${OpenCV_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
+
 install(TARGETS
         ros2ServiceRegistrationFS2D
         ros2ServiceRegistrationFS3D

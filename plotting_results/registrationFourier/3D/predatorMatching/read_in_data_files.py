@@ -160,7 +160,8 @@ def evaluate_file_3d_predator_matching(folder, dataset_name, threshold_trans, th
 threshold_trans = 0.4
 threshold_rot = 10
 
-folder = "paperTests"
+folder = "benchmarkFS3D"
+# folder = "paperTests"
 
 files = [f for f in os.listdir(folder) if f.endswith('.csv')]
 
