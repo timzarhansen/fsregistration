@@ -26,7 +26,7 @@ import transforms3d.euler as euler
 # --- Input mode (choose ONE by setting the appropriate variable): ---
 #   Option A: Predator dataset
 INPUT_CONFIG = 'configFiles/predatorNothing.yaml'          # path to predator config YAML, e.g. 'configFiles/predatorNothing.yaml'
-INPUT_INDEX = 0              # sample index for Predator dataset
+INPUT_INDEX = 1              # sample index for Predator dataset
 INPUT_DATA_SPLIT = 'train'   # 'train' or 'val'
 
 #   Option B: Raw voxel files (set both paths)
