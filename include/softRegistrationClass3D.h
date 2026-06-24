@@ -38,6 +38,7 @@ struct translationPeak3D {
     double persistence;
     double levelPotential;
     double correlationHeight;
+    double globalCorrelationHeight;
 };
 
 struct rotationPeak4D {

@@ -125,7 +125,7 @@ def get_matching_indices(source, target, trans, search_voxel_size, K=None):
     return match_inds
 
 
-def compute_transformation_from_peak(peak, mean1Transform, mean2Transform):
+def compute_transformation_from_peak(peak, mean1Transform, mean2Transform, translationIndex=0):
     currentQuaternion = [
         peak.potentialRotation.w,
         peak.potentialRotation.x,
@@ -136,13 +136,13 @@ def compute_transformation_from_peak(peak, mean1Transform, mean2Transform):
     rotationMatrix = o3d.geometry.get_rotation_matrix_from_quaternion(currentQuaternion)
 
     translations = peak.potentialTranslations
-    if not translations:
+    if not translations or translationIndex >= len(translations):
         translationVector = np.array([0.0, 0.0, 0.0])
     else:
         translationVector = np.array([
-            translations[0].xTranslation,
-            translations[0].yTranslation,
-            translations[0].zTranslation
+            translations[translationIndex].xTranslation,
+            translations[translationIndex].yTranslation,
+            translations[translationIndex].zTranslation
         ])
 
     resultingTransformation = np.eye(4)
@@ -360,25 +360,30 @@ def main():
             print(f"Sample {indexDataLoader}: NO SOLUTIONS, skipping CSV write")
             continue
 
-        highestPeakCorrelation = 0.0
-        indexHighestPeak = 0
-        closestPeak = float('inf')
-        indexClosestPeak = 0
+        highestTransCorrelation = -1.0
+        indexHighestPeakRoi = 0
+        indexHighestPeakTrIdx = 0
+        closestPeakDistance = float('inf')
+        indexClosestPeakRoi = 0
+        indexClosestPeakTrIdx = 0
 
-        for index, peak in enumerate(listPeaks):
-            if peak.potentialRotation.correlationHeight > highestPeakCorrelation:
-                highestPeakCorrelation = peak.potentialRotation.correlationHeight
-                indexHighestPeak = index
-            currentPeakTransformation = compute_transformation_from_peak(peak, mean1Transform, mean2Transform)
-            distanceSolutions = difference_between_transformations(gtTransformation, currentPeakTransformation)
-            if closestPeak > distanceSolutions:
-                closestPeak = distanceSolutions
-                indexClosestPeak = index
+        for roi, peak in enumerate(listPeaks):
+            for tri, trans in enumerate(peak.potentialTranslations):
+                if trans.globalCorrelationHeight > highestTransCorrelation:
+                    highestTransCorrelation = trans.globalCorrelationHeight
+                    indexHighestPeakRoi = roi
+                    indexHighestPeakTrIdx = tri
+                currentPeakTransformation = compute_transformation_from_peak(peak, mean1Transform, mean2Transform, translationIndex=tri)
+                distanceSolutions = difference_between_transformations(gtTransformation, currentPeakTransformation)
+                if closestPeakDistance > distanceSolutions:
+                    closestPeakDistance = distanceSolutions
+                    indexClosestPeakRoi = roi
+                    indexClosestPeakTrIdx = tri
 
-        highestPeak = listPeaks[indexHighestPeak]
-        bestPeak = listPeaks[indexClosestPeak]
-        estimatedHighestTransformation = compute_transformation_from_peak(highestPeak, mean1Transform, mean2Transform)
-        estimatedBestTransformation = compute_transformation_from_peak(bestPeak, mean1Transform, mean2Transform)
+        highestPeak = listPeaks[indexHighestPeakRoi]
+        bestPeak = listPeaks[indexClosestPeakRoi]
+        estimatedHighestTransformation = compute_transformation_from_peak(highestPeak, mean1Transform, mean2Transform, translationIndex=indexHighestPeakTrIdx)
+        estimatedBestTransformation = compute_transformation_from_peak(bestPeak, mean1Transform, mean2Transform, translationIndex=indexClosestPeakTrIdx)
 
         np.set_printoptions(suppress=True)
 

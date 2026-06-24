@@ -68,7 +68,8 @@ PYBIND11_MODULE(pybind_registration_3d, m) {
         .def_readwrite("zTranslation", &translationPeak3D::zTranslation)
         .def_readwrite("persistence", &translationPeak3D::persistence)
         .def_readwrite("levelPotential", &translationPeak3D::levelPotential)
-        .def_readwrite("correlationHeight", &translationPeak3D::correlationHeight);
+        .def_readwrite("correlationHeight", &translationPeak3D::correlationHeight)
+        .def_readwrite("globalCorrelationHeight", &translationPeak3D::globalCorrelationHeight);
 
     py::class_<rotationPeak4D>(m, "RotationPeak4D")
         .def_readwrite("x", &rotationPeak4D::x)

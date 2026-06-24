@@ -6,13 +6,13 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="ml"
 CONFIG="configFiles/predatorNothingBenchmark.yaml"
-NUM_WORKERS=8
+NUM_WORKERS=14
 BATCH_SIZE=100
 TOTAL_SAMPLES_VAL=1331
 TOTAL_SAMPLES_TRAIN=20642
 # SOFT parameters (read from environment, fall back to defaults)
 SOFT_N=${SOFT_N:-64}
-SOFT_USE_CLAHE=${SOFT_USE_CLAHE:-0}
+SOFT_USE_CLAHE=${SOFT_USE_CLAHE:-1}
 SOFT_R_MIN=${SOFT_R_MIN:-8}
 SOFT_R_MAX=${SOFT_R_MAX:-24}
 SOFT_LEVEL_ROTATION=${SOFT_LEVEL_ROTATION:-0.001}
@@ -32,8 +32,10 @@ echo "SOFT normalization: $SOFT_NORMALIZATION"
 echo "=============================================="
 
 # Process all combinations
-for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None low high; do
-    for data_type in val train; do
+# for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None low high; do
+#     for data_type in val train; do
+for noise_level in  None; do
+    for data_type in val ; do
         echo ""
         echo "=============================================="
         echo "Processing: $noise_level / $data_type"

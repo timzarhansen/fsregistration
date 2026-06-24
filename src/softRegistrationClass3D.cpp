@@ -1123,6 +1123,8 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
 
     auto totalAllTransStart = std::chrono::high_resolution_clock::now();
     std::vector<transformationPeakfs3D> allSolutions;
+    double globalMinTranslationCorrelation = INFINITY;
+    double globalMaxTranslationCorrelation = -INFINITY;
     for (int p = 0; p < potentialRotationsTMP.size(); p++) {
         auto solStart = std::chrono::high_resolution_clock::now();
 
@@ -1285,6 +1287,13 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             }
         }
 
+        if (maximumCorrelationTranslation > globalMaxTranslationCorrelation) {
+            globalMaxTranslationCorrelation = maximumCorrelationTranslation;
+        }
+        if (minimumCorrelationTranslation < globalMinTranslationCorrelation) {
+            globalMinTranslationCorrelation = minimumCorrelationTranslation;
+        }
+
         for (int i = 0; i < this->correlationN * this->correlationN * this->correlationN; i++) {
             resultingCorrelationDouble[i] = (resultingCorrelationDouble[i] - minimumCorrelationTranslation) /
                                             (maximumCorrelationTranslation - minimumCorrelationTranslation);
@@ -1356,6 +1365,25 @@ softRegistrationClass3D::sofftRegistrationVoxel3DListOfPossibleTransformations(d
             transPerSolutionTimes.push_back(transPerSolutionTime);
             if (benchmark && !timings) {
                 std::cerr << "  Translation solution [" << p << "]: " << transPerSolutionTime << " ms" << std::endl;
+            }
+        }
+    }
+
+    // Compute globally-normalized translation correlation for cross-rotation comparison
+    double globalRange = globalMaxTranslationCorrelation - globalMinTranslationCorrelation;
+    if (globalRange > 0) {
+        double invGlobalRange = 1.0 / globalRange;
+        for (auto& sol : allSolutions) {
+            for (auto& trans : sol.potentialTranslations) {
+                trans.globalCorrelationHeight = (trans.correlationHeight - globalMinTranslationCorrelation) * invGlobalRange;
+                if (trans.globalCorrelationHeight < 0.0) trans.globalCorrelationHeight = 0.0;
+                if (trans.globalCorrelationHeight > 1.0) trans.globalCorrelationHeight = 1.0;
+            }
+        }
+    } else {
+        for (auto& sol : allSolutions) {
+            for (auto& trans : sol.potentialTranslations) {
+                trans.globalCorrelationHeight = 1.0;
             }
         }
     }
