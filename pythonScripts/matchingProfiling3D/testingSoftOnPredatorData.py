@@ -296,7 +296,7 @@ def main():
         mean1 = -mean1
         mean2 = -mean2
 
-        maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
+        maxDistance = max(np.max(np.abs(pcd1.points + mean1)), np.max(np.abs(pcd2.points + mean2)))
         voxelSize = (2 * maxDistance * 1.5) / N
 
         mean1Transform = np.eye(4)

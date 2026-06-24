@@ -39,12 +39,12 @@ INPUT_PCD2 = None            # path to .ply/.obj point cloud 2
 
 # --- Registration parameters ---
 N = 64                       # voxel grid dimension
-USE_CLAHE = False             # enable CLAHE contrast enhancement
+USE_CLAHE = True             # enable CLAHE contrast enhancement
 R_MIN = None                 # min radius for rotation filter (None = N/8)
 R_MAX = None                 # max radius for rotation filter (None = N/2 - N/8)
-LEVEL_POTENTIAL_ROTATION = 0.00001
-LEVEL_POTENTIAL_TRANSLATION = 0.0001
-NORMALIZATION = 2            # 0, 1, or 2
+LEVEL_POTENTIAL_ROTATION = 0.001
+LEVEL_POTENTIAL_TRANSLATION = 0.01
+NORMALIZATION = 0            # 0, 1, or 2
 
 # --- Noise ---
 NOISE_LEVEL = 'None'         # None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
@@ -74,7 +74,7 @@ try:
     from pybind_registration_3d import SoftRegistrationWrapper
 except ImportError:
     print("ERROR: Could not import pybind_registration_3d module.")
-    print(f" Searched in: {fsregistration_src}, {debug_build_dir}")
+    print(f" Searched in: {install_dir}")
     print("Make sure you have built the package with: colcon build --packages-select fsregistration")
     sys.exit(1)
 
@@ -297,17 +297,17 @@ def main():
         print("at the top of this file.")
         sys.exit(1)
 
+    # --- Compute means from ORIGINAL point clouds (before noise) ---
+    mean1, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd1)
+    mean2, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd2)
+    mean1 = np.squeeze(np.asarray(mean1))
+    mean2 = np.squeeze(np.asarray(mean2))
+
     # --- Add noise ---
     if NOISE_LEVEL != "None" and NOISE_LEVEL != "none":
         print(f"\nAdding noise: {NOISE_LEVEL}")
         pcd1 = add_noise_to_pcd(pcd1, NOISE_LEVEL)
         pcd2 = add_noise_to_pcd(pcd2, NOISE_LEVEL)
-
-    # --- Compute voxelization parameters ---
-    mean1, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd1)
-    mean2, _ = o3d.geometry.PointCloud.compute_mean_and_covariance(pcd2)
-    mean1 = np.squeeze(np.asarray(mean1))
-    mean2 = np.squeeze(np.asarray(mean2))
 
     # Center point clouds by subtracting mean
     pcd1_centered = o3d.geometry.PointCloud()
