@@ -34,8 +34,8 @@ echo "=============================================="
 # Process all combinations
 ALL_NOISE_LEVELS=(low_gauss high_gauss low_salt_pepper high_salt_pepper None low high)
 NOISE_LEVELS=()
-if [ -n "${SOFT_NOISE_SUBSET:-}" ]; then
-    IFS=',' read -ra NOISE_LEVELS <<< "$SOFT_NOISE_SUBSET"
+if [ -n "${NOISE_SUBSET:-}" ]; then
+    IFS=',' read -ra NOISE_LEVELS <<< "$NOISE_SUBSET"
 else
     NOISE_LEVELS=("${ALL_NOISE_LEVELS[@]}")
 fi

@@ -21,7 +21,16 @@ echo "Batch size: $BATCH_SIZE"
 echo "=============================================="
 
 # Process all combinations
-for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None low high; do
+ALL_NOISE_LEVELS=(low_gauss high_gauss low_salt_pepper high_salt_pepper None low high)
+NOISE_LEVELS=()
+if [ -n "${NOISE_SUBSET:-}" ]; then
+    IFS=',' read -ra NOISE_LEVELS <<< "$NOISE_SUBSET"
+else
+    NOISE_LEVELS=("${ALL_NOISE_LEVELS[@]}")
+fi
+echo "Noise levels to process: ${NOISE_LEVELS[*]}"
+
+for noise_level in "${NOISE_LEVELS[@]}"; do
     for data_type in val train; do
         echo ""
         echo "=============================================="
