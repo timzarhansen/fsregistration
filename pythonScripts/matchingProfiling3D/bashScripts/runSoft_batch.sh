@@ -32,10 +32,18 @@ echo "SOFT normalization: $SOFT_NORMALIZATION"
 echo "=============================================="
 
 # Process all combinations
-# for noise_level in low_gauss high_gauss low_salt_pepper high_salt_pepper None low high; do
-#     for data_type in val train; do
-for noise_level in  None; do
-    for data_type in val ; do
+ALL_NOISE_LEVELS=(low_gauss high_gauss low_salt_pepper high_salt_pepper None low high)
+NOISE_LEVELS=()
+if [ -n "${SOFT_NOISE_SUBSET:-}" ]; then
+    IFS=',' read -ra NOISE_LEVELS <<< "$SOFT_NOISE_SUBSET"
+else
+    NOISE_LEVELS=("${ALL_NOISE_LEVELS[@]}")
+fi
+
+echo "Noise levels to process: ${NOISE_LEVELS[*]}"
+
+for noise_level in "${NOISE_LEVELS[@]}"; do
+    for data_type in val train; do
         echo ""
         echo "=============================================="
         echo "Processing: $noise_level / $data_type"

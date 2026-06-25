@@ -149,7 +149,7 @@ def add_noise_to_pcd(pcd, noise_level):
     return pcd
 
 
-def compute_transformation_from_peak(peak, mean1_transform, mean2_transform):
+def compute_transformation_from_peak(peak, mean1_transform, mean2_transform, translation_index=0):
     """Compute the full SE(3) transformation from a registration peak."""
     current_quaternion = [
         peak.potentialRotation.w,
@@ -160,13 +160,13 @@ def compute_transformation_from_peak(peak, mean1_transform, mean2_transform):
     rotation_matrix = o3d.geometry.get_rotation_matrix_from_quaternion(current_quaternion)
 
     translations = peak.potentialTranslations
-    if not translations:
+    if not translations or translation_index >= len(translations):
         translation_vector = np.array([0.0, 0.0, 0.0])
     else:
         translation_vector = np.array([
-            translations[0].xTranslation,
-            translations[0].yTranslation,
-            translations[0].zTranslation
+            translations[translation_index].xTranslation,
+            translations[translation_index].yTranslation,
+            translations[translation_index].zTranslation
         ])
 
     resulting_transformation = np.eye(4)
@@ -406,6 +406,7 @@ def main():
                 'y_translation': float(trans_peak.yTranslation),
                 'z_translation': float(trans_peak.zTranslation),
                 'correlation_height': float(trans_peak.correlationHeight),
+                'global_correlation_height': float(trans_peak.globalCorrelationHeight),
                 'persistence': float(trans_peak.persistence),
                 'level_potential': float(trans_peak.levelPotential)
             }

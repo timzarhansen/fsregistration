@@ -56,7 +56,7 @@
     0.06226922173081003,
     2.57049713552858
   ],
-  "total_time_seconds": 205.87340688705444,
+  "total_time_seconds": 196.37449145317078,
   "num_rotation_peaks": 19,
   "solutions": [
     {
@@ -115,6 +115,7 @@
           "y_translation": 0.38564326191294146,
           "z_translation": 0.7046501252441805,
           "correlation_height": 2.4980548984892342e+17,
+          "global_correlation_height": 0.9888097242995886,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -124,6 +125,7 @@
           "y_translation": 0.3288508647621673,
           "z_translation": 0.007530526767031312,
           "correlation_height": 2.4776209973947082e+17,
+          "global_correlation_height": 0.9807213351613582,
           "persistence": 0.39183015318463155,
           "level_potential": 0.02022230562996926
         },
@@ -133,6 +135,7 @@
           "y_translation": 2.2038965890114808,
           "z_translation": -0.4668796426793196,
           "correlation_height": 2.0559777281976064e+16,
+          "global_correlation_height": 0.08138214944013693,
           "persistence": 0.08203439935501224,
           "level_potential": 0.011772973731087587
         }
@@ -194,6 +197,7 @@
           "y_translation": -1.0115390368482287,
           "z_translation": 0.8595594818188875,
           "correlation_height": 1.7256367861596106e+17,
+          "global_correlation_height": 0.6830620238953352,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -203,6 +207,7 @@
           "y_translation": 0.7748180614095691,
           "z_translation": -0.009879597670768119,
           "correlation_height": 5.238538307364561e+16,
+          "global_correlation_height": 0.20735803775051856,
           "persistence": 0.2759515632840142,
           "level_potential": 0.051228274515334925
         },
@@ -212,6 +217,7 @@
           "y_translation": -0.9672178959227121,
           "z_translation": -0.06844089756922501,
           "correlation_height": 1.4619913809335088e+17,
+          "global_correlation_height": 0.5787027719781186,
           "persistence": 0.1720975887216606,
           "level_potential": 0.012620576580848997
         }
@@ -273,6 +279,7 @@
           "y_translation": -1.033484383809674,
           "z_translation": 0.23257763751268556,
           "correlation_height": 1.5459127071517066e+17,
+          "global_correlation_height": 0.611921506878964,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -282,6 +289,7 @@
           "y_translation": 0.7800025761585818,
           "z_translation": -0.1619501899734173,
           "correlation_height": 2.70446117767015e+16,
+          "global_correlation_height": 0.1070511906318894,
           "persistence": 0.16367372874419833,
           "level_potential": 0.018215701196781783
         }
@@ -343,6 +351,7 @@
           "y_translation": -0.7924122229844689,
           "z_translation": 0.24064702512358574,
           "correlation_height": 1.9830520376235e+17,
+          "global_correlation_height": 0.7849551824421929,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -352,6 +361,7 @@
           "y_translation": -0.26499454733612937,
           "z_translation": -0.2356648658118404,
           "correlation_height": 1.2689739945738709e+17,
+          "global_correlation_height": 0.502300340347522,
           "persistence": 0.5739357867124629,
           "level_potential": 0.03208171930783057
         }
@@ -413,6 +423,7 @@
           "y_translation": 0.3803570130837938,
           "z_translation": 0.07425925353999938,
           "correlation_height": 1.8498658774900557e+17,
+          "global_correlation_height": 0.7322358565531908,
           "persistence": 1.0,
           "level_potential": 1.0
         }
@@ -474,6 +485,7 @@
           "y_translation": -0.7880852768038311,
           "z_translation": 0.23129692254497128,
           "correlation_height": 1.8638534418646458e+17,
+          "global_correlation_height": 0.7377725802181614,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -483,6 +495,7 @@
           "y_translation": -0.25905358010598967,
           "z_translation": 1.098910070308036,
           "correlation_height": 6.795286876213326e+16,
+          "global_correlation_height": 0.26897910637067085,
           "persistence": 0.27939426243445564,
           "level_potential": 0.04952481706800243
         }
@@ -544,6 +557,7 @@
           "y_translation": 0.14883691916005273,
           "z_translation": 0.08265988775388135,
           "correlation_height": 1.7731204989790054e+17,
+          "global_correlation_height": 0.701857590401925,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -553,6 +567,7 @@
           "y_translation": -0.38732504344049745,
           "z_translation": 0.8561251003710888,
           "correlation_height": 1.2601523041602987e+17,
+          "global_correlation_height": 0.4988084341964698,
           "persistence": 0.6530801540363154,
           "level_potential": 0.04301291842777534
         }
@@ -614,6 +629,7 @@
           "y_translation": 0.1399274448754247,
           "z_translation": 0.1552558693617874,
           "correlation_height": 1.2838639596696341e+17,
+          "global_correlation_height": 0.5081942629711106,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -623,6 +639,7 @@
           "y_translation": -0.39354695189665284,
           "z_translation": -0.0068644852680597645,
           "correlation_height": 8.847044048375643e+16,
+          "global_correlation_height": 0.35019419275498104,
           "persistence": 0.5290877171355322,
           "level_potential": 0.04948675403508802
         },
@@ -632,6 +649,7 @@
           "y_translation": 0.1563868080816075,
           "z_translation": 0.7824960144856123,
           "correlation_height": 1.223705037551033e+17,
+          "global_correlation_height": 0.4843814447539329,
           "persistence": 0.14285330542445285,
           "level_potential": 0.010895801791706032
         }
@@ -693,6 +711,7 @@
           "y_translation": -0.952060290619507,
           "z_translation": 0.7030159696224829,
           "correlation_height": 2.334972764875741e+17,
+          "global_correlation_height": 0.9242566195323269,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -702,6 +721,7 @@
           "y_translation": 0.7985930966810745,
           "z_translation": -0.6058358249683164,
           "correlation_height": 5.344522628436179e+16,
+          "global_correlation_height": 0.21155323487618163,
           "persistence": 0.216171061851786,
           "level_potential": 0.03178971356572061
         }
@@ -763,6 +783,7 @@
           "y_translation": -0.7994691854296941,
           "z_translation": -0.5461856969397411,
           "correlation_height": 1.6617689970029446e+17,
+          "global_correlation_height": 0.6577811179289289,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -772,6 +793,7 @@
           "y_translation": -0.2516712089040913,
           "z_translation": 0.017190201195910776,
           "correlation_height": 9.96545711414119e+16,
+          "global_correlation_height": 0.39446454549548765,
           "persistence": 0.5069807195058688,
           "level_potential": 0.07412269195754506
         }
@@ -833,6 +855,7 @@
           "y_translation": 0.3789035220445189,
           "z_translation": -0.2375364884329359,
           "correlation_height": 2.1370137742583507e+17,
+          "global_correlation_height": 0.8458981434822657,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -842,6 +865,7 @@
           "y_translation": 0.3208390876519157,
           "z_translation": 0.39010017441886163,
           "correlation_height": 1.7221954713354378e+17,
+          "global_correlation_height": 0.6816998418373763,
           "persistence": 0.24540863501943389,
           "level_potential": 0.02093863125123388
         },
@@ -851,6 +875,7 @@
           "y_translation": 2.1215811582774395,
           "z_translation": -0.5469881225435846,
           "correlation_height": 3.3429517201036764e+16,
+          "global_correlation_height": 0.13232468072265616,
           "persistence": 0.15199071440282275,
           "level_potential": 0.012390051112539362
         }
@@ -912,6 +937,7 @@
           "y_translation": -0.7918071852200133,
           "z_translation": 0.0821421063338746,
           "correlation_height": 1.060061138818016e+17,
+          "global_correlation_height": 0.419605975452852,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -921,6 +947,7 @@
           "y_translation": -0.34937213128614025,
           "z_translation": 0.1518502146391515,
           "correlation_height": 6.927446834721344e+16,
+          "global_correlation_height": 0.27421041862945233,
           "persistence": 0.5753975099709573,
           "level_potential": 0.026204798472729524
         },
@@ -930,6 +957,7 @@
           "y_translation": -0.62677752104503,
           "z_translation": 1.2603827358012027,
           "correlation_height": 7.366377599626976e+16,
+          "global_correlation_height": 0.2915846968687108,
           "persistence": 0.2556270831080161,
           "level_potential": 0.02354363001084198
         },
@@ -939,6 +967,7 @@
           "y_translation": 0.9779146337450836,
           "z_translation": -1.2712996133213572,
           "correlation_height": 1.9964803239870424e+16,
+          "global_correlation_height": 0.07902705260501257,
           "persistence": 0.18311444257272597,
           "level_potential": 0.02877377401641145
         }
@@ -1000,6 +1029,7 @@
           "y_translation": 0.3153698585565153,
           "z_translation": 0.47734459197421225,
           "correlation_height": 2.5263251736917344e+17,
+          "global_correlation_height": 0.9999999999999999,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1009,6 +1039,7 @@
           "y_translation": 0.38249582550779015,
           "z_translation": 0.7810117519858706,
           "correlation_height": 2.2175685326668595e+17,
+          "global_correlation_height": 0.8777842835751476,
           "persistence": 0.1912962643818762,
           "level_potential": 0.01632901071891141
         }
@@ -1070,6 +1101,7 @@
           "y_translation": 0.15871945700013854,
           "z_translation": 0.943381743583827,
           "correlation_height": 1.6640549709204784e+17,
+          "global_correlation_height": 0.6586859792434339,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1079,6 +1111,7 @@
           "y_translation": -0.3926585617558164,
           "z_translation": 0.9333220395348383,
           "correlation_height": 7.229724564214189e+16,
+          "global_correlation_height": 0.28617553430975584,
           "persistence": 0.3918670988135281,
           "level_potential": 0.05563046238603893
         },
@@ -1088,6 +1121,7 @@
           "y_translation": 1.8601737070792415,
           "z_translation": -1.3492913633906056,
           "correlation_height": 1.6554384267487968e+16,
+          "global_correlation_height": 0.06552752765114929,
           "persistence": 0.09026326694370593,
           "level_potential": 0.010143910938555495
         }
@@ -1149,6 +1183,7 @@
           "y_translation": -0.7010308514217239,
           "z_translation": 0.6256963666791279,
           "correlation_height": 1.3363625217963122e+17,
+          "global_correlation_height": 0.5289748666215748,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1158,6 +1193,7 @@
           "y_translation": -0.1977932852158851,
           "z_translation": -0.16208168437861115,
           "correlation_height": 7.305208722886874e+16,
+          "global_correlation_height": 0.28916343782505743,
           "persistence": 0.43787441216738876,
           "level_potential": 0.032390353849224736
         },
@@ -1167,6 +1203,7 @@
           "y_translation": 1.0909131158685839,
           "z_translation": -0.32906338946541397,
           "correlation_height": 3.0058045413348184e+16,
+          "global_correlation_height": 0.11897932113554557,
           "persistence": 0.22291865951744905,
           "level_potential": 0.04099916665510791
         }
@@ -1228,6 +1265,7 @@
           "y_translation": -0.9596872448580153,
           "z_translation": 0.4700843093040917,
           "correlation_height": 2.289052784119643e+17,
+          "global_correlation_height": 0.9060800280015561,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1237,6 +1275,7 @@
           "y_translation": -1.0184665855548,
           "z_translation": -0.0024958643385959278,
           "correlation_height": 2.1820994785347898e+17,
+          "global_correlation_height": 0.8637445017998512,
           "persistence": 0.4192080314976385,
           "level_potential": 0.07150130958226086
         },
@@ -1246,6 +1285,7 @@
           "y_translation": 0.793025454829416,
           "z_translation": -0.7122563527961884,
           "correlation_height": 4.5181988140764296e+16,
+          "global_correlation_height": 0.17884470538976413,
           "persistence": 0.18115163902971157,
           "level_potential": 0.023526161876829037
         }
@@ -1307,6 +1347,7 @@
           "y_translation": 0.16168602604740906,
           "z_translation": -0.08082998167771627,
           "correlation_height": 1.8455278866477062e+17,
+          "global_correlation_height": 0.7305187415564659,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1316,6 +1357,7 @@
           "y_translation": -0.38520400675585414,
           "z_translation": -0.003946299914349971,
           "correlation_height": 1.274439891112464e+17,
+          "global_correlation_height": 0.5044639163572586,
           "persistence": 0.5939366610616069,
           "level_potential": 0.041529674819824794
         },
@@ -1325,6 +1367,7 @@
           "y_translation": 1.9664419796117252,
           "z_translation": -1.737842124135476,
           "correlation_height": 2.1589902264455236e+16,
+          "global_correlation_height": 0.08545971234932428,
           "persistence": 0.1168390263587708,
           "level_potential": 0.012010852939168393
         },
@@ -1334,6 +1377,7 @@
           "y_translation": 1.8555046715925392,
           "z_translation": -0.22722002768195648,
           "correlation_height": 2.1276277122433296e+16,
+          "global_correlation_height": 0.0842182841068798,
           "persistence": 0.10105860961696769,
           "level_potential": 0.01252786830641289
         }
@@ -1395,6 +1439,7 @@
           "y_translation": 0.08972646238321129,
           "z_translation": -0.46992777902568617,
           "correlation_height": 1.9344825749107504e+17,
+          "global_correlation_height": 0.7657298415325843,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1404,6 +1449,7 @@
           "y_translation": -0.5431728439188926,
           "z_translation": -0.1641580533297868,
           "correlation_height": 1.4964982955878358e+17,
+          "global_correlation_height": 0.5923617082914918,
           "persistence": 0.732102418077221,
           "level_potential": 0.165015108590229
         },
@@ -1413,6 +1459,7 @@
           "y_translation": 0.1429923840685106,
           "z_translation": 0.3164103688550371,
           "correlation_height": 1.5288726252394672e+17,
+          "global_correlation_height": 0.6051764995102812,
           "persistence": 0.3507984908604317,
           "level_potential": 0.03711034402328019
         },
@@ -1422,6 +1469,7 @@
           "y_translation": -0.5203106113497084,
           "z_translation": -0.3068965126342776,
           "correlation_height": 1.152025650920583e+17,
+          "global_correlation_height": 0.4560084596066154,
           "persistence": 0.23692300278112327,
           "level_potential": 0.026338156911828708
         },
@@ -1431,6 +1479,7 @@
           "y_translation": 1.454845150755833,
           "z_translation": -0.5140065649806476,
           "correlation_height": 2.064429245991298e+16,
+          "global_correlation_height": 0.08171668744346694,
           "persistence": 0.10247497879884943,
           "level_potential": 0.014122748256661785
         }
@@ -1492,6 +1541,7 @@
           "y_translation": 0.05692935697646422,
           "z_translation": 0.39868871465157074,
           "correlation_height": 4.99881863852221e+16,
+          "global_correlation_height": 0.19786916943939584,
           "persistence": 1.0,
           "level_potential": 1.0
         },
@@ -1501,6 +1551,7 @@
           "y_translation": 1.8839743494899734,
           "z_translation": -1.170292716403809,
           "correlation_height": 1.8033001995949376e+16,
+          "global_correlation_height": 0.07138036775209598,
           "persistence": 0.34367841393661125,
           "level_potential": 0.012901273969072095
         },
@@ -1510,6 +1561,7 @@
           "y_translation": 0.006176752814517512,
           "z_translation": -1.0183916581423411,
           "correlation_height": 1.9429360654721936e+16,
+          "global_correlation_height": 0.07690760024502187,
           "persistence": 0.2834179315572648,
           "level_potential": 0.02719122552852765
         },
@@ -1519,6 +1571,7 @@
           "y_translation": -0.39139506114507416,
           "z_translation": 0.6296678794254718,
           "correlation_height": 2.182289105631892e+16,
+          "global_correlation_height": 0.0863819562246969,
           "persistence": 0.2677146536419848,
           "level_potential": 0.011726026573229385
         }
