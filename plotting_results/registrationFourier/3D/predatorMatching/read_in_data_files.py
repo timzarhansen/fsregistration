@@ -40,7 +40,7 @@ def evaluate_file_3d_predator_matching(folder, dataset_name, threshold_trans, th
     resulting_data = np.zeros((data_set_length, 8))
 
     for i in range(data_set_length):
-        if '_soft_' not in dataset_name:
+        if not any(x in dataset_name for x in ('_soft_', 'results')):
             gt_transformation = transformations_matrix(data[i, 2], data[i, 3], data[i, 4], data[i, 5], data[i, 6], data[i, 7])
             highest_peak_transformation = transformations_matrix(data[i, 8], data[i, 9], data[i, 10], data[i, 11], data[i, 12], data[i, 13])
 
@@ -160,9 +160,10 @@ def evaluate_file_3d_predator_matching(folder, dataset_name, threshold_trans, th
 threshold_trans = 0.4
 threshold_rot = 10
 
-folder = "benchmarkFS3D"
+# folder = "benchmarkFS3D"
 # folder = "paperTests"
-
+# folder = "TestFiles"
+folder = "BackupToBeSave"
 files = [f for f in os.listdir(folder) if f.endswith('.csv')]
 
 if not files:

@@ -26,8 +26,8 @@ import transforms3d.euler as euler
 # --- Input mode (choose ONE by setting the appropriate variable): ---
 #   Option A: Predator dataset
 INPUT_CONFIG = 'configFiles/predatorNothing.yaml'          # path to predator config YAML, e.g. 'configFiles/predatorNothing.yaml'
-INPUT_INDEX = 2              # sample index for Predator dataset
-INPUT_DATA_SPLIT = 'train'   # 'train' or 'val'
+INPUT_INDEX = 0              # sample index for Predator dataset
+INPUT_DATA_SPLIT = 'val'   # 'train' or 'val'
 
 #   Option B: Raw voxel files (set both paths)
 INPUT_VOXEL1 = None          # path to .npy voxel file 1
@@ -40,11 +40,11 @@ INPUT_PCD2 = None            # path to .ply/.obj point cloud 2
 # --- Registration parameters ---
 N = 64                       # voxel grid dimension
 USE_CLAHE = True             # enable CLAHE contrast enhancement
-R_MIN = None                 # min radius for rotation filter (None = N/8)
-R_MAX = None                 # max radius for rotation filter (None = N/2 - N/8)
+R_MIN = 8                 # min radius for rotation filter (None = N/8)
+R_MAX = 24                 # max radius for rotation filter (None = N/2 - N/8)
 LEVEL_POTENTIAL_ROTATION = 0.001
-LEVEL_POTENTIAL_TRANSLATION = 0.01
-NORMALIZATION = 0            # 0, 1, or 2
+LEVEL_POTENTIAL_TRANSLATION = 0.001
+NORMALIZATION = 2            # 0, 1, or 2
 
 # --- Noise ---
 NOISE_LEVEL = 'None'         # None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
@@ -318,6 +318,8 @@ def main():
     # Compute voxel size based on extent
     max_distance_1 = np.max(np.abs(np.asarray(pcd1_centered.points)))
     max_distance_2 = np.max(np.abs(np.asarray(pcd2_centered.points)))
+    # max_distance_1 = np.max(np.asarray(pcd1_centered.points))
+    # max_distance_2 = np.max(np.asarray(pcd2_centered.points))
     max_distance = max(max_distance_1, max_distance_2)
     voxel_size = (2 * max_distance * 1.5) / N
 
@@ -370,7 +372,9 @@ def main():
 
     elapsed = time.time() - start_time
     print(f"\nRegistration completed in {elapsed:.2f}s")
+    total_solutions = sum(len(peak.potentialTranslations) for peak in list_peaks)
     print(f"  Rotation peaks found: {len(list_peaks)}")
+    print(f"  Total solutions (rotation x translation): {total_solutions}")
     for i, peak in enumerate(list_peaks):
         total_trans = len(peak.potentialTranslations)
         print(f"    Solution {i}: {total_trans} translation peak(s), rotation corr={peak.potentialRotation.correlationHeight:.4f}")
