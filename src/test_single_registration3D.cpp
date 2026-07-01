@@ -189,7 +189,8 @@ int main(int argc, char** argv) {
     }
 
     int N = CONFIG_N;
-    double sizeVoxelOneDirection = 2 * maximumDistance * CONFIG_VOXEL_SIZE_MULTIPLIER;
+    double voxel_size = 2 * maximumDistance * 1.001 / (N - 2);
+    double sizeVoxelOneDirection = N * voxel_size;
     double cellSize = CONFIG_CELL_SIZE;
 
     std::cout << "Parameters: N=" << N << ", maxDistance=" << maximumDistance

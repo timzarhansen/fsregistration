@@ -321,8 +321,7 @@ def main():
     # max_distance_1 = np.max(np.asarray(pcd1_centered.points))
     # max_distance_2 = np.max(np.asarray(pcd2_centered.points))
     max_distance = max(max_distance_1, max_distance_2)
-    voxel_size = (2 * max_distance * 1.5) / N
-
+    voxel_size = (2 * max_distance * 1.001) / (N-2)
     print(f"\nVoxelization parameters:")
     print(f"  mean1: [{mean1[0]:.4f}, {mean1[1]:.4f}, {mean1[2]:.4f}]")
     print(f"  mean2: [{mean2[0]:.4f}, {mean2[1]:.4f}, {mean2[2]:.4f}]")

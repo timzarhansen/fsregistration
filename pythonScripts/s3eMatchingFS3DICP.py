@@ -235,12 +235,12 @@ if __name__ == "__main__":
         N = 64
         # maxDistance = max(np.max(pcd1.points - mean1), np.max(pcd2.points - mean2))
         maxDistance = 20
-        voxelSize = (2 * maxDistance * 1.5) / N
+        voxelSize = (2 * maxDistance * 1.001) / (N - 2)
 
         maxDistanceXY = 20
         maxDistanceZ = 20
-        voxelSizeXY = (2 * maxDistanceXY * 1.5) / N
-        voxelSizeZ = (2 * maxDistanceZ * 1.5) / N
+        voxelSizeXY = (2 * maxDistanceXY * 1.001) / (N - 2)
+        voxelSizeZ = (2 * maxDistanceZ * 1.001) / (N - 2)
 
         # print("voxelSizeXY: ",voxelSizeXY)
 

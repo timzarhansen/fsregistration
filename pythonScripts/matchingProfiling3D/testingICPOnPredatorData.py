@@ -259,7 +259,7 @@ def main():
         mean2 = -mean2
         N = 64
         maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
-        voxelSize = (2 * maxDistance * 1.5) / N
+        voxelSize = (2 * maxDistance * 1.001) / (N - 2)
 
         # ICP Registration with retry logic
         # Using Identity as initial guess

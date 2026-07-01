@@ -166,8 +166,9 @@ int main(int argc, char **argv) {
 
     }
 //    std::cout << maximumDistance << std::endl;
-    double sizeVoxelOneDirection = 2 * maximumDistance * 1.4;
     int N = 64;
+    double voxel_size = 2 * maximumDistance * 1.001 / (N - 2);
+    double sizeVoxelOneDirection = N * voxel_size;
     double *voxelData1;
     double *voxelData2;
     voxelData1 = (double *) malloc(sizeof(double) * N * N * N);

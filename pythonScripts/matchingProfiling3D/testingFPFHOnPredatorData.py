@@ -282,7 +282,7 @@ def main():
         mean2 = -mean2
         N = 64
         maxDistance = max(np.max(pcd1.points + mean1), np.max(pcd2.points + mean2))
-        overlapVoxelSize = (2 * maxDistance * 1.5) / N
+        overlapVoxelSize = (2 * maxDistance * 1.001) / (N - 2)
 
         # FPFH Global Registration with retry logic
         max_retries = 3

@@ -182,7 +182,7 @@ if __name__ == "__main__":
     mean2, cov2 = pcd2.compute_mean_and_covariance()
     N = 64
     maxDistance = max(np.max(pcd1.points - mean1), np.max(pcd2.points - mean2))
-    voxelSize = (2 * maxDistance * 1.5) / N
+    voxelSize = (2 * maxDistance * 1.001) / (N - 2)
 
     # o3d.geometry.PointCloud.compute_point_cloud_distance
     # mean1 = mean1
