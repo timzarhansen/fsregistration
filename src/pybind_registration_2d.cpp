@@ -179,7 +179,7 @@ public:
             initialGuessMat, covarianceMatrix,
             useInitialAngle, useInitialTranslation,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak
+            potentialNecessaryForPeak, false, 0.1
         );
 
         return std::make_tuple(eigen4x4_to_numpy(result), eigen3x3_to_numpy(covarianceMatrix));
@@ -204,7 +204,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, false, benchmark
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, false, benchmark, nullptr, 0.0
         );
 
         std::vector<TransformationPeak2D> out;
@@ -248,7 +248,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, true, benchmark
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, true, benchmark, nullptr, 0.0
         );
 
         std::vector<TransformationPeak2D> out;
@@ -307,35 +307,35 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
               py::arg("multipleRadii") = false,
               py::arg("useClahe") = true,
                py::arg("useHamming") = true,
-               py::arg("useDirect") = false,
-               py::arg("levelPotentialRotation") = 0.1)
-        .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
-             py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
-             py::arg("useInitialAngle") = true,
-             py::arg("useInitialTranslation") = true,
-             py::arg("cellSize"),
-             py::arg("useGauss") = false,
-             py::arg("debug") = false,
-             py::arg("potentialNecessaryForPeak") = 0.1)
-        .def("register_so3", &SoftRegistrationWrapper2D::register_so3,
-             py::arg("scan1"), py::arg("scan2"),
-             py::arg("cellSize"),
-             py::arg("useGauss") = false,
-             py::arg("debug") = false,
-             py::arg("potentialNecessaryForPeak") = 0.1,
-             py::arg("multipleRadii") = false,
-             py::arg("useClahe") = true,
-             py::arg("useHamming") = true,
-             py::arg("benchmark") = false)
-        .def("register_direct", &SoftRegistrationWrapper2D::register_direct,
-             py::arg("scan1"), py::arg("scan2"),
-             py::arg("cellSize"),
-             py::arg("useGauss") = false,
-             py::arg("debug") = false,
-             py::arg("potentialNecessaryForPeak") = 0.1,
-             py::arg("multipleRadii") = false,
-             py::arg("useClahe") = true,
-             py::arg("useHamming") = true,
-             py::arg("benchmark") = false)
+                py::arg("useDirect") = false,
+                py::arg("levelPotentialRotation") = 0.1)
+         .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
+              py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
+              py::arg("useInitialAngle") = true,
+              py::arg("useInitialTranslation") = true,
+              py::arg("cellSize"),
+              py::arg("useGauss") = false,
+              py::arg("debug") = false,
+              py::arg("potentialNecessaryForPeak") = 0.1)
+         .def("register_so3", &SoftRegistrationWrapper2D::register_so3,
+              py::arg("scan1"), py::arg("scan2"),
+              py::arg("cellSize"),
+              py::arg("useGauss") = false,
+              py::arg("debug") = false,
+              py::arg("potentialNecessaryForPeak") = 0.1,
+              py::arg("multipleRadii") = false,
+              py::arg("useClahe") = true,
+              py::arg("useHamming") = true,
+              py::arg("benchmark") = false)
+         .def("register_direct", &SoftRegistrationWrapper2D::register_direct,
+              py::arg("scan1"), py::arg("scan2"),
+              py::arg("cellSize"),
+              py::arg("useGauss") = false,
+              py::arg("debug") = false,
+              py::arg("potentialNecessaryForPeak") = 0.1,
+              py::arg("multipleRadii") = false,
+              py::arg("useClahe") = true,
+              py::arg("useHamming") = true,
+              py::arg("benchmark") = false)
         .def_property_readonly("N", &SoftRegistrationWrapper2D::getN);
 }

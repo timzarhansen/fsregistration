@@ -7,7 +7,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="ml"
 CONFIG="configFiles/predatorNothingBenchmark.yaml"
 NUM_WORKERS=14
-BATCH_SIZE=100
+BATCH_SIZE=50
 TOTAL_SAMPLES_VAL=1331
 TOTAL_SAMPLES_TRAIN=20642
 # SOFT parameters (read from environment, fall back to defaults)

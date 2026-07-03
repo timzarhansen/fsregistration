@@ -26,7 +26,7 @@ import transforms3d.euler as euler
 # --- Input mode (choose ONE by setting the appropriate variable): ---
 #   Option A: Predator dataset
 INPUT_CONFIG = 'configFiles/predatorNothing.yaml'          # path to predator config YAML, e.g. 'configFiles/predatorNothing.yaml'
-INPUT_INDEX = 0              # sample index for Predator dataset
+INPUT_INDEX = 2              # sample index for Predator dataset
 INPUT_DATA_SPLIT = 'val'   # 'train' or 'val'
 
 #   Option B: Raw voxel files (set both paths)
@@ -39,11 +39,11 @@ INPUT_PCD2 = None            # path to .ply/.obj point cloud 2
 
 # --- Registration parameters ---
 N = 64                       # voxel grid dimension
-USE_CLAHE = True             # enable CLAHE contrast enhancement
+USE_CLAHE = False             # enable CLAHE contrast enhancement
 R_MIN = 8                 # min radius for rotation filter (None = N/8)
 R_MAX = 24                 # max radius for rotation filter (None = N/2 - N/8)
-LEVEL_POTENTIAL_ROTATION = 0.001
-LEVEL_POTENTIAL_TRANSLATION = 0.001
+LEVEL_POTENTIAL_ROTATION = 0.0001
+LEVEL_POTENTIAL_TRANSLATION = 0.0001
 NORMALIZATION = 2            # 0, 1, or 2
 
 # --- Noise ---

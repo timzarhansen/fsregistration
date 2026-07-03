@@ -63,6 +63,7 @@ struct BenchmarkTimings2D {
     double transFftshiftTime = 0;
     double transPeakDetectionTime = 0;
     double transPreprocessingTime = 0;
+    double freqRotationPhaseTime = 0;
     std::vector<double> transPerAngleTimes;
     int numAngles = 0;
     int totalTransPeaks = 0;
@@ -111,6 +112,7 @@ public:
                 sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
         this->complexSpectrum2Correlation = (fftw_complex *) fftw_malloc(
                 sizeof(fftw_complex) * this->correlationN * this->correlationN * this->correlationN);
+
         resampledMagnitudeSO3_1 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_2 = (double *) malloc(sizeof(double) * N * N);
         resampledMagnitudeSO3_1TMP = (double *) malloc(sizeof(double) * N * N);
@@ -178,6 +180,7 @@ public:
 
         ~softRegistrationClass() {
         sofftCorrelationObject.~softCorrelationClass();
+
         free(hammingCoeffs);
         free(xAngle);
         free(yAngle);
@@ -222,31 +225,32 @@ public:
                                                        double level_potential_rotation = 0.1);
 
 std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
-                                                                                    double voxelData2Input[],
-                                                                                    double cellSize,
-                                                                                    bool useGauss,
-                                                                                    bool debug = false,
-                                                                                    double potentialNecessaryForPeak = 0.1,
-                                                                                    bool multipleRadii = false,
-                                                                                    bool useClahe = true,
-                                                                                    bool useHamming = true,
-                                                                                    bool useDirect = true,
-                                                                                    bool benchmark = false,
-                                                                                    BenchmarkTimings2D* timings = nullptr,
-                                                                                    double level_potential_rotation = 0.0);
+                                                                                     double voxelData2Input[],
+                                                                                     double cellSize,
+                                                                                     bool useGauss,
+                                                                                     bool debug = false,
+                                                                                     double potentialNecessaryForPeak = 0.1,
+                                                                                     bool multipleRadii = false,
+                                                                                     bool useClahe = true,
+                                                                                     bool useHamming = true,
+                                                                                     bool useDirect = true,
+                                                                                     bool benchmark = false,
+                                                                                     BenchmarkTimings2D* timings = nullptr,
+                                                                                     double level_potential_rotation = 0.0);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
 
  std::vector<translationPeakfs2D> sofftRegistrationVoxel2DTranslationAllPossibleSolutions(double voxelData1Input[],
-                                                                                               double voxelData2Input[],
-                                                                                               double cellSize,
-                                                                                               double normalizationFactor,
-                                                                                               bool debug = false,
-                                                                                               int numberOfRotationForDebug = 0,
-                                                                                               double potentialNecessaryForPeak = 0.1,
-                                                                                               bool benchmark = false,
-                                                                                               BenchmarkTimings2D* timings = nullptr);
+                                                                                                double voxelData2Input[],
+                                                                                                double cellSize,
+                                                                                                double normalizationFactor,
+                                                                                                bool debug = false,
+                                                                                                int numberOfRotationForDebug = 0,
+                                                                                                double potentialNecessaryForPeak = 0.1,
+                                                                                                bool benchmark = false,
+                                                                                                BenchmarkTimings2D* timings = nullptr);
+
 
     std::pair<std::vector<float>, std::vector<float>>
     compute1AngleCorrelationArraySO3(double voxelData1Input[], double voxelData2Input[],
@@ -300,6 +304,7 @@ private://here everything is created. malloc is done in the constructor
     double *phase2;
     fftw_complex *complexSpectrum1Correlation;
     fftw_complex *complexSpectrum2Correlation;
+
     double *magnitude1Shifted;
     double *magnitude2Shifted;
     double *resampledMagnitudeSO3_1;
@@ -347,6 +352,7 @@ private://here everything is created. malloc is done in the constructor
     std::vector<rotationPeakfs2D> runRotationPeakDetection(const RotationCorrelationResult& result,
                                                            BenchmarkTimings2D* timings,
                                                            double level_potential_rotation = 0.1);
+
 };
 
 

@@ -163,7 +163,7 @@ threshold_rot = 10
 # folder = "benchmarkFS3D"
 # folder = "paperTests"
 # folder = "TestFiles"
-folder = "BackupToBeSave"
+folder = "benchmarkfs3d"
 files = [f for f in os.listdir(folder) if f.endswith('.csv')]
 
 if not files:

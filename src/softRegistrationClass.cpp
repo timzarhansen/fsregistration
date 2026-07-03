@@ -55,6 +55,7 @@ double angleDifference(double angle1, double angle2) {//gives angle 1 - angle 2
     return atan2(sin(angle1 - angle2), cos(angle1 - angle2));
 }
 
+
 double
 softRegistrationClass::getSpectrumFromVoxelData2D(double voxelData[], double magnitude[], double phase[],
     bool gaussianBlur) {
@@ -843,6 +844,7 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     return potentialTranslations;
 }
 
+
 Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double voxelData1Input[],
      double voxelData2Input[],
      Eigen::Matrix4d& initialGuess,
@@ -883,6 +885,8 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
     int angleIndex = 0;
     for (auto& estimatedAngle : estimatedAngles) {
 
+        std::vector<translationPeakfs2D> potentialTranslations;
+
         //copy data
         for (int i = 0; i < N * N; i++) {
             this->voxelData1[i] = voxelData1Input[i];
@@ -891,24 +895,24 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
 
         cv::Mat magTMP1(this->N, this->N, CV_64F, voxelData1);
         cv::Mat magTMP2(this->N, this->N, CV_64F, voxelData2);
-        //add gaussian blur
-        if (useGauss) {
-            for (int i = 0; i < 2; i++) {
-                cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-                cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
+            //add gaussian blur
+            if (useGauss) {
+                for (int i = 0; i < 2; i++) {
+                    cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
+                    cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
+                }
             }
-        }
 
-        cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
-        //positive values mean COUNTER CLOCK WISE (open cv description) threfore negative rotation
-        cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
-        cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size()); // what size I should use?
+            cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
+            //positive values mean COUNTER CLOCK WISE (open cv description) threfore negative rotation
+            cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
+            cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size()); // what size I should use?
 
-        std::vector<translationPeakfs2D> potentialTranslations = this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-            voxelData1, voxelData2,
-            cellSize,
-            1.0,
-            debug, angleIndex, potentialNecessaryForPeak, benchmark);
+            potentialTranslations = this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
+                voxelData1, voxelData2,
+                cellSize,
+                1.0,
+                debug, angleIndex, potentialNecessaryForPeak, benchmark);
         Eigen::Matrix4d estimatedRotationScans = Eigen::Matrix4d::Identity();
         Eigen::AngleAxisd rotation_vectorTMP(estimatedAngle.angle, Eigen::Vector3d(0, 0, 1));
         Eigen::Matrix3d tmpRotMatrix3d = rotation_vectorTMP.toRotationMatrix();
@@ -1003,45 +1007,45 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     std::vector<double> transPerAngleTimes;
 
     for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
-        auto& estimatedAngle = estimatedAnglePeak[angleIndex];
+            auto& estimatedAngle = estimatedAnglePeak[angleIndex];
 
-        auto preprocessStart = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < this->N * this->N; i++) {
-            voxelData1_local[i] = voxelData1Input[i];
-            voxelData2_local[i] = voxelData2Input[i];
-        }
-
-        cv::Mat magTMP1(this->N, this->N, CV_64F, voxelData1_local.data());
-        cv::Mat magTMP2(this->N, this->N, CV_64F, voxelData2_local.data());
-
-        if (useGauss) {
-            for (int i = 0; i < 2; i++) {
-                cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
-                cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
+            auto preprocessStart = std::chrono::high_resolution_clock::now();
+            for (int i = 0; i < this->N * this->N; i++) {
+                voxelData1_local[i] = voxelData1Input[i];
+                voxelData2_local[i] = voxelData2Input[i];
             }
-        }
 
-        cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
-        cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
-        cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
-        auto preprocessEnd = std::chrono::high_resolution_clock::now();
-        totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
+            cv::Mat magTMP1(this->N, this->N, CV_64F, voxelData1_local.data());
+            cv::Mat magTMP2(this->N, this->N, CV_64F, voxelData2_local.data());
 
-        auto angleStart = std::chrono::high_resolution_clock::now();
-        std::vector<translationPeakfs2D> potentialTranslations =
-            this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
-                voxelData1_local.data(), voxelData2_local.data(),
-                cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings);
-        auto angleEnd = std::chrono::high_resolution_clock::now();
-        double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
-        totalTranslationTime += angleTime;
-        transPerAngleTimes.push_back(angleTime);
+            if (useGauss) {
+                for (int i = 0; i < 2; i++) {
+                    cv::GaussianBlur(magTMP1, magTMP1, cv::Size(9, 9), 0);
+                    cv::GaussianBlur(magTMP2, magTMP2, cv::Size(9, 9), 0);
+                }
+            }
 
-        transformationPeakfs2D transformationPeakTMP;
-        transformationPeakTMP.potentialRotation = estimatedAngle;
-        transformationPeakTMP.potentialTranslations = potentialTranslations;
+            cv::Point2f pc(magTMP1.cols / 2., magTMP1.rows / 2.);
+            cv::Mat r = cv::getRotationMatrix2D(pc, estimatedAngle.angle * 180.0 / M_PI, 1.0);
+            cv::warpAffine(magTMP1, magTMP1, r, magTMP1.size());
+            auto preprocessEnd = std::chrono::high_resolution_clock::now();
+            totalPreprocessingTime += std::chrono::duration<double, std::milli>(preprocessEnd - preprocessStart).count();
 
-        listOfTransformations.push_back(transformationPeakTMP);
+            auto angleStart = std::chrono::high_resolution_clock::now();
+            std::vector<translationPeakfs2D> potentialTranslations =
+                this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
+                    voxelData1_local.data(), voxelData2_local.data(),
+                    cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings);
+            auto angleEnd = std::chrono::high_resolution_clock::now();
+            double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
+            totalTranslationTime += angleTime;
+            transPerAngleTimes.push_back(angleTime);
+
+            transformationPeakfs2D transformationPeakTMP;
+            transformationPeakTMP.potentialRotation = estimatedAngle;
+            transformationPeakTMP.potentialTranslations = potentialTranslations;
+
+            listOfTransformations.push_back(transformationPeakTMP);
     }
 
     auto totalEnd = std::chrono::high_resolution_clock::now();
