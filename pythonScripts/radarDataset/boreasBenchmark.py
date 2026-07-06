@@ -226,8 +226,10 @@ def run_benchmark(
 
             # Save blended image if requested
             if save_blended and blended_dir is not None:
+                warp_affine = get_affine_matrix(result.transform,
+                                                pixel_size=size_of_pixel, img_size=N)
                 warped = cv2.warpPerspective(
-                    img_curr, est_affine,
+                    img_curr, warp_affine,
                     (img_prev.shape[1], img_prev.shape[0])
                 )
                 blended = cv2.addWeighted(

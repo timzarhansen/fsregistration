@@ -66,6 +66,7 @@ def run_registration(wrapper, img1, img2, cell_size, debug=False):
         useHamming=True,
         useDirect=True,
         levelPotentialRotation=LEVEL_POTENTIAL_ROTATION,
+        normalization=1,
     )
     elapsed = time.time() - t0
 
@@ -161,7 +162,7 @@ def main():
     transform = np.eye(4)
     transform[:3, :3] = R.from_euler("z", best_row['angle']).as_matrix()
     transform[:3, 3] = [best_row['tx'], -best_row['ty'], 0.0]
-    affine = get_affine_matrix(transform)
+    affine = get_affine_matrix(transform, pixel_size=SIZE_OF_PIXEL, img_size=N)
     warped = cv2.warpPerspective(img2, affine, (img1.shape[1], img1.shape[0]))
     blended = cv2.addWeighted(img1, 0.5, warped, 0.5, 0)
     blended_path = out_dir / "blended.png"

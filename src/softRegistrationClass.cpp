@@ -735,7 +735,8 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     int numberOfRotationForDebug,
     double potentialNecessaryForPeak,
     bool benchmark,
-    BenchmarkTimings2D* timings) {
+    BenchmarkTimings2D* timings,
+    int normalization) {
     //copy and normalize voxelDataInput
 
     auto totalTransStart = std::chrono::high_resolution_clock::now();
@@ -789,8 +790,22 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
         for (int i = 0; i < this->correlationN; i++) {
             int indexX = (this->correlationN / 2 + i + this->correlationN) % this->correlationN;
             int indexY = (this->correlationN / 2 + j + this->correlationN) % this->correlationN;
-            double normalizationFactorForCorrelation = 1 / this->normalizationFactorCalculation(indexX, indexY);
-            normalizationFactorForCorrelation = sqrt(normalizationFactorForCorrelation);
+            double normVal = this->normalizationFactorCalculation(indexX, indexY);
+            double normalizationFactorForCorrelation;
+            switch (normalization) {
+                case 0:
+                    normalizationFactorForCorrelation = 1;
+                    break;
+                case 1:
+                    normalizationFactorForCorrelation = 1.0 / sqrt(normVal);
+                    break;
+                case 2:
+                    normalizationFactorForCorrelation = 1.0 / normVal;
+                    break;
+                default:
+                    std::cout << "normalization has to be 0-2 but was: " << normalization << std::endl;
+                    exit(-1);
+            }
             resultingCorrelationDouble[indexY + this->correlationN * indexX] = normalizationFactorForCorrelation * sqrt(
                 resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] *
                 resultingShiftPeaks2DCorrelation[j + this->correlationN * i][0] +
@@ -854,7 +869,8 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
      double cellSize,
      bool useGauss,
      bool debug, double potentialNecessaryForPeak, bool benchmark,
-     double level_potential_rotation) {
+     double level_potential_rotation,
+     int normalization) {
     if (!useInitialAngle || !useInitialTranslation) {
         std::cout << "this function has to be used with initial guess = true" << std::endl;
         exit(-1);
@@ -912,7 +928,7 @@ Eigen::Matrix4d softRegistrationClass::registrationOfTwoVoxelsSOFFTFast(double v
                 voxelData1, voxelData2,
                 cellSize,
                 1.0,
-                debug, angleIndex, potentialNecessaryForPeak, benchmark);
+                debug, angleIndex, potentialNecessaryForPeak, benchmark, nullptr, normalization);
         Eigen::Matrix4d estimatedRotationScans = Eigen::Matrix4d::Identity();
         Eigen::AngleAxisd rotation_vectorTMP(estimatedAngle.angle, Eigen::Vector3d(0, 0, 1));
         Eigen::Matrix3d tmpRotMatrix3d = rotation_vectorTMP.toRotationMatrix();
@@ -982,7 +998,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
      bool useDirect,
      bool benchmark,
      BenchmarkTimings2D* timings,
-     double level_potential_rotation) {
+     double level_potential_rotation,
+     int normalization) {
 
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
@@ -1035,7 +1052,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
             std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                     voxelData1_local.data(), voxelData2_local.data(),
-                    cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings);
+                    cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings, normalization);
             auto angleEnd = std::chrono::high_resolution_clock::now();
             double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
             totalTranslationTime += angleTime;

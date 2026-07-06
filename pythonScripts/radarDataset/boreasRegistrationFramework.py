@@ -113,6 +113,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.multiple_radii = config.get("multiple_radii", True)
         self.use_gauss = config.get("use_gauss", False)
         self.use_direct = config.get("use_direct", False)
+        self.normalization = config.get("normalization", 1)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -132,7 +133,8 @@ class FS2DRegistration(BaseRegistrationMethod):
             multipleRadii=self.multiple_radii,
             useClahe=self.use_clahe,
             useHamming=self.use_hamming,
-            useDirect=self.use_direct
+            useDirect=self.use_direct,
+            normalization=self.normalization
         )
 
         # Find peak with highest translation peak height
@@ -360,13 +362,27 @@ def get_image_from_sequence(seq, index, cart_resolution, cart_pixel_width):
     return img
 
 
-def get_affine_matrix(input_matrix):
-    """Extract 2D affine transform from 4x4 matrix."""
+def get_affine_matrix(input_matrix, pixel_size=1.0, img_size=0):
+    """Extract 2D affine transform from 4x4 matrix.
+    
+    Args:
+        input_matrix: 4x4 world transform (translation in meters).
+        pixel_size: Meters per pixel for converting translation to pixel units.
+        img_size: Image dimension N for rotation center compensation.
+                  0 = no compensation (backward compatible).
+    """
     input_matrix = np.linalg.inv(input_matrix)
     result = np.eye(3)
     result[:2, :2] = input_matrix[:2, :2]
-    result[0, 2] = -input_matrix[1, 3]
-    result[1, 2] = input_matrix[0, 3]
+    result[0, 2] = -input_matrix[1, 3] / pixel_size
+    result[1, 2] = input_matrix[0, 3] / pixel_size
+    if img_size > 0:
+        c = img_size / 2.0
+        T_c = np.eye(3)
+        T_c[:2, 2] = [c, c]
+        T_c_inv = np.eye(3)
+        T_c_inv[:2, 2] = [-c, -c]
+        result = T_c @ result @ T_c_inv
     return result
 
 
@@ -384,8 +400,16 @@ def transform_diff(matrix1, matrix2):
     return trans_diff, angle_diff
 
 
-def fuse_images(images_over_time, estimated_transformations):
-    """Fuse multiple images using their absolute transformation matrices."""
+def fuse_images(images_over_time, estimated_transformations,
+                pixel_size=1.0, img_size=0):
+    """Fuse multiple images using their absolute transformation matrices.
+    
+    Args:
+        images_over_time: List of cartesian images.
+        estimated_transformations: List of 4x4 absolute transform matrices.
+        pixel_size: Meters per pixel for converting translation to pixel units.
+        img_size: Image dimension N for rotation center compensation.
+    """
     assert len(images_over_time) == len(estimated_transformations)
     if not images_over_time:
         return None
@@ -398,7 +422,7 @@ def fuse_images(images_over_time, estimated_transformations):
 
     for i in range(len(images_over_time)):
         img = images_over_time[i]
-        tmat = get_affine_matrix(estimated_transformations[i])
+        tmat = get_affine_matrix(estimated_transformations[i], pixel_size, img_size)
         h, w = img.shape[:2]
         corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float64).reshape(-1, 1, 2)
 
@@ -419,7 +443,7 @@ def fuse_images(images_over_time, estimated_transformations):
 
     adjusted = []
     for tmat in estimated_transformations:
-        t = get_affine_matrix(tmat)
+        t = get_affine_matrix(tmat, pixel_size, img_size)
         if t.shape == (3, 3):
             trans = np.eye(3)
             trans[0, 2] = tx
@@ -553,7 +577,7 @@ def run_sequence(args, method_class, method_configs, seq, bd, radar_file_path):
                 # Save blended images for fs2d
                 if "fs2d" in method_configs:
                     fs2d_result = all_method_results["fs2d"][-1]
-                    fs2d_affine = get_affine_matrix(fs2d_result.transform)
+                    fs2d_affine = get_affine_matrix(fs2d_result.transform, pixel_size=size_of_pixel, img_size=N)
                     warped = cv2.warpPerspective(img_curr, fs2d_affine, (img_prev.shape[1], img_prev.shape[0]))
                     blended = cv2.addWeighted(img_prev, 0.5, warped, 0.5, 0)
                     cv2.imwrite(str(save_dir / f"blended_{index:04d}.png"), blended * 255.0)
@@ -592,7 +616,8 @@ def run_sequence(args, method_class, method_configs, seq, bd, radar_file_path):
 
         # Fusion (only for fs2d to avoid excessive computation)
         if method_name == "fs2d" and len(images_over_time) > 1:
-            fused = fuse_images(images_over_time, cumulative_transforms[method_name])
+            fused = fuse_images(images_over_time, cumulative_transforms[method_name],
+                                pixel_size=size_of_pixel, img_size=N)
             if fused is not None:
                 cv2.imwrite(str(save_dir / "fused_map.png"), fused)
 

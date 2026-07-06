@@ -222,21 +222,23 @@ public:
                                                        bool debug = false,
                                                        double potentialNecessaryForPeak = 0.1,
                                                        bool benchmark = false,
-                                                       double level_potential_rotation = 0.1);
+                                                       double level_potential_rotation = 0.1,
+                                                       int normalization = 1);
 
 std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(double voxelData1Input[],
-                                                                                     double voxelData2Input[],
-                                                                                     double cellSize,
-                                                                                     bool useGauss,
-                                                                                     bool debug = false,
-                                                                                     double potentialNecessaryForPeak = 0.1,
-                                                                                     bool multipleRadii = false,
-                                                                                     bool useClahe = true,
-                                                                                     bool useHamming = true,
-                                                                                     bool useDirect = true,
-                                                                                     bool benchmark = false,
-                                                                                     BenchmarkTimings2D* timings = nullptr,
-                                                                                     double level_potential_rotation = 0.0);
+                                                                                      double voxelData2Input[],
+                                                                                      double cellSize,
+                                                                                      bool useGauss,
+                                                                                      bool debug = false,
+                                                                                      double potentialNecessaryForPeak = 0.1,
+                                                                                      bool multipleRadii = false,
+                                                                                      bool useClahe = true,
+                                                                                      bool useHamming = true,
+                                                                                      bool useDirect = true,
+                                                                                      bool benchmark = false,
+                                                                                      BenchmarkTimings2D* timings = nullptr,
+                                                                                      double level_potential_rotation = 0.0,
+                                                                                      int normalization = 1);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
@@ -249,7 +251,8 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                                 int numberOfRotationForDebug = 0,
                                                                                                 double potentialNecessaryForPeak = 0.1,
                                                                                                 bool benchmark = false,
-                                                                                                BenchmarkTimings2D* timings = nullptr);
+                                                                                                BenchmarkTimings2D* timings = nullptr,
+                                                                                                int normalization = 1);
 
 
     std::pair<std::vector<float>, std::vector<float>>

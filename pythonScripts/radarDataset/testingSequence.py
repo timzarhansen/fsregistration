@@ -54,13 +54,16 @@ class MinimalClientAsync(Node):
         rclpy.spin_until_future_complete(self, self.future)
         return self.future.result()
 
-def fuse_images(imagesOverTime, estimatedTransformations):
+def fuse_images(imagesOverTime, estimatedTransformations,
+                pixel_size=1.0, img_size=0):
     """
     Fuses multiple images using their absolute transformation matrices.
 
     Args:
         imagesOverTime (list): List of OpenCV images in BGR format.
-        estimatedTransformations (list): List of transformation matrices (3x3 for Homography / 2x3 for Affine)
+        estimatedTransformations (list): List of transformation matrices.
+        pixel_size: Meters per pixel for converting translation to pixel units.
+        img_size: Image dimension N for rotation center compensation.
 
     Returns:
         numpy.ndarray: Fused image as a BGR array
@@ -79,7 +82,7 @@ def fuse_images(imagesOverTime, estimatedTransformations):
 
     for i in range(len(imagesOverTime)):
         img = imagesOverTime[i]
-        tmat = get_affine_matrix(estimatedTransformations[i])
+        tmat = get_affine_matrix(estimatedTransformations[i], pixel_size, img_size)
 
         h, w = img.shape[:2]
 
@@ -115,7 +118,7 @@ def fuse_images(imagesOverTime, estimatedTransformations):
 
     adjusted_transforms = []
     for tmat in estimatedTransformations:
-        tmat_corrected = get_affine_matrix(tmat)
+        tmat_corrected = get_affine_matrix(tmat, pixel_size, img_size)
         if tmat_corrected.shape == (3,3):  # Homography case
             T_trans = np.eye(3, dtype=np.float32)
             T_trans[0,2] = tx
@@ -210,19 +213,20 @@ def get_transformation_based_on_gt_row(gt_row):
     transformation_matrix[:3, :3] = rotation_matrix
     return transformation_matrix
 
-def get_affine_matrix(inputMatrix):
+def get_affine_matrix(inputMatrix, pixel_size=1.0, img_size=0):
     inputMatrix = np.linalg.inv(inputMatrix)
-    perspectiveMatrixReturn = np.eye(3)
-    perspectiveMatrixReturn[:2,:2]= inputMatrix[:2,:2]
-    perspectiveMatrixReturn[0,2]= -inputMatrix[1,3]
-    perspectiveMatrixReturn[1,2]= inputMatrix[0,3]
-
-
-    # perspectiveMatrixReturn[:2,:2]= np.linalg.inv(inputMatrix[:2,:2])
-    # perspectiveMatrixReturn[:2,:2]= inputMatrix[:2,:2]
-    # perspectiveMatrixReturn[0,2]= -inputMatrix[1,3]
-    # perspectiveMatrixReturn[1,2]= -inputMatrix[0,3]
-    return perspectiveMatrixReturn
+    result = np.eye(3)
+    result[:2, :2] = inputMatrix[:2, :2]
+    result[0, 2] = -inputMatrix[1, 3] / pixel_size
+    result[1, 2] = inputMatrix[0, 3] / pixel_size
+    if img_size > 0:
+        c = img_size / 2.0
+        T_c = np.eye(3)
+        T_c[:2, 2] = [c, c]
+        T_c_inv = np.eye(3)
+        T_c_inv[:2, 2] = [-c, -c]
+        result = T_c @ result @ T_c_inv
+    return result
 
 def transform_diff(matrix1, matrix2):
     """Computes translation and rotation difference (angle) between two 3x3 transformation matrices."""
@@ -377,8 +381,8 @@ if __name__ == '__main__':
                     estimatedTransformationList.append(np.matmul(estimatedTransformationList[-1],resultingTransformation))
                     absoluteTransformationListForImagePrint.append(np.matmul(absoluteTransformationListForImagePrint[-1],transformation_matrix_gt))
 
-                    perspectiveMatrixGT = get_affine_matrix(transformation_matrix_gt)
-                    perspectiveMatrixEstimated = get_affine_matrix(resultingTransformation)
+                    perspectiveMatrixGT = get_affine_matrix(transformation_matrix_gt, pixel_size=size_of_pixel, img_size=N)
+                    perspectiveMatrixEstimated = get_affine_matrix(resultingTransformation, pixel_size=size_of_pixel, img_size=N)
 
 
                     print("resultingTransformation:")

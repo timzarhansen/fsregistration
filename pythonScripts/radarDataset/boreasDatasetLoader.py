@@ -126,13 +126,33 @@ def load_single_sequence(data_dir: str, sequence_name: str) -> BoreasSequence:
     return BoreasSequence(sequence=seq, data_dir=data_dir)
 
 
-def get_affine_matrix(input_matrix: np.ndarray) -> np.ndarray:
-    """Extract 2D affine transform from 4x4 matrix."""
+def get_affine_matrix(input_matrix: np.ndarray,
+                       pixel_size: float = 1.0,
+                       img_size: int = 0) -> np.ndarray:
+    """Extract 2D affine transform from 4x4 matrix.
+
+    Args:
+        input_matrix: 4x4 world transform (translation in meters).
+        pixel_size: Meters per pixel for converting translation to pixel units.
+        img_size: Image dimension N for rotation center compensation.
+                  0 = no compensation (backward compatible).
+
+    Returns:
+        3x3 affine matrix suitable for cv2.warpPerspective.
+    """
     input_matrix = np.linalg.inv(input_matrix)
     result = np.eye(3)
     result[:2, :2] = input_matrix[:2, :2]
-    result[0, 2] = -input_matrix[1, 3]
-    result[1, 2] = input_matrix[0, 3]
+    result[0, 2] = -input_matrix[1, 3] / pixel_size
+    result[1, 2] = input_matrix[0, 3] / pixel_size
+    # Rotation center compensation (rotate around image center)
+    if img_size > 0:
+        c = img_size / 2.0
+        T_c = np.eye(3)
+        T_c[:2, 2] = [c, c]
+        T_c_inv = np.eye(3)
+        T_c_inv[:2, 2] = [-c, -c]
+        result = T_c @ result @ T_c_inv
     return result
 
 
@@ -168,12 +188,16 @@ def matrix_to_transform(matrix: np.ndarray) -> np.ndarray:
 
 
 def fuse_images(images_over_time: List[np.ndarray],
-                estimated_transformations: List[np.ndarray]) -> Optional[np.ndarray]:
+                estimated_transformations: List[np.ndarray],
+                pixel_size: float = 1.0,
+                img_size: int = 0) -> Optional[np.ndarray]:
     """Fuse multiple images using their absolute transformation matrices.
 
     Args:
         images_over_time: List of cartesian images.
         estimated_transformations: List of 4x4 absolute transform matrices.
+        pixel_size: Meters per pixel for converting translation to pixel units.
+        img_size: Image dimension N for rotation center compensation.
 
     Returns:
         Fused map as uint8 array, or None if no images.
@@ -189,7 +213,7 @@ def fuse_images(images_over_time: List[np.ndarray],
 
     for i in range(len(images_over_time)):
         img = images_over_time[i]
-        tmat = get_affine_matrix(estimated_transformations[i])
+        tmat = get_affine_matrix(estimated_transformations[i], pixel_size, img_size)
         h, w = img.shape[:2]
         corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float64).reshape(-1, 1, 2)
 
@@ -210,7 +234,7 @@ def fuse_images(images_over_time: List[np.ndarray],
 
     adjusted = []
     for tmat in estimated_transformations:
-        t = get_affine_matrix(tmat)
+        t = get_affine_matrix(tmat, pixel_size, img_size)
         if t.shape == (3, 3):
             trans = np.eye(3)
             trans[0, 2] = tx

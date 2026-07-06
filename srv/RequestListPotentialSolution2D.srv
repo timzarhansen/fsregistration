@@ -4,6 +4,7 @@ int32 size_image
 float64 size_of_pixel
 float64 potential_for_necessary_peak  # default mostly 0.1 Higher values less peaks, lower values more peaks
 float64 level_potential_rotation  # default 0.1 Higher values less peaks, lower values more peaks (persistence-based)
+int32 set_normalization  # 0=none, 1=1/sqrt(norm) (default), 2=1/norm, 3=1/(norm*norm)
 bool multiple_radii
 bool use_clahe
 bool use_hamming

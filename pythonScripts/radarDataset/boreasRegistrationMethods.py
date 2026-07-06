@@ -92,6 +92,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.use_gauss = config.get("use_gauss", False)
         self.use_direct = config.get("use_direct", False)
         self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
+        self.normalization = config.get("normalization", 1)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -112,7 +113,8 @@ class FS2DRegistration(BaseRegistrationMethod):
             useClahe=self.use_clahe,
             useHamming=self.use_hamming,
             useDirect=self.use_direct,
-            levelPotentialRotation=self.level_potential_rotation
+            levelPotentialRotation=self.level_potential_rotation,
+            normalization=self.normalization
         )
 
         highest_peak = 0.0

@@ -120,7 +120,8 @@ public:
         bool useClahe,
         bool useHamming,
         bool useDirect,
-        double levelPotentialRotation = 0.1
+        double levelPotentialRotation = 0.1,
+        int normalization = 1
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -128,7 +129,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization
         );
 
         std::vector<TransformationPeak2D> out;
@@ -163,7 +164,9 @@ public:
         double cellSize,
         bool useGauss,
         bool debug,
-        double potentialNecessaryForPeak
+        double potentialNecessaryForPeak,
+        double levelPotentialRotation = 0.1,
+        int normalization = 1
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -179,7 +182,7 @@ public:
             initialGuessMat, covarianceMatrix,
             useInitialAngle, useInitialTranslation,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, false, 0.1
+            potentialNecessaryForPeak, false, levelPotentialRotation, normalization
         );
 
         return std::make_tuple(eigen4x4_to_numpy(result), eigen3x3_to_numpy(covarianceMatrix));
@@ -196,7 +199,8 @@ public:
         bool multipleRadii,
         bool useClahe,
         bool useHamming,
-        bool benchmark
+        bool benchmark,
+        int normalization = 1
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -204,7 +208,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, false, benchmark, nullptr, 0.0
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, false, benchmark, nullptr, 0.0, normalization
         );
 
         std::vector<TransformationPeak2D> out;
@@ -240,7 +244,8 @@ public:
         bool multipleRadii,
         bool useClahe,
         bool useHamming,
-        bool benchmark
+        bool benchmark,
+        int normalization = 1
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -248,7 +253,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, true, benchmark, nullptr, 0.0
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, true, benchmark, nullptr, 0.0, normalization
         );
 
         std::vector<TransformationPeak2D> out;
@@ -308,7 +313,8 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
               py::arg("useClahe") = true,
                py::arg("useHamming") = true,
                 py::arg("useDirect") = false,
-                py::arg("levelPotentialRotation") = 0.1)
+                 py::arg("levelPotentialRotation") = 0.1,
+                 py::arg("normalization") = 1)
          .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
               py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
               py::arg("useInitialAngle") = true,
@@ -316,7 +322,9 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
               py::arg("cellSize"),
               py::arg("useGauss") = false,
               py::arg("debug") = false,
-              py::arg("potentialNecessaryForPeak") = 0.1)
+              py::arg("potentialNecessaryForPeak") = 0.1,
+              py::arg("levelPotentialRotation") = 0.1,
+              py::arg("normalization") = 1)
          .def("register_so3", &SoftRegistrationWrapper2D::register_so3,
               py::arg("scan1"), py::arg("scan2"),
               py::arg("cellSize"),
@@ -326,7 +334,8 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
               py::arg("multipleRadii") = false,
               py::arg("useClahe") = true,
               py::arg("useHamming") = true,
-              py::arg("benchmark") = false)
+              py::arg("benchmark") = false,
+              py::arg("normalization") = 1)
          .def("register_direct", &SoftRegistrationWrapper2D::register_direct,
               py::arg("scan1"), py::arg("scan2"),
               py::arg("cellSize"),
@@ -336,6 +345,7 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
               py::arg("multipleRadii") = false,
               py::arg("useClahe") = true,
               py::arg("useHamming") = true,
-              py::arg("benchmark") = false)
+              py::arg("benchmark") = false,
+              py::arg("normalization") = 1)
         .def_property_readonly("N", &SoftRegistrationWrapper2D::getN);
 }

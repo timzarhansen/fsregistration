@@ -143,7 +143,7 @@ def run_sequence(args, method_configs: Dict[str, dict], seq: BoreasSequence, seq
                 if "fs2d" in method_configs:
                     fs2d_results = all_method_results["fs2d"]
                     fs2d_result = fs2d_results["transforms"][-1]
-                    fs2d_affine = get_affine_matrix(fs2d_result)
+                    fs2d_affine = get_affine_matrix(fs2d_result, pixel_size=size_of_pixel, img_size=N)
                     warped = cv2.warpPerspective(img_curr, fs2d_affine, (img_prev.shape[1], img_prev.shape[0]))
                     blended = cv2.addWeighted(img_prev, 0.5, warped, 0.5, 0)
                     cv2.imwrite(str(save_dir / f"blended_{index:04d}.png"), blended * 255.0)
@@ -176,7 +176,8 @@ def run_sequence(args, method_configs: Dict[str, dict], seq: BoreasSequence, seq
                 writer.writerow([x, y, yaw])
 
         if method_name == "fs2d" and len(images_over_time) > 1:
-            fused = fuse_images(images_over_time, cumulative_transforms[method_name])
+            fused = fuse_images(images_over_time, cumulative_transforms[method_name],
+                                  pixel_size=size_of_pixel, img_size=N)
             if fused is not None:
                 cv2.imwrite(str(save_dir / "fused_map.png"), fused)
 

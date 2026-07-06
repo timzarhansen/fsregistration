@@ -5,7 +5,7 @@
 # Usage:
 #     python viewBoreasPairs.py
 #
-# Saves display images to displayImages/ folder:
+# Saves display images to viewBoreasOutput/ folder:
 #     image1.png - previous frame
 #     image2.png - current frame
 #     blended.png - warped overlay
@@ -47,9 +47,10 @@ MATCHING_STEP = 5                # Match every Nth frame
 START_FRAME = 45                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
-USE_DIRECT = False               # Use direct registration (1-angle) vs SO3 (multiple angles)
-LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
+USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
+LEVEL_POTENTIAL_ROTATION = 0.01  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.1  # 2D peak detection threshold
+NORMALIZATION = 1  # 0=none, 1=1/sqrt(norm), 2=1/norm
 # ============================================================================
 
 
@@ -102,7 +103,6 @@ def get_config_from_file():
     POTENTIAL_NECCESSARY_FOR_PEAK = extract_var("POTENTIAL_NECCESSARY_FOR_PEAK", POTENTIAL_NECCESSARY_FOR_PEAK)
 
 
-DISPLAY_DIR = Path(os.path.dirname(os.path.abspath(__file__))) / "displayImages"
 PLOT_DATA_DIR = "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data"
 
 
@@ -111,7 +111,6 @@ def run_pair(
     idx1: int,
     idx2: int,
     method: FS2DRegistration,
-    save_dir: Path,
 ) -> Tuple:
     """Register one pair and return (img1, img2, blended, result, gt_error)."""
     img1 = seq.get_cartesian_image(idx1, N, SIZE_OF_PIXEL)
@@ -120,12 +119,14 @@ def run_pair(
     gt_transform = seq.get_gt_transform(idx1, idx2)
     gt_affine = get_affine_matrix(gt_transform)
 
-    t0 = time.time()
-
-    # Run registration with debug=True
+    # Preprocessing
+    pre_start = time.time()
     image_1 = img1.astype(np.float64).reshape(-1)
     image_2 = img2.astype(np.float64).reshape(-1)
+    preprocessing_time = time.time() - pre_start
 
+    # Registration
+    reg_start = time.time()
     list_peaks = method.wrapper.register_all_solutions(
         image_1, image_2,
         cellSize=SIZE_OF_PIXEL,
@@ -136,10 +137,13 @@ def run_pair(
         useClahe=method.use_clahe,
         useHamming=method.use_hamming,
         useDirect=method.use_direct,
-        levelPotentialRotation=method.level_potential_rotation
+        levelPotentialRotation=method.level_potential_rotation,
+        normalization=method.normalization
     )
+    registration_time = time.time() - reg_start
 
-    # Find highest peak
+    # Post-processing
+    post_start = time.time()
     highest_peak = 0.0
     index_highest = 0
     for i, peak in enumerate(list_peaks):
@@ -155,14 +159,18 @@ def run_pair(
     transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
     tx, ty = peak.potentialTranslations[0].translationSI
     transform[:3, 3] = [tx, -ty, 0.0]
+    postprocessing_time = time.time() - post_start
 
-    elapsed = time.time() - t0
+    total_time = preprocessing_time + registration_time + postprocessing_time
 
     result = type('obj', (object,), {
         'transform': transform,
         'confidence': highest_peak,
         'method_name': 'fs2d',
-        'computation_time': elapsed,
+        'total_time': total_time,
+        'preprocessing_time': preprocessing_time,
+        'registration_time': registration_time,
+        'postprocessing_time': postprocessing_time,
         'metadata': {
             'rotation_angle': yaw,
             'translation': (tx, ty),
@@ -171,12 +179,12 @@ def run_pair(
         }
     })()
 
-    # Compute GT error
+    # Compute GT error (keep default pixel_size=1.0, translation stays in meters)
     est_affine = get_affine_matrix(transform)
     gt_error = transform_diff(gt_affine, est_affine)
 
-    # Create blended image
-    fs2d_affine = est_affine
+    # Create blended image (use correct pixel_size and center)
+    fs2d_affine = get_affine_matrix(transform, pixel_size=SIZE_OF_PIXEL, img_size=N)
     warped = cv2.warpPerspective(img2, fs2d_affine, (img1.shape[1], img1.shape[0]))
     blended = cv2.addWeighted((img1 * 255).astype(np.uint8), 0.5, (warped * 255).astype(np.uint8), 0.5, 0)
 
@@ -187,9 +195,6 @@ def main():
     # Reload config from file (in case it was edited)
     get_config_from_file()
 
-    # Create display directory
-    DISPLAY_DIR.mkdir(parents=True, exist_ok=True)
-
     print(f"Config:")
     print(f"  DATA_DIR: {DATA_DIR}")
     print(f"  SEQUENCE_NUMBER: {SEQUENCE_NUMBER}")
@@ -198,7 +203,6 @@ def main():
     print(f"  N: {N}, SIZE_OF_PIXEL: {SIZE_OF_PIXEL}")
     print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
-    print(f"  DISPLAY_DIR: {DISPLAY_DIR}")
     print()
 
     # Load sequence
@@ -222,16 +226,14 @@ def main():
         "size_of_pixel": SIZE_OF_PIXEL,
         "use_direct": USE_DIRECT,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
+        "normalization": NORMALIZATION,
     }
     method = FS2DRegistration(method_config)
     print(f"Method: FS2D (N={N}, clahe={method.use_clahe}, hamming={method.use_hamming}, use_direct={method.use_direct}, level_potential_rotation={method.level_potential_rotation})")
     print()
 
     # Setup output directory
-    method_key = "fs2d"
-    save_dir = Path(
-        f"{OUTPUT_DIR}/{SEQUENCE_NUMBER:02d}_{N:03d}_{int(SIZE_OF_PIXEL*100)}_{MATCHING_STEP}/{method_key}/"
-    )
+    save_dir = Path(OUTPUT_DIR)
     save_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving results to: {save_dir}")
     print()
@@ -241,7 +243,7 @@ def main():
     if MAX_FRAMES is not None:
         length_of_radar_scans = min(length_of_radar_scans, MAX_FRAMES)
     print(f"Matching every {MATCHING_STEP}th image (from frame {START_FRAME}, up to {length_of_radar_scans})")
-    print(f"Display images saved to: {DISPLAY_DIR}/")
+    print(f"Display images saved to: {save_dir}/")
     print("Image files: image1.png, image2.png, blended.png (overwritten each pair)")
     print("=" * 80)
     print()
@@ -254,12 +256,12 @@ def main():
         print(f"\n--- Pair: {prev_idx} -> {idx} ---")
 
         # Run registration
-        img1, img2, blended, result, gt_error = run_pair(seq, prev_idx, idx, method, save_dir)
+        img1, img2, blended, result, gt_error = run_pair(seq, prev_idx, idx, method)
 
         # Save display images (overwrite each time)
-        cv2.imwrite(str(DISPLAY_DIR / "image1.png"), cv2.cvtColor((img1 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
-        cv2.imwrite(str(DISPLAY_DIR / "image2.png"), cv2.cvtColor((img2 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
-        cv2.imwrite(str(DISPLAY_DIR / "blended.png"), blended)
+        cv2.imwrite(str(save_dir / "image1.png"), cv2.cvtColor((img1 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
+        cv2.imwrite(str(save_dir / "image2.png"), cv2.cvtColor((img2 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
+        cv2.imwrite(str(save_dir / "blended.png"), blended)
 
         # Save current pair images and meta to plot data directory
         try:
@@ -268,14 +270,15 @@ def main():
             gt_trans_norm = np.linalg.norm(gt_trans)
             np.savetxt(os.path.join(PLOT_DATA_DIR, "input1.csv"), img1, fmt='%.10f', delimiter=' ')
             np.savetxt(os.path.join(PLOT_DATA_DIR, "input2.csv"), img2, fmt='%.10f', delimiter=' ')
-            header = "frame1,frame2,rot_angle_deg,tx_m,ty_m,confidence,time_ms,gt_rot_err_deg,gt_trans_err_m,N,n_solutions,pixel_size_m"
+            header = "frame1,frame2,rot_angle_deg,tx_m,ty_m,confidence,total_time_ms,reg_time_ms,gt_rot_err_deg,gt_trans_err_m,N,n_solutions,pixel_size_m"
             row = [
                 prev_idx, idx,
                 result.metadata['rotation_angle'] * 180 / np.pi,
                 result.metadata['translation'][0],
                 result.metadata['translation'][1],
                 result.confidence,
-                result.computation_time * 1000,
+                result.total_time * 1000,
+                result.registration_time * 1000,
                 abs(gt_rot),
                 gt_trans_norm,
                 N,
@@ -294,10 +297,10 @@ def main():
         print(f"  Rot: {result.metadata['rotation_angle'] * 180 / np.pi:.4f} deg")
         print(f"  Tx: {result.metadata['translation'][0]:.4f} m, Ty: {result.metadata['translation'][1]:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
-        print(f"  Time: {result.computation_time * 1000:.1f} ms")
+        print(f"  Time: {result.total_time * 1000:.1f} ms (pre={result.preprocessing_time * 1000:.1f} ms, reg={result.registration_time * 1000:.1f} ms, post={result.postprocessing_time * 1000:.1f} ms)")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
-        print(f"  -> Saved to {DISPLAY_DIR}/ (image1.png, image2.png, blended.png)")
-
+        print(f"  -> Saved to {save_dir}/ (image1.png, image2.png, blended.png)")
+        
         idx += MATCHING_STEP
 
     print("\nDone.")
