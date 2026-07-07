@@ -93,6 +93,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.use_direct = config.get("use_direct", False)
         self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
         self.normalization = config.get("normalization", 1)
+        self.use_weighted_peak_score = config.get("use_weighted_peak_score", True)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -120,8 +121,12 @@ class FS2DRegistration(BaseRegistrationMethod):
         highest_peak = 0.0
         index_highest = 0
         for i, peak in enumerate(list_peaks):
-            if peak.potentialTranslations[0].peakHeight > highest_peak:
-                highest_peak = peak.potentialTranslations[0].peakHeight
+            if self.use_weighted_peak_score:
+                score = peak.potentialTranslations[0].peakHeight * np.sqrt(peak.potentialRotation.peakCorrelation)
+            else:
+                score = peak.potentialTranslations[0].peakHeight
+            if score > highest_peak:
+                highest_peak = score
                 index_highest = i
 
         peak = list_peaks[index_highest]
@@ -131,6 +136,17 @@ class FS2DRegistration(BaseRegistrationMethod):
         transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
         tx, ty = peak.potentialTranslations[0].translationSI
         transform[:3, 3] = [tx, -ty, 0.0]
+
+        # Collect all candidate solutions (rotation peaks × translation candidates)
+        all_solutions = []
+        for rot_peak in list_peaks:
+            rot_yaw = rot_peak.potentialRotation.angle
+            rot_R = R.from_euler("z", rot_yaw).as_matrix()
+            for trans in rot_peak.potentialTranslations:
+                t = np.eye(4)
+                t[:3, :3] = rot_R
+                t[:3, 3] = [trans.translationSI[0], -trans.translationSI[1], 0.0]
+                all_solutions.append(t)
 
         elapsed = time.time() - t0
 
@@ -143,7 +159,8 @@ class FS2DRegistration(BaseRegistrationMethod):
                 "rotation_angle": yaw,
                 "translation": (tx, ty),
                 "peak_height": highest_peak,
-                "num_solutions": len(list_peaks)
+                "all_solutions": all_solutions,
+                "num_solutions": len(all_solutions)
             }
         )
 
@@ -167,20 +184,45 @@ class ICPRegistration(BaseRegistrationMethod):
 
 
 class FourierMellinRegistration(BaseRegistrationMethod):
-    """Fourier-Mellin Transform registration (placeholder).
+    """Fourier-Mellin Transform registration via imreg_dft.
 
     Uses log-polar FFT for rotation + translation estimation.
-    Reference: implementation at plotting_results/registrationFourier/FMT/register.py
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "fourier_mellin"
+        self.highpass = config.get("highpass", True)
 
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
-        raise NotImplementedError(
-            "FourierMellinRegistration not yet implemented. "
-            "Plan: port the FMT algorithm from plotting_results/registrationFourier/FMT/register.py."
+        import imreg_dft as ird
+
+        t0 = time.time()
+
+        I1 = img1.astype(np.float64)
+        I2 = img2.astype(np.float64)
+
+        result = ird.similarity(I1, I2)
+
+        angle = float(result["angle"])
+        tx, ty = result["tvec"]
+        success = float(result.get("success", 0.0))
+
+        transform = np.eye(4)
+        transform[:3, :3] = R.from_euler("z", np.radians(angle)).as_matrix()
+        transform[:3, 3] = [tx, -ty, 0.0]
+
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform,
+            confidence=success,
+            method_name="fourier_mellin",
+            computation_time=elapsed,
+            metadata={
+                "rotation_angle_deg": angle,
+                "translation_px": (tx, ty),
+            },
         )
 
 
@@ -240,5 +282,5 @@ class RegistrationFactory:
 # Auto-register available methods
 RegistrationFactory.register("fs2d", FS2DRegistration)
 # RegistrationFactory.register("icp", ICPRegistration)          # uncomment when implemented
-# RegistrationFactory.register("fourier_mellin", FourierMellinRegistration)  # uncomment when implemented
+RegistrationFactory.register("fourier_mellin", FourierMellinRegistration)
 # RegistrationFactory.register("sift", SIFTRegistration)         # uncomment when implemented

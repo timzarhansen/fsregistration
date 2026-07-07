@@ -175,6 +175,8 @@ def transform_diff(matrix1: np.ndarray, matrix2: np.ndarray) -> tuple:
     angle_diff = np.degrees(
         np.arctan2(r2[1, 0], r2[0, 0]) - np.arctan2(r1[1, 0], r1[0, 0])
     )
+    # Normalize to [-180, 180] for correct angle wrapping
+    angle_diff = (angle_diff + 180) % 360 - 180
     return trans_diff, angle_diff
 
 

@@ -77,6 +77,7 @@ DEFAULT_CONFIG = {
     "multiple_radii": True,
     "potential_for_necessary_peak": 0.01,
     "level_potential_rotation": 0.001,
+    "use_weighted_peak_score": True,
     "save_blended": False,
 }
 
@@ -124,15 +125,15 @@ def run_benchmark(
 
     num_pairs = 0
     if end_frame > start_frame + matching_step:
-        num_pairs = (end_frame - start_frame - matching_step) // matching_step + 1
+        num_pairs = max(0, (end_frame - start_frame - 1) // matching_step)
 
     # Setup output directory
     px_int = int(size_of_pixel * 100)
-    output_subdir = f"seq{0:02d}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}"
+    output_subdir = f"seq{sequence_number:02d}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}"
     # Try to get sequence name for better naming
     try:
         seq_name = str(seq.sequence)
-        output_subdir = f"seq{0:02d}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}"
+        output_subdir = f"seq{sequence_number:02d}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}"
     except Exception:
         pass
 
@@ -161,10 +162,11 @@ def run_benchmark(
     failures = []
     total_time = 0.0
 
-    # Print progress header
+         # Print progress header
     print(f"{'Pair':>6} {'Prev':>6} {'Curr':>6} {'RotErr°':>8} {'TransErr(m)':>12} "
+          f"{'BestRot°':>8} {'BestTrans(m)':>12} "
           f"{'Conf':>6} {'Time(ms)':>9} {'Status':>8}")
-    print("-" * 75)
+    print("-" * 90)
 
     for pair_idx in range(num_pairs):
         prev_idx = start_frame + pair_idx * matching_step
@@ -204,6 +206,27 @@ def run_benchmark(
             gt_tx = gt_affine[0, 2]
             gt_ty = gt_affine[1, 2]
 
+            # Find best solution among all candidates (closest to GT)
+            best_rot_error = float('inf')
+            best_trans_error = float('inf')
+            best_rot_deg = 0.0
+            best_tx = 0.0
+            best_ty = 0.0
+            all_solutions = result.metadata.get("all_solutions", [])
+            for sol in all_solutions:
+                sol_affine = get_affine_matrix(sol)
+                s_trans_err, s_rot_err = transform_diff(gt_affine, sol_affine)
+                s_trans_norm = np.linalg.norm(s_trans_err)
+                s_rot_deg = np.degrees(np.arctan2(sol_affine[1, 0], sol_affine[0, 0]))
+                s_tx = sol_affine[0, 2]
+                s_ty = sol_affine[1, 2]
+                if abs(s_rot_err) < abs(best_rot_error) or (abs(s_rot_err) == abs(best_rot_error) and s_trans_norm < best_trans_error):
+                    best_rot_error = s_rot_err
+                    best_trans_error = s_trans_norm
+                    best_rot_deg = s_rot_deg
+                    best_tx = s_tx
+                    best_ty = s_ty
+
             # Store result
             row = {
                 "pair_idx": pair_idx,
@@ -221,6 +244,12 @@ def run_benchmark(
                 "gt_tx_m": gt_tx,
                 "gt_ty_m": gt_ty,
                 "computation_time_ms": elapsed * 1000,
+                "best_rot_error_deg": best_rot_error,
+                "best_trans_error_m": best_trans_error,
+                "best_rot_deg": best_rot_deg,
+                "best_tx_m": best_tx,
+                "best_ty_m": best_ty,
+                "num_solutions": len(all_solutions),
             }
             results.append(row)
 
@@ -239,6 +268,7 @@ def run_benchmark(
                 cv2.imwrite(str(blended_dir / f"blended_{curr_idx:04d}.png"), blended)
 
             print(f"{pair_idx:6d} {prev_idx:6d} {curr_idx:6d} {rot_error:8.3f} {trans_norm:12.4f} "
+                  f"{best_rot_error:8.3f} {best_trans_error:12.4f} "
                   f"{result.confidence:6.3f} {elapsed * 1000:9.1f} OK")
 
         except Exception as e:
@@ -324,6 +354,9 @@ def run_benchmark(
             "est_rot_deg", "est_tx_m", "est_ty_m", "est_confidence",
             "gt_rot_deg", "gt_tx_m", "gt_ty_m",
             "computation_time_ms",
+            "best_rot_error_deg", "best_trans_error_m",
+            "best_rot_deg", "best_tx_m", "best_ty_m",
+            "num_solutions",
         ]
         writer.writerow(columns)
 
@@ -454,6 +487,7 @@ def main():
         "multiple_radii": DEFAULT_CONFIG["multiple_radii"],
         "potential_for_necessary_peak": DEFAULT_CONFIG["potential_for_necessary_peak"],
         "level_potential_rotation": DEFAULT_CONFIG["level_potential_rotation"],
+        "use_weighted_peak_score": DEFAULT_CONFIG["use_weighted_peak_score"],
         "size_of_pixel": args.size_of_pixel,
     }
 

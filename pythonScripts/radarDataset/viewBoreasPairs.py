@@ -40,24 +40,29 @@ from boreasRegistrationMethods import FS2DRegistration
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-N = 256                        # Image grid size (N x N)
-SIZE_OF_PIXEL = 0.5              # Meters per pixel
+N = 128                        # Image grid size (N x N)
+SIZE_OF_PIXEL = 2.0              # Meters per pixel
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame
-START_FRAME = 45                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP)
+START_FRAME = 2595                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
-LEVEL_POTENTIAL_ROTATION = 0.01  # Persistence threshold for rotation peak filtering
+LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.1  # 2D peak detection threshold
-NORMALIZATION = 1  # 0=none, 1=1/sqrt(norm), 2=1/norm
+NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
+ROUND = False  # If True, apply circular mask (corners → 0)
 # ============================================================================
+#testing: 68    340    345 -170.383      35.3775    1.180       5.3106 74540.099     302.7 OK
+#notes:
+# 1020 funktioniert garnicht, egal was ich mache.
+# 2205,2595 which higher details, i get the correct solution( changing pixerl size from 2.0 to 1.0)
 
 
 def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, SIZE_OF_PIXEL
-    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK
+    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND
 
     source_file = inspect.getfile(inspect.currentframe())
     source_dir = os.path.dirname(os.path.abspath(source_file))
@@ -101,9 +106,20 @@ def get_config_from_file():
     USE_DIRECT = extract_var("USE_DIRECT", USE_DIRECT)
     LEVEL_POTENTIAL_ROTATION = extract_var("LEVEL_POTENTIAL_ROTATION", LEVEL_POTENTIAL_ROTATION)
     POTENTIAL_NECCESSARY_FOR_PEAK = extract_var("POTENTIAL_NECCESSARY_FOR_PEAK", POTENTIAL_NECCESSARY_FOR_PEAK)
+    ROUND = extract_var("ROUND", ROUND)
 
 
 PLOT_DATA_DIR = "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data"
+
+
+def apply_circular_mask(image: np.ndarray) -> np.ndarray:
+    """Zero out pixels outside the inscribed circle of a square image."""
+    N = image.shape[0]
+    cy = cx = N // 2
+    radius = N // 2
+    Y, X = np.ogrid[:N, :N]
+    mask = (X - cx)**2 + (Y - cy)**2 <= radius**2
+    return image * mask
 
 
 def run_pair(
@@ -115,6 +131,10 @@ def run_pair(
     """Register one pair and return (img1, img2, blended, result, gt_error)."""
     img1 = seq.get_cartesian_image(idx1, N, SIZE_OF_PIXEL)
     img2 = seq.get_cartesian_image(idx2, N, SIZE_OF_PIXEL)
+
+    if ROUND:
+        img1 = apply_circular_mask(img1)
+        img2 = apply_circular_mask(img2)
 
     gt_transform = seq.get_gt_transform(idx1, idx2)
     gt_affine = get_affine_matrix(gt_transform)
@@ -147,10 +167,9 @@ def run_pair(
     highest_peak = 0.0
     index_highest = 0
     for i, peak in enumerate(list_peaks):
-        if peak.potentialTranslations[0].peakHeight > highest_peak:
-            highest_peak = peak.potentialTranslations[0].peakHeight
+        if peak.potentialTranslations[0].peakHeight*np.sqrt(peak.potentialRotation.peakCorrelation) > highest_peak:
+            highest_peak = peak.potentialTranslations[0].peakHeight*np.sqrt(peak.potentialRotation.peakCorrelation)
             index_highest = i
-
     peak = list_peaks[index_highest]
 
     transform = np.eye(4)
@@ -188,7 +207,14 @@ def run_pair(
     warped = cv2.warpPerspective(img2, fs2d_affine, (img1.shape[1], img1.shape[0]))
     blended = cv2.addWeighted((img1 * 255).astype(np.uint8), 0.5, (warped * 255).astype(np.uint8), 0.5, 0)
 
-    return img1, img2, blended, result, gt_error
+    # Extract GT yaw and translation from the 4x4 GT matrix
+    gt_yaw = np.arctan2(gt_transform[1, 0], gt_transform[0, 0])
+    if gt_yaw < 0:
+        gt_yaw += 2 * np.pi
+    gt_tx = gt_transform[0, 3]
+    gt_ty = gt_transform[1, 3]
+
+    return img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty
 
 
 def main():
@@ -203,6 +229,7 @@ def main():
     print(f"  N: {N}, SIZE_OF_PIXEL: {SIZE_OF_PIXEL}")
     print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
+    print(f"  ROUND: {ROUND}")
     print()
 
     # Load sequence
@@ -256,7 +283,7 @@ def main():
         print(f"\n--- Pair: {prev_idx} -> {idx} ---")
 
         # Run registration
-        img1, img2, blended, result, gt_error = run_pair(seq, prev_idx, idx, method)
+        img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty = run_pair(seq, prev_idx, idx, method)
 
         # Save display images (overwrite each time)
         cv2.imwrite(str(save_dir / "image1.png"), cv2.cvtColor((img1 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
@@ -294,8 +321,13 @@ def main():
         # Print results
         gt_trans, gt_rot = gt_error
         gt_trans_norm = np.linalg.norm(gt_trans)
-        print(f"  Rot: {result.metadata['rotation_angle'] * 180 / np.pi:.4f} deg")
-        print(f"  Tx: {result.metadata['translation'][0]:.4f} m, Ty: {result.metadata['translation'][1]:.4f} m")
+        est_yaw = result.metadata['rotation_angle']
+        if est_yaw < 0:
+            est_yaw += 2 * np.pi
+        est_tx = result.metadata['translation'][0]
+        est_ty = result.metadata['translation'][1]
+        print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
+        print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
         print(f"  Time: {result.total_time * 1000:.1f} ms (pre={result.preprocessing_time * 1000:.1f} ms, reg={result.registration_time * 1000:.1f} ms, post={result.postprocessing_time * 1000:.1f} ms)")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
