@@ -7,7 +7,7 @@ Outputs per-sequence results (same format as boreasBenchmark.py).
 Usage:
     # Single machine, all sequences
     python boreasBenchmarkParallel.py --method fs2d --sequences all \\
-        --N 128 --size_of_pixel 0.5 --matching_step 5 --num-workers 4 \\
+        --N 128 --radius 32.0 --matching_step 5 --num-workers 4 \\
         --output-dir benchmark_results <data_dir>
 
     # Multi-machine: machine 1 covers sequences 0-15
@@ -134,8 +134,8 @@ def main():
                         help="Sequence spec: 'all', '0-15', '0,1,2', or '0'.")
     parser.add_argument("--N", type=int, default=128,
                         help="Image grid size (N x N). Default: 128")
-    parser.add_argument("--size_of_pixel", type=float, default=0.5,
-                        help="Size of a pixel in meters. Default: 0.5")
+    parser.add_argument("--radius", type=float, default=32.0,
+                        help="Scene radius in meters (pixel_size = 2*radius/N). Default: 32.0")
     parser.add_argument("--matching_step", type=int, default=5,
                         help="Match every Nth frame. Default: 5")
     parser.add_argument("--start_frame", type=int, default=0,
@@ -178,7 +178,7 @@ def main():
 
     print(f"Sequences to process: {len(sequence_numbers)} — {sequence_numbers}")
     print(f"Method: {args.method}")
-    print(f"N={args.N}, size_of_pixel={args.size_of_pixel}, "
+    print(f"N={args.N}, radius={args.radius} m (pixel_size: {(2.0 * args.radius) / args.N:.3f} m), "
           f"matching_step={args.matching_step}")
     print(f"Workers: {args.num_workers}")
     print(f"Output: {args.output_dir}")
@@ -196,7 +196,8 @@ def main():
         "potential_for_necessary_peak": _BDC["potential_for_necessary_peak"],
         "level_potential_rotation": _BDC["level_potential_rotation"],
         "use_weighted_peak_score": _BDC["use_weighted_peak_score"],
-        "size_of_pixel": args.size_of_pixel,
+        "radius": args.radius,
+        "size_of_pixel": (2.0 * args.radius) / args.N,
     }
 
     # Parse method config overrides

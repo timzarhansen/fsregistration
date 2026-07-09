@@ -376,7 +376,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
     int maxRNumber = N / 2 - floor(N * 0.05);
     int bandwidth = N / 2;
 
-    if (multipleRadii) {
+    if (!multipleRadii) {
         minRNumber = maxRNumber - 1;
     }
 
@@ -736,7 +736,8 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
     double potentialNecessaryForPeak,
     bool benchmark,
     BenchmarkTimings2D* timings,
-    int normalization) {
+    int normalization,
+    bool usePhaseCorrelation) {
     //copy and normalize voxelDataInput
 
     auto totalTransStart = std::chrono::high_resolution_clock::now();
@@ -768,8 +769,16 @@ softRegistrationClass::sofftRegistrationVoxel2DTranslationAllPossibleSolutions(d
             double i1 = complexSpectrum1Correlation[idx][1];
             double r2 = complexSpectrum2Correlation[idx][0];
             double i2 = complexSpectrum2Correlation[idx][1];
-            resultingPhaseDiff2DCorrelation[idx][0] = r1 * r2 + i1 * i2;
-            resultingPhaseDiff2DCorrelation[idx][1] = i1 * r2 - r1 * i2;
+            double real_part = r1 * r2 + i1 * i2;
+            double imag_part = i1 * r2 - r1 * i2;
+            if (usePhaseCorrelation) {
+                double mag = sqrt(real_part * real_part + imag_part * imag_part) + 1e-10;
+                resultingPhaseDiff2DCorrelation[idx][0] = real_part / mag;
+                resultingPhaseDiff2DCorrelation[idx][1] = imag_part / mag;
+            } else {
+                resultingPhaseDiff2DCorrelation[idx][0] = real_part;
+                resultingPhaseDiff2DCorrelation[idx][1] = imag_part;
+            }
         }
     }
     auto correlationEnd = std::chrono::high_resolution_clock::now();
@@ -999,7 +1008,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
      bool benchmark,
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
-     int normalization) {
+     int normalization,
+     bool usePhaseCorrelation) {
 
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
@@ -1052,7 +1062,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
             std::vector<translationPeakfs2D> potentialTranslations =
                 this->sofftRegistrationVoxel2DTranslationAllPossibleSolutions(
                     voxelData1_local.data(), voxelData2_local.data(),
-                    cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings, normalization);
+                    cellSize, 1.0, debug, angleIndex, potentialNecessaryForPeak, benchmark, pTimings, normalization, usePhaseCorrelation);
             auto angleEnd = std::chrono::high_resolution_clock::now();
             double angleTime = std::chrono::duration<double, std::milli>(angleEnd - angleStart).count();
             totalTranslationTime += angleTime;

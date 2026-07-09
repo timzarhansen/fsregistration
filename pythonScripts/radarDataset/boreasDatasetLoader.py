@@ -81,6 +81,39 @@ class BoreasSequence:
         ])
         return points
 
+    def get_raw_point_cloud(self, index: int, intensity_threshold: float = 0.0) -> np.ndarray:
+        """Extract (x, y, intensity) point cloud directly from raw polar radar data.
+
+        Bypasses the cartesian image entirely — each range bin becomes a metric
+        point at full native resolution (0.0596 m/bin). pc_y = -vehicle_x
+        (consistent with _image_to_pointcloud convention), pc_x = vehicle_left.
+
+        Args:
+            index: Frame index.
+            intensity_threshold: Minimum intensity to include a point (0.0 = all).
+
+        Returns:
+            Nx3 array of (x, y, intensity) points in the Open3D/point-cloud frame.
+        """
+        frame = self.sequence.get_radar(index)
+        azimuths = np.asarray(frame.azimuths, dtype=np.float32).squeeze()
+        polar = np.asarray(frame.polar, dtype=np.float32)
+        resolution = float(frame.resolution)
+
+        num_bins = polar.shape[1]
+        ranges = (np.arange(num_bins, dtype=np.float32) + 0.5) * resolution
+
+        angles = azimuths[:, np.newaxis]
+        pcd_x = ranges[np.newaxis, :] * np.sin(angles)     # horizontal, +right
+        pcd_y = ranges[np.newaxis, :] * np.cos(angles)     # aligned with Boreas convention, pc_y = -vehicle_x
+        pcd_z = polar
+        if pcd_z.max() > 1.0:
+            pcd_z = pcd_z / pcd_z.max()
+
+        points = np.stack([pcd_x, pcd_y, pcd_z], axis=-1)
+        mask = polar > intensity_threshold
+        return points[mask]
+
     def get_gt_transform(self, prev_index: int, curr_index: int) -> np.ndarray:
         """Compute ground truth relative transformation between two frames.
 

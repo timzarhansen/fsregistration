@@ -20,10 +20,10 @@ Outputs a structured CSV with metadata header + per-pair results, suitable
 for cross-method comparison and analysis in Python/Pandas/R.
 
 Usage:
-    python boreasBenchmark.py --method fs2d --sequence 0 --N 128 --size_of_pixel 0.5 \
+    python boreasBenchmark.py --method fs2d --sequence 0 --N 128 --radius 32.0 \
         --matching_step 5 --output-dir benchmark_results <data_dir>
 
-    python boreasBenchmark.py --method fs2d --sequence 0 --N 256 --size_of_pixel 0.25 \
+    python boreasBenchmark.py --method fs2d --sequence 0 --N 256 --radius 32.0 \
         --matching_step 3 --start_frame 0 --max_frames 100 \
         --method-config "fs2d.use_direct=1 fs2d.level_potential_rotation=0.01" \
         --output-dir benchmark_results <data_dir>
@@ -65,7 +65,7 @@ from boreasRegistrationMethods import RegistrationFactory, RegistrationResult
 
 DEFAULT_CONFIG = {
     "N": 128,
-    "size_of_pixel": 0.5,
+    "radius": 32.0,
     "matching_step": 5,
     "start_frame": 0,
     "max_frames": None,
@@ -114,7 +114,8 @@ def run_benchmark(
         Tuple of (results_csv_path, summary_dict).
     """
     N = method_config["N"]
-    size_of_pixel = method_config["size_of_pixel"]
+    radius = method_config["radius"]
+    size_of_pixel = (2.0 * radius) / N
 
     # Determine number of frames
     total_frames = seq.length
@@ -271,6 +272,11 @@ def run_benchmark(
                   f"{best_rot_error:8.3f} {best_trans_error:12.4f} "
                   f"{result.confidence:6.3f} {elapsed * 1000:9.1f} OK")
 
+            # Free cached polar data — pyboreas caches it on the Radar object and never frees
+            if hasattr(seq.sequence, 'radar_frames'):
+                seq.sequence.radar_frames[prev_idx].unload_data()
+                seq.sequence.radar_frames[curr_idx].unload_data()
+
         except Exception as e:
             # Log failure but continue
             failures.append({
@@ -294,7 +300,7 @@ def run_benchmark(
         "sequence": sequence_number,
         "sequence_name": str(seq.sequence) if hasattr(seq, 'sequence') else "unknown",
         "N": N,
-        "size_of_pixel": size_of_pixel,
+        "radius": radius,
         "matching_step": matching_step,
         "start_frame": start_frame,
         "max_frames": max_frames,
@@ -453,8 +459,8 @@ def main():
                              "When provided, loads only this sequence without scanning all sequences.")
     parser.add_argument("--N", type=int, default=DEFAULT_CONFIG["N"],
                         help=f"Image grid size (N x N). Default: {DEFAULT_CONFIG['N']}")
-    parser.add_argument("--size_of_pixel", type=float, default=DEFAULT_CONFIG["size_of_pixel"],
-                        help=f"Size of a pixel in meters. Default: {DEFAULT_CONFIG['size_of_pixel']}")
+    parser.add_argument("--radius", type=float, default=DEFAULT_CONFIG["radius"],
+                        help=f"Scene radius in meters (pixel_size = 2*radius/N). Default: {DEFAULT_CONFIG['radius']}")
     parser.add_argument("--matching_step", type=int, default=DEFAULT_CONFIG["matching_step"],
                         help=f"Match every Nth frame. Default: {DEFAULT_CONFIG['matching_step']}")
     parser.add_argument("--start_frame", type=int, default=DEFAULT_CONFIG["start_frame"],
@@ -488,7 +494,8 @@ def main():
         "potential_for_necessary_peak": DEFAULT_CONFIG["potential_for_necessary_peak"],
         "level_potential_rotation": DEFAULT_CONFIG["level_potential_rotation"],
         "use_weighted_peak_score": DEFAULT_CONFIG["use_weighted_peak_score"],
-        "size_of_pixel": args.size_of_pixel,
+        "radius": args.radius,
+        "size_of_pixel": (2.0 * args.radius) / args.N,
     }
 
     # Override with CLI values for this method
@@ -504,7 +511,7 @@ def main():
     if args.sequence_name is not None:
         print(f"Sequence name: {args.sequence_name}")
     print(f"N: {args.N}")
-    print(f"Size of pixel: {args.size_of_pixel} m")
+    print(f"Radius: {args.radius} m (pixel_size: {(2.0 * args.radius) / args.N:.3f} m)")
     print(f"Matching step: {args.matching_step}")
     print(f"Start frame: {args.start_frame}")
     print(f"Max frames: {args.max_frames}")

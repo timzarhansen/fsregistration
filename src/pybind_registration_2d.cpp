@@ -121,7 +121,8 @@ public:
         bool useHamming,
         bool useDirect,
         double levelPotentialRotation = 0.1,
-        int normalization = 1
+        int normalization = 1,
+        bool usePhaseCorrelation = false
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -129,7 +130,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization, usePhaseCorrelation
         );
 
         std::vector<TransformationPeak2D> out;
@@ -314,7 +315,8 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
                py::arg("useHamming") = true,
                 py::arg("useDirect") = false,
                  py::arg("levelPotentialRotation") = 0.1,
-                 py::arg("normalization") = 1)
+                 py::arg("normalization") = 1,
+                 py::arg("usePhaseCorrelation") = false)
          .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
               py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
               py::arg("useInitialAngle") = true,

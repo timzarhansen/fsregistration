@@ -36,6 +36,22 @@ _install_lib = os.path.join(_root_dir, 'install', 'fsregistration', 'lib', 'fsre
 if os.path.isdir(_install_lib):
     sys.path.insert(0, _install_lib)
 
+# Try to import Open3D (needed for ICP, NDT)
+try:
+    import open3d as o3d
+    OPEN3D_AVAILABLE = True
+except ImportError:
+    o3d = None
+    OPEN3D_AVAILABLE = False
+
+# Try to import pybind_ndt (PCL NDT)
+try:
+    import pybind_ndt
+    PCLNDT_AVAILABLE = True
+except ImportError:
+    pybind_ndt = None
+    PCLNDT_AVAILABLE = False
+
 
 @dataclass
 class RegistrationResult:
@@ -45,6 +61,38 @@ class RegistrationResult:
     method_name: str
     computation_time: float         # seconds
     metadata: dict = field(default_factory=dict)  # method-specific info
+
+
+def _image_to_pointcloud(img: np.ndarray, cell_size: float = 0.01,
+                          scale: float = 1.0, threshold_pct: float = 5.0) -> "o3d.geometry.PointCloud":
+    """Convert a 2D cartesian image to an Open3D point cloud.
+
+    Maps pixel coordinates to metric space centered at origin,
+    uses pixel intensity as the z-coordinate.
+
+    Args:
+        img: N x N float64 image in [0, 1].
+        cell_size: Meters per pixel.
+        scale: Multiplier for intensity as z-coordinate.
+        threshold_pct: Percentile threshold below which points are filtered out.
+
+    Returns:
+        Open3D PointCloud.
+    """
+    h, w = img.shape
+    y, x = np.meshgrid(np.arange(h), np.arange(w), indexing='ij')
+    points = np.stack([
+        (x - w / 2) * cell_size,
+        (y - h / 2) * cell_size,
+        img.astype(np.float64) * scale
+    ], axis=-1)
+
+    mask = img > np.percentile(img, threshold_pct)
+    point_coords = points[mask]
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(point_coords)
+    return pcd
 
 
 class BaseRegistrationMethod(ABC):
@@ -94,6 +142,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
         self.normalization = config.get("normalization", 1)
         self.use_weighted_peak_score = config.get("use_weighted_peak_score", True)
+        self.use_phase_correlation = config.get("use_phase_correlation", False)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -115,26 +164,30 @@ class FS2DRegistration(BaseRegistrationMethod):
             useHamming=self.use_hamming,
             useDirect=self.use_direct,
             levelPotentialRotation=self.level_potential_rotation,
-            normalization=self.normalization
+            normalization=self.normalization,
+            usePhaseCorrelation=self.use_phase_correlation
         )
 
-        highest_peak = 0.0
-        index_highest = 0
+        best_score = 0.0
+        best_rot_idx = 0
+        best_trans = list_peaks[0].potentialTranslations[0]
         for i, peak in enumerate(list_peaks):
-            if self.use_weighted_peak_score:
-                score = peak.potentialTranslations[0].peakHeight * np.sqrt(peak.potentialRotation.peakCorrelation)
-            else:
-                score = peak.potentialTranslations[0].peakHeight
-            if score > highest_peak:
-                highest_peak = score
-                index_highest = i
-
-        peak = list_peaks[index_highest]
+            for trans in peak.potentialTranslations:
+                if self.use_weighted_peak_score:
+                    score = trans.peakHeight * np.sqrt(peak.potentialRotation.peakCorrelation)
+                else:
+                    score = trans.peakHeight
+                if score > best_score:
+                    best_score = score
+                    best_rot_idx = i
+                    best_trans = trans
+        highest_peak = best_score
+        peak = list_peaks[best_rot_idx]
 
         transform = np.eye(4)
         yaw = peak.potentialRotation.angle
         transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
-        tx, ty = peak.potentialTranslations[0].translationSI
+        tx, ty = best_trans.translationSI
         transform[:3, 3] = [tx, -ty, 0.0]
 
         # Collect all candidate solutions (rotation peaks × translation candidates)
@@ -166,20 +219,79 @@ class FS2DRegistration(BaseRegistrationMethod):
 
 
 class ICPRegistration(BaseRegistrationMethod):
-    """Open3D point-to-point ICP (placeholder).
+    """Open3D point-to-point ICP registration.
 
-    Would convert images to 2D point clouds and run registration_icp.
+    Converts images to 3D point clouds (x, y, intensity) and
+    runs point-to-point ICP.
     """
 
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "icp"
+        if not OPEN3D_AVAILABLE:
+            raise ImportError("Open3D is required for ICPRegistration. Install with: pip install open3d")
+        self.max_distance = config.get("icp_max_distance", config.get("max_distance", 0.05))
+        self.max_iteration = config.get("icp_max_iteration", config.get("max_iteration", 100))
+        self.scale = config.get("icp_scale", config.get("scale", 1.0))
+        self.threshold_pct = config.get("icp_threshold_pct", config.get("threshold_pct", 5.0))
+        self.initial_guess = config.get("initial_guess", np.eye(4))
+        self.voxel_size = config.get("icp_voxel_size", config.get("voxel_size", 0.0))
 
-    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
-        raise NotImplementedError(
-            "ICPRegistration not yet implemented. "
-            "Plan: extract 2D point cloud from images (threshold-based), "
-            "then use o3d.pipelines.registration.registration_icp."
+    def register(self, img1: np.ndarray, img2: np.ndarray,
+                 pcd1: np.ndarray = None, pcd2: np.ndarray = None) -> RegistrationResult:
+        t0 = time.time()
+
+        if pcd1 is not None and pcd2 is not None:
+            source = o3d.geometry.PointCloud()
+            source.points = o3d.utility.Vector3dVector(pcd1[:, :3])
+            target = o3d.geometry.PointCloud()
+            target.points = o3d.utility.Vector3dVector(pcd2[:, :3])
+        else:
+            cell_size = self.config.get("size_of_pixel", 0.01)
+            source = _image_to_pointcloud(img1, cell_size, self.scale, self.threshold_pct)
+            target = _image_to_pointcloud(img2, cell_size, self.scale, self.threshold_pct)
+
+        if self.voxel_size > 0:
+            source = source.voxel_down_sample(self.voxel_size)
+            target = target.voxel_down_sample(self.voxel_size)
+
+        if len(source.points) < 3 or len(target.points) < 3:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4),
+                confidence=0.0,
+                method_name="icp",
+                computation_time=elapsed,
+                metadata={"error": "too few points", "source_points": len(source.points), "target_points": len(target.points)}
+            )
+
+        reg = o3d.pipelines.registration.registration_icp(
+            source, target, self.max_distance, self.initial_guess,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=self.max_iteration)
+            )
+
+        # Convert Open3D point-cloud frame to vehicle frame (x-forward, y-right user convention)
+        # Boreas radar standard: x = r*cos(θ) (forward), y = r*sin(θ) (left for CCW)
+        # Our pc frame: pc_x = y_Boreas (left), pc_y = x_Boreas (forward)
+        # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
+        T_pc = reg.transformation
+        transform = np.eye(4)
+        transform[:3, :3] = T_pc[:3, :3]
+        transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
+        transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
+
+        fitness = reg.fitness
+        rmse = reg.inlier_rmse
+        confidence = fitness / (1.0 + rmse) if rmse > 0 else 0.0
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform,
+            confidence=confidence,
+            method_name="icp",
+            computation_time=elapsed,
+            metadata={"fitness": fitness, "rmse": rmse, "num_points_source": len(source.points), "num_points_target": len(target.points)}
         )
 
 
@@ -192,7 +304,6 @@ class FourierMellinRegistration(BaseRegistrationMethod):
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "fourier_mellin"
-        self.highpass = config.get("highpass", True)
 
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
         import imreg_dft as ird
@@ -202,6 +313,8 @@ class FourierMellinRegistration(BaseRegistrationMethod):
         I1 = img1.astype(np.float64)
         I2 = img2.astype(np.float64)
 
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
         result = ird.similarity(I1, I2)
 
         angle = float(result["angle"])
@@ -210,7 +323,7 @@ class FourierMellinRegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", np.radians(angle)).as_matrix()
-        transform[:3, 3] = [tx, -ty, 0.0]
+        transform[:3, 3] = [tx * cell_size, -ty * cell_size, 0.0]
 
         elapsed = time.time() - t0
 
@@ -226,31 +339,538 @@ class FourierMellinRegistration(BaseRegistrationMethod):
         )
 
 
-class NDTRegistration(BaseRegistrationMethod):
-    """Normal Distributions Transform registration (placeholder)."""
+class NDT_P2DRegistration(BaseRegistrationMethod):
+    """Normal Distributions Transform registration using PCL's NDT via pybind_ndt.
+
+    Falls back to Open3D GeneralizedICP if pybind_ndt is unavailable.
+    Uses raw polar point clouds when available (USE_RAW_POINTCLOUD).
+    """
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self._name = "ndt"
+        self._name = "ndt_p2d"
+        self.resolution = config.get("ndt_voxel_size", config.get("voxel_size", 5.0))
+        self.max_iteration = config.get("ndt_max_iteration", config.get("max_iteration", 35))
+        self.transformation_epsilon = config.get("ndt_transformation_epsilon", config.get("transformation_epsilon", 0.01))
+        self.step_size = config.get("ndt_step_size", config.get("step_size", 0.1))
+        self.scale = config.get("ndt_scale", config.get("scale", 1.0))
+        self.threshold_pct = config.get("ndt_threshold_pct", config.get("threshold_pct", 5.0))
 
-    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
-        raise NotImplementedError(
-            "NDTRegistration not yet implemented."
+    def register(self, img1: np.ndarray, img2: np.ndarray,
+                 pcd1: np.ndarray = None, pcd2: np.ndarray = None) -> RegistrationResult:
+        t0 = time.time()
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
+        if pcd1 is not None and pcd2 is not None:
+            source_pts = np.zeros((len(pcd1), 3), dtype=np.float64)
+            source_pts[:, :2] = pcd1[:, :2]
+            target_pts = np.zeros((len(pcd2), 3), dtype=np.float64)
+            target_pts[:, :2] = pcd2[:, :2]
+        else:
+            pcd1_o3d = _image_to_pointcloud(img1, cell_size, self.scale, self.threshold_pct)
+            pcd2_o3d = _image_to_pointcloud(img2, cell_size, self.scale, self.threshold_pct)
+            source_pts = np.asarray(pcd1_o3d.points, dtype=np.float64)
+            target_pts = np.asarray(pcd2_o3d.points, dtype=np.float64)
+            source_pts[:, 2] = 0.0
+            target_pts[:, 2] = 0.0
+
+        if len(source_pts) < 10 or len(target_pts) < 10:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="ndt_p2d",
+                computation_time=elapsed,
+                metadata={"error": "too few points", "source_points": len(source_pts), "target_points": len(target_pts)}
+            )
+
+        if PCLNDT_AVAILABLE:
+            ndt = pybind_ndt.PCLNDTWrapper()
+            initial_guess = self.config.get("initial_guess", np.eye(4)).astype(np.float64)
+            result = ndt.align(
+                source_pts, target_pts,
+                resolution=self.resolution,
+                step_size=self.step_size,
+                transformation_epsilon=self.transformation_epsilon,
+                max_iterations=self.max_iteration,
+                initial_guess=initial_guess.ravel()
+            )
+            T_pc = np.array(result.transformation)
+            fitness = result.fitness
+            convergence = result.has_converged
+            n_iter = result.final_num_iteration
+        else:
+            # Fallback: Open3D generalized ICP
+            if not OPEN3D_AVAILABLE:
+                raise ImportError("Neither pybind_ndt nor Open3D available for NDT_P2DRegistration")
+            import open3d as o3d
+            source_o3d = o3d.geometry.PointCloud()
+            source_o3d.points = o3d.utility.Vector3dVector(source_pts)
+            target_o3d = o3d.geometry.PointCloud()
+            target_o3d.points = o3d.utility.Vector3dVector(target_pts)
+            reg = o3d.pipelines.registration.registration_generalized_icp(
+                source_o3d, target_o3d, self.resolution, np.eye(4),
+                o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(),
+                o3d.pipelines.registration.ICPConvergenceCriteria(
+                    max_iteration=self.max_iteration,
+                    relative_rmse=self.transformation_epsilon
+                )
+            )
+            T_pc = reg.transformation
+            fitness = reg.fitness
+            convergence = True
+            n_iter = 0
+
+        # Convert PCL/Open3D point-cloud frame to vehicle frame
+        # Boreas radar standard: x = r*cos(θ) (forward), y = r*sin(θ) (left for CCW)
+        # Our pc frame: pc_x = y_Boreas (left), pc_y = x_Boreas (forward)
+        # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
+        transform = np.eye(4)
+        transform[:3, :3] = T_pc[:3, :3]
+        transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
+        transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
+
+        confidence = 1.0 / (1.0 + fitness) if fitness > 0 else 0.0
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform,
+            confidence=confidence,
+            method_name="ndt_p2d",
+            computation_time=elapsed,
+            metadata={
+                "fitness": fitness, "converged": convergence, "iterations": n_iter,
+                "resolution": self.resolution,
+                "num_points_source": len(source_pts), "num_points_target": len(target_pts)
+            }
         )
 
 
 class SIFTRegistration(BaseRegistrationMethod):
-    """SIFT feature-based registration with RANSAC (placeholder)."""
+    """SIFT feature-based registration with RANSAC.
+
+    Detects SIFT keypoints, matches with FLANN + Lowe ratio test,
+    and estimates 2D rotation + translation via RANSAC.
+    """
 
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "sift"
+        self.nfeatures = config.get("sift_nfeatures", config.get("nfeatures", 0))
+        self.n_octave_layers = config.get("sift_n_octave_layers", config.get("n_octave_layers", 3))
+        self.contrast_threshold = config.get("sift_contrast_threshold", config.get("contrast_threshold", 0.04))
+        self.edge_threshold = config.get("sift_edge_threshold", config.get("edge_threshold", 10))
+        self.sigma = config.get("sift_sigma", config.get("sigma", 1.6))
+        self.ratio_threshold = config.get("sift_ratio_threshold", config.get("ratio_threshold", 0.75))
+        self.ransac_threshold = config.get("sift_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.confidence = config.get("sift_ransac_confidence", config.get("ransac_confidence", 0.99))
 
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
-        raise NotImplementedError(
-            "SIFTRegistration not yet implemented. "
-            "Plan: use cv2.SIFT_create(), find keypoints/descriptors, "
-            "BFMatcher with FLANN, RANSAC for affine/homography estimation."
+        import cv2
+        t0 = time.time()
+
+        img1_u8 = (img1 * 255).astype(np.uint8)
+        img2_u8 = (img2 * 255).astype(np.uint8)
+
+        detector = cv2.SIFT_create(
+            nfeatures=self.nfeatures,
+            nOctaveLayers=self.n_octave_layers,
+            contrastThreshold=self.contrast_threshold,
+            edgeThreshold=self.edge_threshold,
+            sigma=self.sigma
+        )
+        kp1, des1 = detector.detectAndCompute(img1_u8, None)
+        kp2, des2 = detector.detectAndCompute(img2_u8, None)
+
+        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="sift",
+                computation_time=elapsed,
+                metadata={"error": "insufficient keypoints", "n1": len(kp1) if kp1 else 0, "n2": len(kp2) if kp2 else 0}
+            )
+
+        index_params = dict(algorithm=1, trees=5)
+        search_params = dict(checks=50)
+        matcher = cv2.FlannBasedMatcher(index_params, search_params)
+
+        knn_matches = matcher.knnMatch(des1, des2, k=2)
+
+        good_matches = []
+        for m, n in knn_matches:
+            if m.distance < self.ratio_threshold * n.distance:
+                good_matches.append(m)
+
+        if len(good_matches) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="sift",
+                computation_time=elapsed,
+                metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
+            )
+
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        affine, inlier_mask = cv2.estimateAffinePartial2D(
+            src_pts, dst_pts, method=cv2.RANSAC,
+            ransacReprojThreshold=self.ransac_threshold,
+            confidence=self.confidence
+        )
+
+        if affine is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="sift",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed to estimate transform"}
+            )
+
+        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        tx_px = affine[0, 2]
+        ty_px = affine[1, 2]
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
+        transform = np.eye(4)
+        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
+        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+
+        confidence = n_inliers / max(len(good_matches), 1)
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="sift",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(kp1), "keypoints_target": len(kp2),
+                "good_matches": len(good_matches), "inliers": n_inliers,
+                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+            }
+        )
+
+
+def _check_surf():
+    """Check that SURF is available in the OpenCV build.
+
+    SURF requires opencv-contrib-python and may not be present
+    in all OpenCV distributions. Raises ImportError if unavailable.
+    """
+    import cv2
+    if not hasattr(cv2, 'xfeatures2d'):
+        raise ImportError(
+            "SURF is not available in this OpenCV build. "
+            "Install opencv-contrib-python: pip install opencv-contrib-python"
+        )
+
+
+class SURFRegistration(BaseRegistrationMethod):
+    """SURF feature-based registration with RANSAC.
+
+    Requires opencv-contrib-python. Fails hard if not available.
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "surf"
+        self.hessian_threshold = config.get("surf_hessian_threshold", config.get("hessian_threshold", 400))
+        self.n_octaves = config.get("surf_n_octaves", config.get("n_octaves", 4))
+        self.n_octave_layers = config.get("surf_n_octave_layers", config.get("n_octave_layers", 3))
+        self.extended = config.get("surf_extended", config.get("extended", True))
+        self.upright = config.get("surf_upright", config.get("upright", False))
+        self.ratio_threshold = config.get("surf_ratio_threshold", config.get("ratio_threshold", 0.75))
+        self.ransac_threshold = config.get("surf_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.confidence = config.get("surf_ransac_confidence", config.get("ransac_confidence", 0.99))
+        # Validate availability at construction time
+        _check_surf()
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import cv2
+        t0 = time.time()
+
+        img1_u8 = (img1 * 255).astype(np.uint8)
+        img2_u8 = (img2 * 255).astype(np.uint8)
+
+        detector = cv2.xfeatures2d.SURF_create(
+            hessianThreshold=self.hessian_threshold,
+            nOctaves=self.n_octaves,
+            nOctaveLayers=self.n_octave_layers,
+            extended=self.extended,
+            upright=self.upright
+        )
+        kp1, des1 = detector.detectAndCompute(img1_u8, None)
+        kp2, des2 = detector.detectAndCompute(img2_u8, None)
+
+        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="surf",
+                computation_time=elapsed,
+                metadata={"error": "insufficient keypoints", "n1": len(kp1) if kp1 else 0, "n2": len(kp2) if kp2 else 0}
+            )
+
+        matcher = cv2.BFMatcher(cv2.NORM_L2)
+        knn_matches = matcher.knnMatch(des1, des2, k=2)
+
+        good_matches = []
+        for m, n in knn_matches:
+            if m.distance < self.ratio_threshold * n.distance:
+                good_matches.append(m)
+
+        if len(good_matches) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="surf",
+                computation_time=elapsed,
+                metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
+            )
+
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        affine, inlier_mask = cv2.estimateAffinePartial2D(
+            src_pts, dst_pts, method=cv2.RANSAC,
+            ransacReprojThreshold=self.ransac_threshold,
+            confidence=self.confidence
+        )
+
+        if affine is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="surf",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed to estimate transform"}
+            )
+
+        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        tx_px = affine[0, 2]
+        ty_px = affine[1, 2]
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
+        transform = np.eye(4)
+        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
+        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+
+        confidence = n_inliers / max(len(good_matches), 1)
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="surf",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(kp1), "keypoints_target": len(kp2),
+                "good_matches": len(good_matches), "inliers": n_inliers,
+                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+            }
+        )
+
+
+class KAZERegistration(BaseRegistrationMethod):
+    """KAZE feature-based registration with RANSAC."""
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "kaze"
+        self.extended = config.get("kaze_extended", config.get("extended", False))
+        self.upright = config.get("kaze_upright", config.get("upright", False))
+        self.threshold = config.get("kaze_threshold", config.get("threshold", 0.001))
+        self.n_octaves = config.get("kaze_n_octaves", config.get("n_octaves", 4))
+        self.n_octave_layers = config.get("kaze_n_octave_layers", config.get("n_octave_layers", 4))
+        self.diffusivity = int(config.get("kaze_diffusivity", config.get("diffusivity", 2)))
+        self.ratio_threshold = config.get("kaze_ratio_threshold", config.get("ratio_threshold", 0.75))
+        self.ransac_threshold = config.get("kaze_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.confidence = config.get("kaze_ransac_confidence", config.get("ransac_confidence", 0.99))
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import cv2
+        t0 = time.time()
+
+        img1_u8 = (img1 * 255).astype(np.uint8)
+        img2_u8 = (img2 * 255).astype(np.uint8)
+
+        detector = cv2.KAZE_create(
+            extended=self.extended,
+            upright=self.upright,
+            threshold=self.threshold,
+            nOctaves=self.n_octaves,
+            nOctaveLayers=self.n_octave_layers,
+            diffusivity=self.diffusivity
+        )
+        kp1, des1 = detector.detectAndCompute(img1_u8, None)
+        kp2, des2 = detector.detectAndCompute(img2_u8, None)
+
+        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="kaze",
+                computation_time=elapsed,
+                metadata={"error": "insufficient keypoints", "n1": len(kp1) if kp1 else 0, "n2": len(kp2) if kp2 else 0}
+            )
+
+        matcher = cv2.BFMatcher(cv2.NORM_L2)
+        knn_matches = matcher.knnMatch(des1, des2, k=2)
+
+        good_matches = []
+        for m, n in knn_matches:
+            if m.distance < self.ratio_threshold * n.distance:
+                good_matches.append(m)
+
+        if len(good_matches) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="kaze",
+                computation_time=elapsed,
+                metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
+            )
+
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        affine, inlier_mask = cv2.estimateAffinePartial2D(
+            src_pts, dst_pts, method=cv2.RANSAC,
+            ransacReprojThreshold=self.ransac_threshold,
+            confidence=self.confidence
+        )
+
+        if affine is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="kaze",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed to estimate transform"}
+            )
+
+        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        tx_px = affine[0, 2]
+        ty_px = affine[1, 2]
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
+        transform = np.eye(4)
+        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
+        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+
+        confidence = n_inliers / max(len(good_matches), 1)
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="kaze",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(kp1), "keypoints_target": len(kp2),
+                "good_matches": len(good_matches), "inliers": n_inliers,
+                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+            }
+        )
+
+
+class AKAZERegistration(BaseRegistrationMethod):
+    """AKAZE feature-based registration with RANSAC.
+
+    Uses binary descriptors with Hamming distance matching.
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "akaze"
+        self.descriptor_type = config.get("akaze_descriptor_type", config.get("descriptor_type", "MLDB"))
+        self.descriptor_size = config.get("akaze_descriptor_size", config.get("descriptor_size", 0))
+        self.descriptor_channels = config.get("akaze_descriptor_channels", config.get("descriptor_channels", 3))
+        self.threshold = config.get("akaze_threshold", config.get("threshold", 0.001))
+        self.n_octaves = config.get("akaze_n_octaves", config.get("n_octaves", 4))
+        self.n_octave_layers = config.get("akaze_n_octave_layers", config.get("n_octave_layers", 4))
+        self.diffusivity = int(config.get("akaze_diffusivity", config.get("diffusivity", 2)))
+        self.ratio_threshold = config.get("akaze_ratio_threshold", config.get("ratio_threshold", 0.75))
+        self.ransac_threshold = config.get("akaze_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.confidence = config.get("akaze_ransac_confidence", config.get("ransac_confidence", 0.99))
+        # Descriptor type resolved lazily in register() to avoid import-time dependency on cv2
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import cv2
+        t0 = time.time()
+
+        _desc_map = {
+            "KAZE": cv2.AKAZE_DESCRIPTOR_KAZE,
+            "MLDB": cv2.AKAZE_DESCRIPTOR_MLDB,
+        }
+        desc_type = _desc_map.get(self.descriptor_type.upper(), cv2.AKAZE_DESCRIPTOR_MLDB)
+
+        img1_u8 = (img1 * 255).astype(np.uint8)
+        img2_u8 = (img2 * 255).astype(np.uint8)
+
+        detector = cv2.AKAZE_create(
+            descriptor_type=desc_type,
+            descriptor_size=self.descriptor_size,
+            descriptor_channels=self.descriptor_channels,
+            threshold=self.threshold,
+            nOctaves=self.n_octaves,
+            nOctaveLayers=self.n_octave_layers,
+            diffusivity=self.diffusivity
+        )
+        kp1, des1 = detector.detectAndCompute(img1_u8, None)
+        kp2, des2 = detector.detectAndCompute(img2_u8, None)
+
+        if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="akaze",
+                computation_time=elapsed,
+                metadata={"error": "insufficient keypoints", "n1": len(kp1) if kp1 else 0, "n2": len(kp2) if kp2 else 0}
+            )
+
+        matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+        knn_matches = matcher.knnMatch(des1, des2, k=2)
+
+        good_matches = []
+        for m, n in knn_matches:
+            if m.distance < self.ratio_threshold * n.distance:
+                good_matches.append(m)
+
+        if len(good_matches) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="akaze",
+                computation_time=elapsed,
+                metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
+            )
+
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        affine, inlier_mask = cv2.estimateAffinePartial2D(
+            src_pts, dst_pts, method=cv2.RANSAC,
+            ransacReprojThreshold=self.ransac_threshold,
+            confidence=self.confidence
+        )
+
+        if affine is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="akaze",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed to estimate transform"}
+            )
+
+        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        tx_px = affine[0, 2]
+        ty_px = affine[1, 2]
+        cell_size = self.config.get("size_of_pixel", 0.01)
+
+        transform = np.eye(4)
+        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
+        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+
+        confidence = n_inliers / max(len(good_matches), 1)
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="akaze",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(kp1), "keypoints_target": len(kp2),
+                "good_matches": len(good_matches), "inliers": n_inliers,
+                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+            }
         )
 
 
@@ -281,6 +901,10 @@ class RegistrationFactory:
 
 # Auto-register available methods
 RegistrationFactory.register("fs2d", FS2DRegistration)
-# RegistrationFactory.register("icp", ICPRegistration)          # uncomment when implemented
+RegistrationFactory.register("icp", ICPRegistration)
+RegistrationFactory.register("ndt_p2d", NDT_P2DRegistration)
 RegistrationFactory.register("fourier_mellin", FourierMellinRegistration)
-# RegistrationFactory.register("sift", SIFTRegistration)         # uncomment when implemented
+RegistrationFactory.register("sift", SIFTRegistration)
+RegistrationFactory.register("surf", SURFRegistration)
+RegistrationFactory.register("kaze", KAZERegistration)
+RegistrationFactory.register("akaze", AKAZERegistration)

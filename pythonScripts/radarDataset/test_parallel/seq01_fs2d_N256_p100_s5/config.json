@@ -1,0 +1,21 @@
+{
+  "method": "fs2d",
+  "config": {
+    "N": 256,
+    "use_clahe": true,
+    "use_hamming": true,
+    "use_direct": true,
+    "use_gauss": false,
+    "multiple_radii": true,
+    "potential_for_necessary_peak": 0.1,
+    "level_potential_rotation": 0.001,
+    "use_weighted_peak_score": true,
+    "size_of_pixel": 1.0
+  },
+  "benchmark_params": {
+    "matching_step": 5,
+    "start_frame": 0,
+    "max_frames": null,
+    "save_blended": false
+  }
+}

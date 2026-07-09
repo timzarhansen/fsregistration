@@ -249,7 +249,7 @@ def main():
         from multiprocessing import Pool
         
         with Pool(args.num_workers) as pool:
-            results = pool.map(process_batch, batch_args)
+            results = list(pool.imap_unordered(process_batch, batch_args))
         
         # Sort results for consistent ordering
         results.sort(key=lambda x: x[0])

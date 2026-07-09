@@ -297,6 +297,26 @@ install(TARGETS pybind_registration_3d
         DESTINATION lib/fsregistration
 )
 
+
+# pybind11 module for PCL Normal Distributions Transform
+pybind11_add_module(pybind_ndt
+        src/pybind_ndt.cpp
+)
+
+target_include_directories(pybind_ndt PRIVATE
+        ${PCL_INCLUDE_DIRS}
+)
+
+target_link_libraries(pybind_ndt
+        PRIVATE
+        ${PCL_LIBRARIES}
+        Eigen3::Eigen3
+)
+
+install(TARGETS pybind_ndt
+        DESTINATION lib/fsregistration
+)
+
 ament_export_dependencies(rosidl_default_runtime)
 ament_package()
 

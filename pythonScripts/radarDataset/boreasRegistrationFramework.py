@@ -138,19 +138,22 @@ class FS2DRegistration(BaseRegistrationMethod):
         )
 
         # Find peak with highest translation peak height
-        highest_peak = 0.0
-        index_highest = 0
+        best_score = 0.0
+        best_rot_idx = 0
+        best_trans = list_peaks[0].potentialTranslations[0]
         for i, peak in enumerate(list_peaks):
-            if peak.potentialTranslations[0].peakHeight > highest_peak:
-                highest_peak = peak.potentialTranslations[0].peakHeight
-                index_highest = i
-
-        peak = list_peaks[index_highest]
+            for trans in peak.potentialTranslations:
+                if trans.peakHeight > best_score:
+                    best_score = trans.peakHeight
+                    best_rot_idx = i
+                    best_trans = trans
+        highest_peak = best_score
+        peak = list_peaks[best_rot_idx]
 
         transform = np.eye(4)
         yaw = peak.potentialRotation.angle
         transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
-        tx, ty = peak.potentialTranslations[0].translationSI
+        tx, ty = best_trans.translationSI
         transform[:3, 3] = [tx, ty, 0.0]
 
         elapsed = time.time() - t0

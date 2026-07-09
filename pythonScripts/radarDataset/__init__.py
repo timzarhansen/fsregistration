@@ -11,9 +11,12 @@ from boreasRegistrationMethods import (
     BaseRegistrationMethod,
     FS2DRegistration,
     ICPRegistration,
+    NDT_P2DRegistration,
     FourierMellinRegistration,
-    NDTRegistration,
     SIFTRegistration,
+    SURFRegistration,
+    KAZERegistration,
+    AKAZERegistration,
     RegistrationFactory,
 )
 
@@ -28,8 +31,11 @@ __all__ = [
     "BaseRegistrationMethod",
     "FS2DRegistration",
     "ICPRegistration",
+    "NDT_P2DRegistration",
     "FourierMellinRegistration",
-    "NDTRegistration",
     "SIFTRegistration",
+    "SURFRegistration",
+    "KAZERegistration",
+    "AKAZERegistration",
     "RegistrationFactory",
 ]

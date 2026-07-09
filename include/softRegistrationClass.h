@@ -238,7 +238,8 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                       bool benchmark = false,
                                                                                       BenchmarkTimings2D* timings = nullptr,
                                                                                       double level_potential_rotation = 0.0,
-                                                                                      int normalization = 1);
+                                                                                      int normalization = 1,
+                                                                                      bool usePhaseCorrelation = false);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
@@ -251,8 +252,9 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                                 int numberOfRotationForDebug = 0,
                                                                                                 double potentialNecessaryForPeak = 0.1,
                                                                                                 bool benchmark = false,
-                                                                                                BenchmarkTimings2D* timings = nullptr,
-                                                                                                int normalization = 1);
+                                                                                                 BenchmarkTimings2D* timings = nullptr,
+                                                                                                 int normalization = 1,
+                                                                                                 bool usePhaseCorrelation = false);
 
 
     std::pair<std::vector<float>, std::vector<float>>
