@@ -9,10 +9,12 @@ import numpy as np
 # Configuration — edit as needed
 # ============================================================================
 INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/benchmark_sweep")
+# INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/paramBenchMethods/benchmark_sweep")
 OUTPUT_PATH = INPUT_FOLDER / "aggregated_results.csv"
 
 OUTLIER_ROT_THRESH_DEG = 10.0
 OUTLIER_TRANS_THRESH_M = 4.0
+MIN_GT_TRANS_M = 0.01
 
 
 def read_data_rows(filepath: Path) -> list[dict]:
@@ -32,7 +34,8 @@ def read_data_rows(filepath: Path) -> list[dict]:
 
 def numeric_cols(row: dict) -> dict:
     keys = ["rot_error_deg", "trans_error_m",
-            "best_rot_error_deg", "best_trans_error_m"]
+            "best_rot_error_deg", "best_trans_error_m",
+            "gt_tx_m", "gt_ty_m"]
     out = {}
     for k in keys:
         try:
@@ -43,6 +46,20 @@ def numeric_cols(row: dict) -> dict:
     out["rot_error_deg"] = abs(out["rot_error_deg"])
     out["best_rot_error_deg"] = abs(out["best_rot_error_deg"])
     # Translation error is already the L2 norm (always >= 0)
+
+    # Normalised odometry metrics (avoid div-by-near-zero)
+    gt_trans_norm = np.sqrt(out["gt_tx_m"]**2 + out["gt_ty_m"]**2)
+    if gt_trans_norm >= MIN_GT_TRANS_M:
+        out["trans_err_pct"] = out["trans_error_m"] / gt_trans_norm * 100.0
+        out["rot_err_per_m"] = out["rot_error_deg"] / gt_trans_norm
+        out["best_trans_err_pct"] = out["best_trans_error_m"] / gt_trans_norm * 100.0
+        out["best_rot_err_per_m"] = out["best_rot_error_deg"] / gt_trans_norm
+    else:
+        out["trans_err_pct"] = np.nan
+        out["rot_err_per_m"] = np.nan
+        out["best_trans_err_pct"] = np.nan
+        out["best_rot_err_per_m"] = np.nan
+
     return out
 
 
@@ -79,17 +96,26 @@ def process_subdirectory(subdir: Path) -> dict | None:
                     pass
 
     rot, trans, best_rot, best_trans = [], [], [], []
+    trans_pct, rot_per_m, best_trans_pct, best_rot_per_m = [], [], [], []
     for r in rows:
         nc = numeric_cols(r)
         rot.append(nc["rot_error_deg"])
         trans.append(nc["trans_error_m"])
         best_rot.append(nc["best_rot_error_deg"])
         best_trans.append(nc["best_trans_error_m"])
+        trans_pct.append(nc["trans_err_pct"])
+        rot_per_m.append(nc["rot_err_per_m"])
+        best_trans_pct.append(nc["best_trans_err_pct"])
+        best_rot_per_m.append(nc["best_rot_err_per_m"])
 
     rot_s = compute_stats(rot)
     trans_s = compute_stats(trans)
     best_rot_s = compute_stats(best_rot)
     best_trans_s = compute_stats(best_trans)
+    trans_pct_s = compute_stats(trans_pct)
+    rot_per_m_s = compute_stats(rot_per_m)
+    best_trans_pct_s = compute_stats(best_trans_pct)
+    best_rot_per_m_s = compute_stats(best_rot_per_m)
 
     outlier_count = sum(
         1 for r, t in zip(rot, trans)
@@ -116,6 +142,18 @@ def process_subdirectory(subdir: Path) -> dict | None:
         "best_trans_mean_m": best_trans_s["mean"],
         "best_trans_std_m": best_trans_s["std"],
         "best_trans_median_m": best_trans_s["median"],
+        "trans_err_pct_mean": trans_pct_s["mean"],
+        "trans_err_pct_std": trans_pct_s["std"],
+        "trans_err_pct_median": trans_pct_s["median"],
+        "rot_err_deg_per_m_mean": rot_per_m_s["mean"],
+        "rot_err_deg_per_m_std": rot_per_m_s["std"],
+        "rot_err_deg_per_m_median": rot_per_m_s["median"],
+        "best_trans_err_pct_mean": best_trans_pct_s["mean"],
+        "best_trans_err_pct_std": best_trans_pct_s["std"],
+        "best_trans_err_pct_median": best_trans_pct_s["median"],
+        "best_rot_err_deg_per_m_mean": best_rot_per_m_s["mean"],
+        "best_rot_err_deg_per_m_std": best_rot_per_m_s["std"],
+        "best_rot_err_deg_per_m_median": best_rot_per_m_s["median"],
         "outlier_count": outlier_count,
         "outlier_best_count": outlier_best_count,
     }

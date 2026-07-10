@@ -48,7 +48,6 @@ python boreasRegistrationFramework.py --method fs2d \
 1. ICP
 2. Fourier-mellin
 3. NDT P2D
-4. NDT D2D
 5. SIFT
 6. SURF
 7. KAZE

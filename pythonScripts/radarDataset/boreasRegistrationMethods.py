@@ -318,12 +318,14 @@ class FourierMellinRegistration(BaseRegistrationMethod):
         result = ird.similarity(I1, I2)
 
         angle = float(result["angle"])
-        tx, ty = result["tvec"]
+        y_px, x_px = result["tvec"]  # imreg_dft returns (Y, X) — (rows, cols)
         success = float(result.get("success", 0.0))
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", np.radians(angle)).as_matrix()
-        transform[:3, 3] = [tx * cell_size, -ty * cell_size, 0.0]
+        # Image frame: +row = down, +col = right.
+        # Boreas frame: x-forward, y-left. Forward = up = -rows, Left = right = +cols.
+        transform[:3, 3] = [-y_px * cell_size, x_px * cell_size, 0.0]
 
         elapsed = time.time() - t0
 
@@ -334,7 +336,7 @@ class FourierMellinRegistration(BaseRegistrationMethod):
             computation_time=elapsed,
             metadata={
                 "rotation_angle_deg": angle,
-                "translation_px": (tx, ty),
+                "tvec_imreg": [float(y_px), float(x_px)],  # (rows, cols) per imreg_dft convention
             },
         )
 
@@ -355,6 +357,7 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
         self.step_size = config.get("ndt_step_size", config.get("step_size", 0.1))
         self.scale = config.get("ndt_scale", config.get("scale", 1.0))
         self.threshold_pct = config.get("ndt_threshold_pct", config.get("threshold_pct", 5.0))
+        self.z_scale = config.get("ndt_z_scale", 0.0)
 
     def register(self, img1: np.ndarray, img2: np.ndarray,
                  pcd1: np.ndarray = None, pcd2: np.ndarray = None) -> RegistrationResult:
@@ -366,13 +369,17 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
             source_pts[:, :2] = pcd1[:, :2]
             target_pts = np.zeros((len(pcd2), 3), dtype=np.float64)
             target_pts[:, :2] = pcd2[:, :2]
+            if self.z_scale > 0:
+                source_pts[:, 2] = pcd1[:, 2] * self.z_scale
+                target_pts[:, 2] = pcd2[:, 2] * self.z_scale
         else:
             pcd1_o3d = _image_to_pointcloud(img1, cell_size, self.scale, self.threshold_pct)
             pcd2_o3d = _image_to_pointcloud(img2, cell_size, self.scale, self.threshold_pct)
             source_pts = np.asarray(pcd1_o3d.points, dtype=np.float64)
             target_pts = np.asarray(pcd2_o3d.points, dtype=np.float64)
-            source_pts[:, 2] = 0.0
-            target_pts[:, 2] = 0.0
+            if self.z_scale == 0:
+                source_pts[:, 2] = 0.0
+                target_pts[:, 2] = 0.0
 
         if len(source_pts) < 10 or len(target_pts) < 10:
             elapsed = time.time() - t0
@@ -384,14 +391,20 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
 
         if PCLNDT_AVAILABLE:
             ndt = pybind_ndt.PCLNDTWrapper()
-            initial_guess = self.config.get("initial_guess", np.eye(4)).astype(np.float64)
+            guess_veh = self.config.get("initial_guess", np.eye(4)).astype(np.float64)
+            # Convert initial guess from vehicle frame to PCL frame:
+            #   pc_x = -veh_y,  pc_y = -veh_x,  rotation preserved (z-axis invariant)
+            guess_pcl = np.eye(4, dtype=np.float64)
+            guess_pcl[:3, :3] = guess_veh[:3, :3]
+            guess_pcl[0, 3] = -guess_veh[1, 3]
+            guess_pcl[1, 3] = -guess_veh[0, 3]
             result = ndt.align(
                 source_pts, target_pts,
                 resolution=self.resolution,
                 step_size=self.step_size,
                 transformation_epsilon=self.transformation_epsilon,
                 max_iterations=self.max_iteration,
-                initial_guess=initial_guess.ravel()
+                initial_guess=guess_pcl.ravel()
             )
             T_pc = np.array(result.transformation)
             fitness = result.fitness
@@ -532,7 +545,7 @@ class SIFTRegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
 
         confidence = n_inliers / max(len(good_matches), 1)
         elapsed = time.time() - t0
@@ -648,7 +661,7 @@ class SURFRegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
 
         confidence = n_inliers / max(len(good_matches), 1)
         elapsed = time.time() - t0
@@ -747,7 +760,7 @@ class KAZERegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
 
         confidence = n_inliers / max(len(good_matches), 1)
         elapsed = time.time() - t0
@@ -858,7 +871,7 @@ class AKAZERegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [-tx_px * cell_size, ty_px * cell_size, 0.0]
+        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
 
         confidence = n_inliers / max(len(good_matches), 1)
         elapsed = time.time() - t0

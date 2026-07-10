@@ -41,16 +41,16 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "ndt_p2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze
+REGISTRATION_METHOD = "akaze"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze
 
 
 # FS2D-specific config
-N = 128         #256 128               # Image grid size (N x N)
+N = 256         #256 128               # Image grid size (N x N)
 RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 1                # Match every Nth frame
-START_FRAME = 3685                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP)
+START_FRAME = 50                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
@@ -79,17 +79,17 @@ NDT_STEP_SIZE = 0.1
 NDT_SCALE = 1.0
 NDT_THRESHOLD_PCT = 5.0
 
-# Fourier-Mellin config
+# Fourier-Mellin config # N = 64/128/256 has impact on the result
 FM_HIGHPASS = True
 
 # SIFT-specific config
 SIFT_NFEATURES = 0
 SIFT_N_OCTAVE_LAYERS = 3
-SIFT_CONTRAST_THRESHOLD = 0.04
+SIFT_CONTRAST_THRESHOLD = 0.08
 SIFT_EDGE_THRESHOLD = 10
 SIFT_SIGMA = 1.6
 SIFT_RATIO_THRESHOLD = 0.75
-SIFT_RANSAC_THRESHOLD = 3.0
+SIFT_RANSAC_THRESHOLD = 5.0
 SIFT_RANSAC_CONFIDENCE = 0.99
 
 # SURF-specific config (requires opencv-contrib-python)
@@ -108,7 +108,7 @@ KAZE_UPRIGHT = False
 KAZE_THRESHOLD = 0.001
 KAZE_N_OCTAVES = 4
 KAZE_N_OCTAVE_LAYERS = 4
-KAZE_DIFFUSIVITY = 2
+KAZE_DIFFUSIVITY = 1
 KAZE_RATIO_THRESHOLD = 0.75
 KAZE_RANSAC_THRESHOLD = 3.0
 KAZE_RANSAC_CONFIDENCE = 0.99
@@ -478,6 +478,7 @@ def main():
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
         print(f"  -> Saved to {save_dir}/ (image1.png, image2.png, blended.png)")
+        
         
         idx += MATCHING_STEP
 
