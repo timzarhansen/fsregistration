@@ -50,21 +50,21 @@ SEQUENCE = 0
 OUTPUT_DIR = "benchmark_sweep"
 START_FRAME = 0
 MAX_FRAMES = None
-NUM_WORKERS = 1
+NUM_WORKERS = 2
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
-    "kaze_threshold": [0.0001, 0.001, 0.01],
+    "kaze_threshold": [0.0001, 0.001],
     "kaze_n_octaves": [4],
     "kaze_n_octave_layers": [4],
     "kaze_diffusivity": [1, 2, 3],
     "kaze_upright": [False, True],
     "kaze_extended": [False],
-    "kaze_ratio_threshold": [0.75],
-    "kaze_ransac_threshold": [0.5, 1.0, 3.0],
+    "kaze_ratio_threshold": [0.6, 0.75, 0.9],
+    "kaze_ransac_threshold": [1.0, 3.0, 5.0],
     "kaze_ransac_confidence": [0.99],
     "round": [False],
 }

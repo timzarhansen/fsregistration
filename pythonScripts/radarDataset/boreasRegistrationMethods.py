@@ -391,7 +391,7 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
 
         if PCLNDT_AVAILABLE:
             ndt = pybind_ndt.PCLNDTWrapper()
-            guess_veh = self.config.get("initial_guess", np.eye(4)).astype(np.float64)
+            guess_veh = np.asarray(self.config.get("initial_guess", np.eye(4)), dtype=np.float64)
             # Convert initial guess from vehicle frame to PCL frame:
             #   pc_x = -veh_y,  pc_y = -veh_x,  rotation preserved (z-axis invariant)
             guess_pcl = np.eye(4, dtype=np.float64)
@@ -520,16 +520,15 @@ class SIFTRegistration(BaseRegistrationMethod):
                 metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
             )
 
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 2)
 
-        affine, inlier_mask = cv2.estimateAffinePartial2D(
-            src_pts, dst_pts, method=cv2.RANSAC,
-            ransacReprojThreshold=self.ransac_threshold,
-            confidence=self.confidence
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence
         )
 
-        if affine is None:
+        if transform is None:
             elapsed = time.time() - t0
             return RegistrationResult(
                 transform=np.eye(4), confidence=0.0, method_name="sift",
@@ -537,17 +536,8 @@ class SIFTRegistration(BaseRegistrationMethod):
                 metadata={"error": "RANSAC failed to estimate transform"}
             )
 
-        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
         angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
-        tx_px = affine[0, 2]
-        ty_px = affine[1, 2]
-        cell_size = self.config.get("size_of_pixel", 0.01)
-
-        transform = np.eye(4)
-        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
-
-        confidence = n_inliers / max(len(good_matches), 1)
+        confidence = n_inliers / max(n_matches, 1)
         elapsed = time.time() - t0
 
         return RegistrationResult(
@@ -556,7 +546,7 @@ class SIFTRegistration(BaseRegistrationMethod):
             metadata={
                 "keypoints_source": len(kp1), "keypoints_target": len(kp2),
                 "good_matches": len(good_matches), "inliers": n_inliers,
-                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+                "rotation_deg": np.degrees(angle_rad), "translation": (affine[0, 2], affine[1, 2])
             }
         )
 
@@ -636,16 +626,15 @@ class SURFRegistration(BaseRegistrationMethod):
                 metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
             )
 
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 2)
 
-        affine, inlier_mask = cv2.estimateAffinePartial2D(
-            src_pts, dst_pts, method=cv2.RANSAC,
-            ransacReprojThreshold=self.ransac_threshold,
-            confidence=self.confidence
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence
         )
 
-        if affine is None:
+        if transform is None:
             elapsed = time.time() - t0
             return RegistrationResult(
                 transform=np.eye(4), confidence=0.0, method_name="surf",
@@ -653,17 +642,8 @@ class SURFRegistration(BaseRegistrationMethod):
                 metadata={"error": "RANSAC failed to estimate transform"}
             )
 
-        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
         angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
-        tx_px = affine[0, 2]
-        ty_px = affine[1, 2]
-        cell_size = self.config.get("size_of_pixel", 0.01)
-
-        transform = np.eye(4)
-        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
-
-        confidence = n_inliers / max(len(good_matches), 1)
+        confidence = n_inliers / max(n_matches, 1)
         elapsed = time.time() - t0
 
         return RegistrationResult(
@@ -672,7 +652,7 @@ class SURFRegistration(BaseRegistrationMethod):
             metadata={
                 "keypoints_source": len(kp1), "keypoints_target": len(kp2),
                 "good_matches": len(good_matches), "inliers": n_inliers,
-                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+                "rotation_deg": np.degrees(angle_rad), "translation": (affine[0, 2], affine[1, 2])
             }
         )
 
@@ -735,16 +715,15 @@ class KAZERegistration(BaseRegistrationMethod):
                 metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
             )
 
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 2)
 
-        affine, inlier_mask = cv2.estimateAffinePartial2D(
-            src_pts, dst_pts, method=cv2.RANSAC,
-            ransacReprojThreshold=self.ransac_threshold,
-            confidence=self.confidence
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence
         )
 
-        if affine is None:
+        if transform is None:
             elapsed = time.time() - t0
             return RegistrationResult(
                 transform=np.eye(4), confidence=0.0, method_name="kaze",
@@ -752,17 +731,8 @@ class KAZERegistration(BaseRegistrationMethod):
                 metadata={"error": "RANSAC failed to estimate transform"}
             )
 
-        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
         angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
-        tx_px = affine[0, 2]
-        ty_px = affine[1, 2]
-        cell_size = self.config.get("size_of_pixel", 0.01)
-
-        transform = np.eye(4)
-        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
-
-        confidence = n_inliers / max(len(good_matches), 1)
+        confidence = n_inliers / max(n_matches, 1)
         elapsed = time.time() - t0
 
         return RegistrationResult(
@@ -771,7 +741,7 @@ class KAZERegistration(BaseRegistrationMethod):
             metadata={
                 "keypoints_source": len(kp1), "keypoints_target": len(kp2),
                 "good_matches": len(good_matches), "inliers": n_inliers,
-                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+                "rotation_deg": np.degrees(angle_rad), "translation": (affine[0, 2], affine[1, 2])
             }
         )
 
@@ -846,16 +816,15 @@ class AKAZERegistration(BaseRegistrationMethod):
                 metadata={"error": "insufficient good matches", "num_matches": len(good_matches)}
             )
 
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 2)
 
-        affine, inlier_mask = cv2.estimateAffinePartial2D(
-            src_pts, dst_pts, method=cv2.RANSAC,
-            ransacReprojThreshold=self.ransac_threshold,
-            confidence=self.confidence
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence
         )
 
-        if affine is None:
+        if transform is None:
             elapsed = time.time() - t0
             return RegistrationResult(
                 transform=np.eye(4), confidence=0.0, method_name="akaze",
@@ -863,17 +832,8 @@ class AKAZERegistration(BaseRegistrationMethod):
                 metadata={"error": "RANSAC failed to estimate transform"}
             )
 
-        n_inliers = np.sum(inlier_mask) if inlier_mask is not None else 0
         angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
-        tx_px = affine[0, 2]
-        ty_px = affine[1, 2]
-        cell_size = self.config.get("size_of_pixel", 0.01)
-
-        transform = np.eye(4)
-        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        transform[:3, 3] = [tx_px * cell_size, -ty_px * cell_size, 0.0]
-
-        confidence = n_inliers / max(len(good_matches), 1)
+        confidence = n_inliers / max(n_matches, 1)
         elapsed = time.time() - t0
 
         return RegistrationResult(
@@ -882,7 +842,381 @@ class AKAZERegistration(BaseRegistrationMethod):
             metadata={
                 "keypoints_source": len(kp1), "keypoints_target": len(kp2),
                 "good_matches": len(good_matches), "inliers": n_inliers,
-                "rotation_deg": np.degrees(angle_rad), "translation": (tx_px, ty_px)
+                "rotation_deg": np.degrees(angle_rad), "translation": (affine[0, 2], affine[1, 2])
+            }
+        )
+
+
+def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransac_confidence):
+    """Estimate rigid transform (rotation + translation, scale=1) from matched keypoints and convert to vehicle frame.
+
+    Args:
+        src_pts: (N, 2) source keypoints (image 0).
+        dst_pts: (N, 2) destination keypoints (image 1).
+        cell_size: meters per pixel.
+        ransac_threshold: RANSAC reprojection threshold in pixels.
+        ransac_confidence: RANSAC confidence level.
+
+    Returns:
+        (transform, affine, n_inliers, n_matches) or (None, None, 0, n) on failure.
+    """
+    import cv2
+
+    src = src_pts.reshape(-1, 1, 2).astype(np.float32)
+    dst = dst_pts.reshape(-1, 1, 2).astype(np.float32)
+
+    affine, inlier_mask = cv2.estimateAffinePartial2D(
+        src, dst, method=cv2.RANSAC,
+        ransacReprojThreshold=ransac_threshold,
+        confidence=ransac_confidence
+    )
+
+    if affine is None:
+        return None, None, 0, len(src_pts)
+
+    n_inliers = int(np.sum(inlier_mask)) if inlier_mask is not None else 0
+    angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+
+    R_2x2 = np.array([[np.cos(angle_rad), -np.sin(angle_rad)],
+                      [np.sin(angle_rad),  np.cos(angle_rad)]])
+    if inlier_mask is not None and n_inliers >= 2:
+        src_flat = src_pts.reshape(-1, 2)
+        dst_flat = dst_pts.reshape(-1, 2)
+        mask_flat = inlier_mask.flatten()
+        src_in = src_flat[mask_flat]
+        dst_in = dst_flat[mask_flat]
+        t_vec = np.mean(dst_in - (R_2x2 @ src_in.T).T, axis=0)
+        tx_px = t_vec[0]
+        ty_px = t_vec[1]
+    else:
+        tx_px = affine[0, 2]
+        ty_px = affine[1, 2]
+
+    transform = np.eye(4)
+    transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
+    # Image frame to vehicle frame (pyboreas convention):
+    #   row = -x_veh/cs (forward = up = decreasing row)
+    #   col =  y_veh/cs (left = right = increasing column)
+    transform[:3, 3] = [ty_px * cell_size, -tx_px * cell_size, 0.0]
+
+    return transform, affine, n_inliers, len(src_pts)
+
+
+def _clear_src_modules():
+    """Remove cached 'src' modules from sys.modules to avoid LoFTR/EfficientLoFTR conflicts."""
+    for mod in list(sys.modules.keys()):
+        if mod == "src" or mod.startswith("src."):
+            del sys.modules[mod]
+
+
+class LoFTRRegistration(BaseRegistrationMethod):
+    """LoFTR detector-free local feature matching (CVPR 2021).
+
+    Uses the original LoFTR architecture with outdoor_ds pretrained weights.
+    Matches keypoints across two images via transformer, then estimates
+    2D rotation + translation via RANSAC.
+    """
+
+    _OTHER_METHODS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otherMethods")
+    _LOFTR_DIR = os.path.join(_OTHER_METHODS_DIR, "LoFTR")
+    _DEFAULT_WEIGHTS = os.path.join(_LOFTR_DIR, "weights", "outdoor_ds.ckpt")
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "loftr"
+
+        self.weights_path = config.get("loftr_weights_path", self._DEFAULT_WEIGHTS)
+        self.ransac_threshold = config.get("loftr_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.ransac_confidence = config.get("loftr_ransac_confidence", config.get("ransac_confidence", 0.99))
+        self.confidence_threshold = config.get("loftr_confidence_threshold", 0.5)
+
+        import torch
+
+        _clear_src_modules()
+        sys.path.insert(0, self._LOFTR_DIR)
+
+        from src.loftr import LoFTR, default_cfg
+
+        self.matcher = LoFTR(config=default_cfg)
+        ckpt = torch.load(self.weights_path, map_location="cpu", weights_only=False)
+        self.matcher.load_state_dict(ckpt["state_dict"])
+        self.matcher = self.matcher.eval()
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import torch
+        import cv2
+        t0 = time.time()
+
+        H, W = img1.shape[:2]
+        h = (H // 8) * 8
+        w = (W // 8) * 8
+        if h != H or w != W:
+            img1 = cv2.resize(img1, (w, h))
+            img2 = cv2.resize(img2, (w, h))
+
+        img0_tensor = torch.from_numpy(img1.astype(np.float32))[None][None]
+        img1_tensor = torch.from_numpy(img2.astype(np.float32))[None][None]
+        batch = {"image0": img0_tensor, "image1": img1_tensor}
+
+        with torch.no_grad():
+            self.matcher(batch)
+            mkpts0 = batch["mkpts0_f"].cpu().numpy()
+            mkpts1 = batch["mkpts1_f"].cpu().numpy()
+            mconf = batch["mconf"].cpu().numpy()
+
+        conf_mask = mconf >= self.confidence_threshold
+        mkpts0 = mkpts0[conf_mask]
+        mkpts1 = mkpts1[conf_mask]
+        mconf = mconf[conf_mask]
+
+        if len(mkpts0) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="loftr",
+                computation_time=elapsed,
+                metadata={"error": "insufficient matches", "num_matches": len(mkpts0)}
+            )
+
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence
+        )
+
+        if transform is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="loftr",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed", "num_matches": n_matches}
+            )
+
+        confidence = n_inliers / max(n_matches, 1)
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="loftr",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(mkpts0), "inliers": n_inliers,
+                "good_matches": n_matches, "rotation_deg": np.degrees(angle_rad),
+            }
+        )
+
+
+class EfficientLoFTRRegistration(BaseRegistrationMethod):
+    """EfficientLoFTR semi-dense local feature matching (CVPR 2024 Highlight).
+
+    Uses the EfficientLoFTR architecture with 'full' or 'opt' pretrained weights.
+    Matches keypoints across two images via efficient transformer, then estimates
+    2D rotation + translation via RANSAC.
+    """
+
+    _OTHER_METHODS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otherMethods")
+    _ELOFTR_DIR = os.path.join(_OTHER_METHODS_DIR, "EfficientLoFTR")
+    _DEFAULT_WEIGHTS = os.path.join(_ELOFTR_DIR, "weights", "eloftr_outdoor.ckpt")
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "eloftr"
+
+        self.weights_path = config.get("eloftr_weights_path", self._DEFAULT_WEIGHTS)
+        self.model_type = config.get("eloftr_model_type", config.get("model_type", "full"))
+        self.ransac_threshold = config.get("eloftr_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.ransac_confidence = config.get("eloftr_ransac_confidence", config.get("ransac_confidence", 0.99))
+        self.confidence_threshold = config.get("eloftr_confidence_threshold", 0.5)
+
+        import torch
+        from copy import deepcopy
+
+        _clear_src_modules()
+        sys.path.insert(0, self._ELOFTR_DIR)
+
+        from src.loftr import LoFTR, full_default_cfg, opt_default_cfg, reparameter
+
+        if self.model_type == "opt":
+            cfg = deepcopy(opt_default_cfg)
+        else:
+            cfg = deepcopy(full_default_cfg)
+
+        self.N = config.get("N", 128)
+        cfg['coarse']['npe'] = [832, 832, self.N, self.N]
+
+        self.matcher = LoFTR(config=cfg)
+        ckpt = torch.load(self.weights_path, map_location="cpu", weights_only=False)
+        self.matcher.load_state_dict(ckpt["state_dict"])
+        self.matcher = reparameter(self.matcher)
+        self.matcher = self.matcher.eval()
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import torch
+        import cv2
+        t0 = time.time()
+
+        H, W = img1.shape[:2]
+        h = (H // 32) * 32
+        w = (W // 32) * 32
+        if h != H or w != W:
+            img1 = cv2.resize(img1, (w, h))
+            img2 = cv2.resize(img2, (w, h))
+
+        img0_tensor = torch.from_numpy(img1.astype(np.float32))[None][None]
+        img1_tensor = torch.from_numpy(img2.astype(np.float32))[None][None]
+        batch = {"image0": img0_tensor, "image1": img1_tensor}
+
+        with torch.no_grad():
+            self.matcher(batch)
+            mkpts0 = batch["mkpts0_f"].cpu().numpy()
+            mkpts1 = batch["mkpts1_f"].cpu().numpy()
+            mconf = batch["mconf"].cpu().numpy()
+
+        if self.model_type == "opt":
+            mconf = (mconf - min(20.0, mconf.min())) / (max(30.0, mconf.max()) - min(20.0, mconf.min()))
+
+        conf_mask = mconf >= self.confidence_threshold
+        mkpts0 = mkpts0[conf_mask]
+        mkpts1 = mkpts1[conf_mask]
+        mconf = mconf[conf_mask]
+
+        if len(mkpts0) < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="eloftr",
+                computation_time=elapsed,
+                metadata={"error": "insufficient matches", "num_matches": len(mkpts0)}
+            )
+
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence
+        )
+
+        if transform is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="eloftr",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed", "num_matches": n_matches}
+            )
+
+        confidence = n_inliers / max(n_matches, 1)
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="eloftr",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": len(mkpts0), "inliers": n_inliers,
+                "good_matches": n_matches, "rotation_deg": np.degrees(angle_rad),
+                "model_type": self.model_type,
+            }
+        )
+
+
+class LightGlueRegistration(BaseRegistrationMethod):
+    """LightGlue local feature matching at light speed (ICCV 2023).
+
+    Uses SuperPoint (default) or other extractors (DISK, ALIKED, SIFT, DoGHardNet)
+    combined with the LightGlue matcher. Weights auto-download via torch.hub.
+    """
+
+    _EXTRACTOR_MAP = {
+        "superpoint": "SuperPoint",
+        "disk": "DISK",
+        "aliked": "ALIKED",
+        "sift": "SIFT",
+        "doghardnet": "DoGHardNet",
+    }
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self._name = "lightglue"
+
+        self.features = config.get("lightglue_features", config.get("features", "superpoint"))
+        self.max_num_keypoints = config.get("lightglue_max_num_keypoints", config.get("max_num_keypoints", 2048))
+        self.depth_confidence = config.get("lightglue_depth_confidence", config.get("depth_confidence", 0.95))
+        self.width_confidence = config.get("lightglue_width_confidence", config.get("width_confidence", 0.99))
+        self.filter_threshold = config.get("lightglue_filter_threshold", config.get("filter_threshold", 0.1))
+        self.ransac_threshold = config.get("lightglue_ransac_threshold", config.get("ransac_threshold", 3.0))
+        self.ransac_confidence = config.get("lightglue_ransac_confidence", config.get("ransac_confidence", 0.99))
+
+        from lightglue import LightGlue
+        from lightglue.utils import match_pair
+
+        extractor_cls_name = self._EXTRACTOR_MAP.get(self.features.lower(), "SuperPoint")
+        extractor_cls = getattr(__import__("lightglue", fromlist=[extractor_cls_name]), extractor_cls_name)
+
+        extractor_kwargs = {}
+        if self.max_num_keypoints is not None:
+            extractor_kwargs["max_num_keypoints"] = self.max_num_keypoints
+
+        self.extractor = extractor_cls(**extractor_kwargs).eval()
+        self.matcher = LightGlue(
+            features=self.features.lower(),
+            depth_confidence=self.depth_confidence,
+            width_confidence=self.width_confidence,
+            filter_threshold=self.filter_threshold,
+        ).eval()
+        self._match_pair = match_pair
+
+    def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        import torch
+        t0 = time.time()
+
+        img0_tensor = torch.from_numpy(img1.astype(np.float32))[None]
+        img1_tensor = torch.from_numpy(img2.astype(np.float32))[None]
+
+        with torch.no_grad():
+            feats0, feats1, matches01 = self._match_pair(
+                self.extractor, self.matcher, img0_tensor, img1_tensor,
+                device="cpu", resize=None
+            )
+
+        matches = matches01["matches"]
+        scores = matches01["scores"]
+
+        if matches.shape[0] < 4:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="lightglue",
+                computation_time=elapsed,
+                metadata={
+                    "error": "insufficient matches", "num_matches": matches.shape[0],
+                    "keypoints_source": feats0["keypoints"].shape[0],
+                    "keypoints_target": feats1["keypoints"].shape[0],
+                }
+            )
+
+        mkpts0 = feats0["keypoints"][matches[:, 0]].numpy()
+        mkpts1 = feats1["keypoints"][matches[:, 1]].numpy()
+
+        cell_size = self.config.get("size_of_pixel", 0.01)
+        transform, affine, n_inliers, n_matches = _keypoints_to_transform(
+            mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence
+        )
+
+        if transform is None:
+            elapsed = time.time() - t0
+            return RegistrationResult(
+                transform=np.eye(4), confidence=0.0, method_name="lightglue",
+                computation_time=elapsed,
+                metadata={"error": "RANSAC failed", "num_matches": n_matches}
+            )
+
+        confidence = n_inliers / max(n_matches, 1)
+        angle_rad = np.arctan2(affine[1, 0], affine[0, 0])
+        elapsed = time.time() - t0
+
+        return RegistrationResult(
+            transform=transform, confidence=confidence, method_name="lightglue",
+            computation_time=elapsed,
+            metadata={
+                "keypoints_source": feats0["keypoints"].shape[0],
+                "keypoints_target": feats1["keypoints"].shape[0],
+                "inliers": n_inliers, "good_matches": n_matches,
+                "rotation_deg": np.degrees(angle_rad),
+                "features": self.features,
             }
         )
 
@@ -921,3 +1255,6 @@ RegistrationFactory.register("sift", SIFTRegistration)
 RegistrationFactory.register("surf", SURFRegistration)
 RegistrationFactory.register("kaze", KAZERegistration)
 RegistrationFactory.register("akaze", AKAZERegistration)
+RegistrationFactory.register("loftr", LoFTRRegistration)
+RegistrationFactory.register("eloftr", EfficientLoFTRRegistration)
+RegistrationFactory.register("lightglue", LightGlueRegistration)

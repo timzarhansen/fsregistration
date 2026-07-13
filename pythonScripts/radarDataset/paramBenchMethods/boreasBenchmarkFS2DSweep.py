@@ -54,7 +54,7 @@ NUM_WORKERS = 6
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0,165.0],
     "matching_step": [5],
     "potential_for_necessary_peak": [0.01],

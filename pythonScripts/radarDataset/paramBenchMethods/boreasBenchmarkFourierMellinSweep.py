@@ -51,15 +51,15 @@ SEQUENCE = 0
 OUTPUT_DIR = "benchmark_sweep"
 START_FRAME = 0
 MAX_FRAMES = None
-NUM_WORKERS = 1
+NUM_WORKERS = 2
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [128, 256],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
-    "fm_highpass": [True, False],
-    "round": [False, True],
+    "fm_highpass": [False],
+    "round": [False],
 }
 # ============================================================================
 

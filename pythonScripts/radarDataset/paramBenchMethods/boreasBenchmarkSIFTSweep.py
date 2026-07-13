@@ -50,20 +50,20 @@ SEQUENCE = 0
 OUTPUT_DIR = "benchmark_sweep"
 START_FRAME = 0
 MAX_FRAMES = None
-NUM_WORKERS = 1
+NUM_WORKERS = 2
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
     "sift_nfeatures": [0],
     "sift_n_octave_layers": [3],
-    "sift_contrast_threshold": [0.01, 0.02, 0.04, 0.08],
-    "sift_edge_threshold": [10],
-    "sift_sigma": [1.6],
-    "sift_ratio_threshold": [0.75],
-    "sift_ransac_threshold": [0.5, 1.0, 3.0, 5.0],
+    "sift_contrast_threshold": [0.01, 0.04, 0.08],
+    "sift_edge_threshold": [5, 10, 20],
+    "sift_sigma": [1.2, 1.6],
+    "sift_ratio_threshold": [0.6, 0.7, 0.8],
+    "sift_ransac_threshold": [1.0, 3.0, 5.0],
     "sift_ransac_confidence": [0.99],
     "round": [False],
 }

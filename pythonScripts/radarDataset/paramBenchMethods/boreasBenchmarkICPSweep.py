@@ -56,14 +56,14 @@ USE_RAW_POINTCLOUD = True
 RAW_INTENSITY_THRESHOLD = 0.3
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
-    "icp_max_distance": [10.0, 30.0, 50.0],
+    "icp_max_distance": [10.0],
     "icp_max_iteration": [200],
     "icp_scale": [1.0],
-    "icp_threshold_pct": [10.0, 20.0, 30.0],
-    "icp_voxel_size": [0.5, 1.0, 2.0],
+    "icp_threshold_pct": [10.0],
+    "icp_voxel_size": [0.0,0.5, 1.0],
     "round": [False],
 }
 # ============================================================================

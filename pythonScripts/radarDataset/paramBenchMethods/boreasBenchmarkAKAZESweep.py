@@ -54,18 +54,18 @@ NUM_WORKERS = 1
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
     "akaze_descriptor_type": ["KAZE", "MLDB"],
     "akaze_descriptor_size": [0],
     "akaze_descriptor_channels": [3],
-    "akaze_threshold": [0.0001, 0.001, 0.01],
+    "akaze_threshold": [0.0001, 0.001],
     "akaze_n_octaves": [4],
     "akaze_n_octave_layers": [4],
     "akaze_diffusivity": [1, 2, 3],
-    "akaze_ratio_threshold": [0.75],
-    "akaze_ransac_threshold": [0.5, 1.0, 3.0],
+    "akaze_ratio_threshold": [0.6, 0.75],
+    "akaze_ransac_threshold": [1.0, 3.0, 5.0],
     "akaze_ransac_confidence": [0.99],
     "round": [False],
 }

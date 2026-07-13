@@ -56,16 +56,16 @@ USE_RAW_POINTCLOUD = True
 RAW_INTENSITY_THRESHOLD = 0.3
 
 PARAM_GRID = {
-    "N": [128],
+    "N": [256],
     "radius": [140.0],
     "matching_step": [3],
-    "ndt_voxel_size": [2.0, 5.0, 10.0],
-    "ndt_step_size": [0.05, 0.1, 0.5],
+    "ndt_voxel_size": [0.0, 10.0,15.0],
+    "ndt_step_size": [0.5,1.0,1.5],
     "ndt_max_iteration": [50],
     "ndt_transformation_epsilon": [0.01],
     "ndt_scale": [1.0],
     "ndt_threshold_pct": [5.0],
-    "ndt_z_scale": [0.0, 0.1, 1.0],
+    "ndt_z_scale": [0.1],
     "round": [False],
 }
 # ============================================================================

@@ -15,13 +15,15 @@ echo "============================================"
 declare -A SWEEPS
 SWEEPS["ICP"]="boreasBenchmarkICPSweep.py"
 SWEEPS["NDT P2D"]="boreasBenchmarkNDTSweep.py"
-# SWEEPS["Fourier-Mellin"]="boreasBenchmarkFourierMellinSweep.py"
-# SWEEPS["SIFT"]="boreasBenchmarkSIFTSweep.py"
-# SWEEPS["fs2d"]="boreasBenchmarkFS2DSweep.py"
+SWEEPS["LoFTR"]="boreasBenchmarkLoFTRSweep.py"
+SWEEPS["EfficientLoFTR"]="boreasBenchmarkEfficientLoFTRSweep.py"
+SWEEPS["LightGlue"]="boreasBenchmarkLightGlueSweep.py"
+SWEEPS["Fourier-Mellin"]="boreasBenchmarkFourierMellinSweep.py"
+SWEEPS["SIFT"]="boreasBenchmarkSIFTSweep.py"
 # SWEEPS["SURF"]="boreasBenchmarkSURFSweep.py"
-# SWEEPS["KAZE"]="boreasBenchmarkKAZESweep.py"
-# SWEEPS["AKAZE"]="boreasBenchmarkAKAZESweep.py"
-# SWEEPS["FS2D"]="boreasBenchmarkFS2DSweep.py"
+SWEEPS["KAZE"]="boreasBenchmarkKAZESweep.py"
+SWEEPS["AKAZE"]="boreasBenchmarkAKAZESweep.py"
+SWEEPS["FS2D"]="boreasBenchmarkFS2DSweep.py"
 
 PIDS=()
 

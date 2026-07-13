@@ -41,15 +41,15 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "akaze"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze
+REGISTRATION_METHOD = "loftr"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
-N = 256         #256 128               # Image grid size (N x N)
-RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
+N = 832         #256 128               # Image grid size (N x N)
+RADIUS = 50                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
-MATCHING_STEP = 1                # Match every Nth frame
+MATCHING_STEP = 5                # Match every Nth frame
 START_FRAME = 50                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
@@ -65,11 +65,11 @@ USE_RAW_POINTCLOUD = True        # True = raw polar data (best), False = cartesi
 RAW_INTENSITY_THRESHOLD = 0.3    # Noise floor for raw polar (0.0 = all points)
 
 # ICP-specific config
-ICP_MAX_DISTANCE = 30.0
+ICP_MAX_DISTANCE = 10.0
 ICP_MAX_ITERATION = 200
 ICP_SCALE = 1.0
 ICP_THRESHOLD_PCT = 20.0
-ICP_VOXEL_SIZE = 0.5             # Downsampling in meters (0 = skip)
+ICP_VOXEL_SIZE = 1.0             # Downsampling in meters (0 = skip)
 
 # NDT_P2D-specific config
 NDT_VOXEL_SIZE = 5.0
@@ -124,6 +124,26 @@ AKAZE_DIFFUSIVITY = 2
 AKAZE_RATIO_THRESHOLD = 0.75
 AKAZE_RANSAC_THRESHOLD = 3.0
 AKAZE_RANSAC_CONFIDENCE = 0.99
+
+# LoFTR-specific config
+LOFTR_RANSAC_THRESHOLD = 3.0
+LOFTR_RANSAC_CONFIDENCE = 0.99
+LOFTR_CONFIDENCE_THRESHOLD = 0.5
+
+# EfficientLoFTR-specific config
+ELOFTR_MODEL_TYPE = "full"
+ELOFTR_RANSAC_THRESHOLD = 3.0
+ELOFTR_RANSAC_CONFIDENCE = 0.99
+ELOFTR_CONFIDENCE_THRESHOLD = 0.5
+
+# LightGlue-specific config
+LIGHTGLUE_FEATURES = "superpoint"
+LIGHTGLUE_MAX_NUM_KEYPOINTS = 2048
+LIGHTGLUE_DEPTH_CONFIDENCE = 0.95
+LIGHTGLUE_WIDTH_CONFIDENCE = 0.99
+LIGHTGLUE_FILTER_THRESHOLD = 0.1
+LIGHTGLUE_RANSAC_THRESHOLD = 3.0
+LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
 # ============================================================================
 
 
@@ -144,6 +164,11 @@ def get_config_from_file():
     global AKAZE_DESCRIPTOR_TYPE, AKAZE_DESCRIPTOR_SIZE, AKAZE_DESCRIPTOR_CHANNELS
     global AKAZE_THRESHOLD, AKAZE_N_OCTAVES, AKAZE_N_OCTAVE_LAYERS, AKAZE_DIFFUSIVITY
     global AKAZE_RATIO_THRESHOLD, AKAZE_RANSAC_THRESHOLD, AKAZE_RANSAC_CONFIDENCE
+    global LOFTR_RANSAC_THRESHOLD, LOFTR_RANSAC_CONFIDENCE, LOFTR_CONFIDENCE_THRESHOLD
+    global ELOFTR_MODEL_TYPE, ELOFTR_RANSAC_THRESHOLD, ELOFTR_RANSAC_CONFIDENCE, ELOFTR_CONFIDENCE_THRESHOLD
+    global LIGHTGLUE_FEATURES, LIGHTGLUE_MAX_NUM_KEYPOINTS
+    global LIGHTGLUE_DEPTH_CONFIDENCE, LIGHTGLUE_WIDTH_CONFIDENCE, LIGHTGLUE_FILTER_THRESHOLD
+    global LIGHTGLUE_RANSAC_THRESHOLD, LIGHTGLUE_RANSAC_CONFIDENCE
 
     source_file = inspect.getfile(inspect.currentframe())
     source_dir = os.path.dirname(os.path.abspath(source_file))
@@ -241,6 +266,20 @@ def get_config_from_file():
     AKAZE_RATIO_THRESHOLD = extract_var("AKAZE_RATIO_THRESHOLD", AKAZE_RATIO_THRESHOLD)
     AKAZE_RANSAC_THRESHOLD = extract_var("AKAZE_RANSAC_THRESHOLD", AKAZE_RANSAC_THRESHOLD)
     AKAZE_RANSAC_CONFIDENCE = extract_var("AKAZE_RANSAC_CONFIDENCE", AKAZE_RANSAC_CONFIDENCE)
+    LOFTR_RANSAC_THRESHOLD = extract_var("LOFTR_RANSAC_THRESHOLD", LOFTR_RANSAC_THRESHOLD)
+    LOFTR_RANSAC_CONFIDENCE = extract_var("LOFTR_RANSAC_CONFIDENCE", LOFTR_RANSAC_CONFIDENCE)
+    LOFTR_CONFIDENCE_THRESHOLD = extract_var("LOFTR_CONFIDENCE_THRESHOLD", LOFTR_CONFIDENCE_THRESHOLD)
+    ELOFTR_MODEL_TYPE = extract_var("ELOFTR_MODEL_TYPE", ELOFTR_MODEL_TYPE)
+    ELOFTR_RANSAC_THRESHOLD = extract_var("ELOFTR_RANSAC_THRESHOLD", ELOFTR_RANSAC_THRESHOLD)
+    ELOFTR_RANSAC_CONFIDENCE = extract_var("ELOFTR_RANSAC_CONFIDENCE", ELOFTR_RANSAC_CONFIDENCE)
+    ELOFTR_CONFIDENCE_THRESHOLD = extract_var("ELOFTR_CONFIDENCE_THRESHOLD", ELOFTR_CONFIDENCE_THRESHOLD)
+    LIGHTGLUE_FEATURES = extract_var("LIGHTGLUE_FEATURES", LIGHTGLUE_FEATURES)
+    LIGHTGLUE_MAX_NUM_KEYPOINTS = extract_var("LIGHTGLUE_MAX_NUM_KEYPOINTS", LIGHTGLUE_MAX_NUM_KEYPOINTS)
+    LIGHTGLUE_DEPTH_CONFIDENCE = extract_var("LIGHTGLUE_DEPTH_CONFIDENCE", LIGHTGLUE_DEPTH_CONFIDENCE)
+    LIGHTGLUE_WIDTH_CONFIDENCE = extract_var("LIGHTGLUE_WIDTH_CONFIDENCE", LIGHTGLUE_WIDTH_CONFIDENCE)
+    LIGHTGLUE_FILTER_THRESHOLD = extract_var("LIGHTGLUE_FILTER_THRESHOLD", LIGHTGLUE_FILTER_THRESHOLD)
+    LIGHTGLUE_RANSAC_THRESHOLD = extract_var("LIGHTGLUE_RANSAC_THRESHOLD", LIGHTGLUE_RANSAC_THRESHOLD)
+    LIGHTGLUE_RANSAC_CONFIDENCE = extract_var("LIGHTGLUE_RANSAC_CONFIDENCE", LIGHTGLUE_RANSAC_CONFIDENCE)
 
 
 PLOT_DATA_DIR = "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data"
@@ -396,6 +435,23 @@ def main():
         "akaze_ratio_threshold": AKAZE_RATIO_THRESHOLD,
         "akaze_ransac_threshold": AKAZE_RANSAC_THRESHOLD,
         "akaze_ransac_confidence": AKAZE_RANSAC_CONFIDENCE,
+        # ---- LoFTR params ----
+        "loftr_ransac_threshold": LOFTR_RANSAC_THRESHOLD,
+        "loftr_ransac_confidence": LOFTR_RANSAC_CONFIDENCE,
+        "loftr_confidence_threshold": LOFTR_CONFIDENCE_THRESHOLD,
+        # ---- EfficientLoFTR params ----
+        "eloftr_model_type": ELOFTR_MODEL_TYPE,
+        "eloftr_ransac_threshold": ELOFTR_RANSAC_THRESHOLD,
+        "eloftr_ransac_confidence": ELOFTR_RANSAC_CONFIDENCE,
+        "eloftr_confidence_threshold": ELOFTR_CONFIDENCE_THRESHOLD,
+        # ---- LightGlue params ----
+        "lightglue_features": LIGHTGLUE_FEATURES,
+        "lightglue_max_num_keypoints": LIGHTGLUE_MAX_NUM_KEYPOINTS,
+        "lightglue_depth_confidence": LIGHTGLUE_DEPTH_CONFIDENCE,
+        "lightglue_width_confidence": LIGHTGLUE_WIDTH_CONFIDENCE,
+        "lightglue_filter_threshold": LIGHTGLUE_FILTER_THRESHOLD,
+        "lightglue_ransac_threshold": LIGHTGLUE_RANSAC_THRESHOLD,
+        "lightglue_ransac_confidence": LIGHTGLUE_RANSAC_CONFIDENCE,
     }
     method = RegistrationFactory.create(REGISTRATION_METHOD, method_config)
     print(f"Method: {REGISTRATION_METHOD} (N={N}, pixel_size={SIZE_OF_PIXEL:.3f} m)")

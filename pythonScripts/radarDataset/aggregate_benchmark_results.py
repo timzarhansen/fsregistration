@@ -8,8 +8,8 @@ import numpy as np
 # ============================================================================
 # Configuration — edit as needed
 # ============================================================================
-INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/benchmark_sweep")
-# INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/paramBenchMethods/benchmark_sweep")
+# INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/benchmark_sweep")
+INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/paramBenchMethods/benchmark_sweep")
 OUTPUT_PATH = INPUT_FOLDER / "aggregated_results.csv"
 
 OUTLIER_ROT_THRESH_DEG = 10.0
