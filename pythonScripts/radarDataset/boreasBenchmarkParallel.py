@@ -217,9 +217,9 @@ def main():
 
     # Parse method config overrides
     def _parse_value(v):
-        if v.lower() in ("true", "1"):
+        if v.lower() == "true":
             return True
-        if v.lower() in ("false", "0"):
+        if v.lower() == "false":
             return False
         try:
             return int(v)

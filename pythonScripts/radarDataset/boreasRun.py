@@ -223,9 +223,9 @@ def run_sequence(args, method_configs: Dict[str, dict], seq: BoreasSequence, seq
 
 def _parse_value(v):
     """Parse a string value into the appropriate Python type."""
-    if v.lower() in ("true", "1"):
+    if v.lower() == "true":
         return True
-    if v.lower() in ("false", "0"):
+    if v.lower() == "false":
         return False
     try:
         return int(v)
