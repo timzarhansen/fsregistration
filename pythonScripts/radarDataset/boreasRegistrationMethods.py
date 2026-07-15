@@ -306,6 +306,7 @@ class FourierMellinRegistration(BaseRegistrationMethod):
         self._name = "fourier_mellin"
 
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
+        np.bool = bool  # restore removed alias for imreg_dft compat
         import imreg_dft as ird
 
         t0 = time.time()
