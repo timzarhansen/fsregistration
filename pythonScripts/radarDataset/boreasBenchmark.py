@@ -96,6 +96,8 @@ def run_benchmark(
     max_frames: Optional[int],
     save_blended: bool,
     output_dir: str,
+    pcd1: Optional[np.ndarray] = None,
+    pcd2: Optional[np.ndarray] = None,
 ) -> Tuple[Path, dict]:
     """Run benchmark on a single sequence with a single method.
 
@@ -109,6 +111,8 @@ def run_benchmark(
         max_frames: Cap sequence length (None = full).
         save_blended: Whether to save blended images.
         output_dir: Base output directory.
+        pcd1: Optional raw point cloud for first frame (used by ICP/NDT).
+        pcd2: Optional raw point cloud for second frame (used by ICP/NDT).
 
     Returns:
         Tuple of (results_csv_path, summary_dict).
@@ -184,7 +188,11 @@ def run_benchmark(
 
             # Run registration
             t0 = time.time()
-            result = method.register(img_prev, img_curr)
+            reg_kwargs = {}
+            if pcd1 is not None and pcd2 is not None:
+                reg_kwargs["pcd1"] = pcd1
+                reg_kwargs["pcd2"] = pcd2
+            result = method.register(img_prev, img_curr, **reg_kwargs)
             elapsed = time.time() - t0
             total_time += elapsed
 

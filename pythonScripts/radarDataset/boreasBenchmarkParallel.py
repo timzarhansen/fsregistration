@@ -89,13 +89,22 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
     all sequences in BoreasDataset.__init__).
     """
     seq_num, seq_name, data_dir, method_name, method_config, matching_step, \
-        start_frame, max_frames, save_blended, output_dir = args
+        start_frame, max_frames, save_blended, output_dir, \
+        use_raw_pointcloud, raw_intensity_threshold = args
 
     try:
         pid = os.getpid()
         print(f"[Worker {pid}] Loading sequence {seq_num} ({seq_name})...")
         seq = load_single_sequence(data_dir, seq_name)
         print(f"[Worker {pid}] Sequence {seq_num}: {seq.length} frames")
+
+        pcd1 = pcd2 = None
+        if use_raw_pointcloud:
+            # Load point clouds for ICP/NDT methods that support them
+            first_idx = start_frame
+            last_idx = min(start_frame + (max_frames or seq.length), seq.length) - 1
+            pcd1 = seq.get_raw_point_cloud(first_idx, raw_intensity_threshold)
+            pcd2 = seq.get_raw_point_cloud(last_idx, raw_intensity_threshold)
 
         csv_path, summary = run_benchmark(
             seq=seq,
@@ -107,6 +116,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
             max_frames=max_frames,
             save_blended=save_blended,
             output_dir=output_dir,
+            pcd1=pcd1,
+            pcd2=pcd2,
         )
 
         print(f"[Worker {pid}] Sequence {seq_num} done: {csv_path}")
@@ -148,6 +159,10 @@ def main():
                         help="Output directory. Default: benchmark_results")
     parser.add_argument("--method-config", action="append", default=[],
                         help="Method config in format 'method_name.key=value'.")
+    parser.add_argument("--use-raw-pointcloud", action="store_true",
+                        help="Use raw polar point clouds for ICP/NDT methods.")
+    parser.add_argument("--raw-intensity-threshold", type=float, default=0.3,
+                        help="Noise threshold for raw point cloud extraction. Default: 0.3")
     parser.add_argument("--save-blended", action="store_true",
                         help="Save blended images for each pair.")
     parser.add_argument("data_dir", type=str,
@@ -243,6 +258,8 @@ def main():
             args.max_frames,
             args.save_blended,
             args.output_dir,
+            args.use_raw_pointcloud,
+            args.raw_intensity_threshold,
         )
         for seq_num in sequence_numbers
     ]

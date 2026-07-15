@@ -46,11 +46,11 @@ REGISTRATION_METHOD = "loftr"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, si
 
 # FS2D-specific config
 N = 832         #256 128               # Image grid size (N x N)
-RADIUS = 50                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
+RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame
-START_FRAME = 50                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
+START_FRAME = 140                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
@@ -380,6 +380,7 @@ def main():
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
         "use_phase_correlation": USE_PHASE_CORRELATION,
+        "debug": DEBUG_MODE,
         # ---- ICP params ----
         "icp_max_distance": ICP_MAX_DISTANCE,
         "icp_max_iteration": ICP_MAX_ITERATION,

@@ -128,7 +128,7 @@ class FS2DRegistration(BaseRegistrationMethod):
             image_1, image_2,
             cellSize=cell_size,
             useGauss=self.use_gauss,
-            debug=False,
+            debug=self.config.get("debug", False),
             potentialNecessaryForPeak=self.potential_for_necessary_peak,
             multipleRadii=self.multiple_radii,
             useClahe=self.use_clahe,

@@ -55,19 +55,19 @@ SAVE_BLENDED = False
 
 PARAM_GRID = {
     "N": [256],
-    "radius": [140.0,165.0],
-    "matching_step": [5],
+    "radius": [140.0],
+    "matching_step": [3],
     "potential_for_necessary_peak": [0.01],
     "level_potential_rotation": [0.001],
     "use_direct": [True],
-    "use_clahe": [False, True],
+    "use_clahe": [False],
     "use_hamming": [True],
     "multiple_radii": [True],
     "use_gauss": [False],
-    "normalization": [0, 1],
-    "use_weighted_peak_score": [True, False],
+    "normalization": [1],
+    "use_weighted_peak_score": [True],
     "use_phase_correlation": [False],
-    "round": [False, True],
+    "round": [False],
 }
 # ============================================================================
 

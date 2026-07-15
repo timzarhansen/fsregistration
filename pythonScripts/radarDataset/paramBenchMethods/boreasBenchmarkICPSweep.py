@@ -63,7 +63,7 @@ PARAM_GRID = {
     "icp_max_iteration": [200],
     "icp_scale": [1.0],
     "icp_threshold_pct": [10.0],
-    "icp_voxel_size": [0.0,0.5, 1.0],
+    "icp_voxel_size": [1.0],
     "round": [False],
 }
 # ============================================================================

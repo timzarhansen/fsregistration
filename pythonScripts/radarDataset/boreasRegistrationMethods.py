@@ -157,7 +157,7 @@ class FS2DRegistration(BaseRegistrationMethod):
             image_1, image_2,
             cellSize=cell_size,
             useGauss=self.use_gauss,
-            debug=False,
+            debug=self.config.get("debug", False),
             potentialNecessaryForPeak=self.potential_for_necessary_peak,
             multipleRadii=self.multiple_radii,
             useClahe=self.use_clahe,
@@ -188,7 +188,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         yaw = peak.potentialRotation.angle
         transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
         tx, ty = best_trans.translationSI
-        transform[:3, 3] = [tx, -ty, 0.0]
+        transform[:3, 3] = [tx, ty, 0.0]
 
         # Collect all candidate solutions (rotation peaks × translation candidates)
         all_solutions = []
@@ -198,7 +198,7 @@ class FS2DRegistration(BaseRegistrationMethod):
             for trans in rot_peak.potentialTranslations:
                 t = np.eye(4)
                 t[:3, :3] = rot_R
-                t[:3, 3] = [trans.translationSI[0], -trans.translationSI[1], 0.0]
+                t[:3, 3] = [trans.translationSI[0], trans.translationSI[1], 0.0]
                 all_solutions.append(t)
 
         elapsed = time.time() - t0

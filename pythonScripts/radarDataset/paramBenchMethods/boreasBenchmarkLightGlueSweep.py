@@ -54,15 +54,15 @@ NUM_WORKERS = 2
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [256],
+    "N": [256,832],
     "radius": [140.0],
     "matching_step": [3],
-    "lightglue_features": ["superpoint", "disk", "aliked", "sift"],
-    "lightglue_max_num_keypoints": [2048, 4096],
-    "lightglue_depth_confidence": [0.95, -1],
-    "lightglue_width_confidence": [0.99, -1],
+    "lightglue_features": ["superpoint"],
+    "lightglue_max_num_keypoints": [2048],
+    "lightglue_depth_confidence": [0.95],
+    "lightglue_width_confidence": [ -1],
     "lightglue_filter_threshold": [0.1],
-    "lightglue_ransac_threshold": [1.0, 3.0, 5.0],
+    "lightglue_ransac_threshold": [1.0],
     "lightglue_ransac_confidence": [0.99],
     "round": [False],
 }

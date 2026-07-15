@@ -55,7 +55,7 @@ NUM_WORKERS = 2
 SAVE_BLENDED = False
 
 PARAM_GRID = {
-    "N": [256],
+    "N": [256,832],
     "radius": [140.0],
     "matching_step": [3],
     "fm_highpass": [False],
