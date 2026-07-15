@@ -199,18 +199,9 @@ def main():
     print(f"Output: {args.output_dir}")
     print()
 
-    # Build method config
-    from boreasBenchmark import DEFAULT_CONFIG as _BDC
+    # Build base method config (method-specific defaults are in each RegistrationFactory class)
     method_config = {
         "N": args.N,
-        "use_clahe": _BDC["use_clahe"],
-        "use_hamming": _BDC["use_hamming"],
-        "use_direct": _BDC["use_direct"],
-        "use_gauss": _BDC["use_gauss"],
-        "multiple_radii": _BDC["multiple_radii"],
-        "potential_for_necessary_peak": _BDC["potential_for_necessary_peak"],
-        "level_potential_rotation": _BDC["level_potential_rotation"],
-        "use_weighted_peak_score": _BDC["use_weighted_peak_score"],
         "radius": args.radius,
         "size_of_pixel": (2.0 * args.radius) / args.N,
     }
