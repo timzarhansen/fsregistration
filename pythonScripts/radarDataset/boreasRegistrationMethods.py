@@ -186,9 +186,12 @@ class FS2DRegistration(BaseRegistrationMethod):
 
         transform = np.eye(4)
         yaw = peak.potentialRotation.angle
-        transform[:3, :3] = R.from_euler("z", yaw).as_matrix()
+        R_mat = R.from_euler("z", yaw).as_matrix()
+        transform[:3, :3] = R_mat
         tx, ty = best_trans.translationSI
-        transform[:3, 3] = [tx, ty, 0.0]
+        # C++ returns translationSI = (-dy, -dx). Correct to standard SE3:
+        # translation = -R_z(yaw) * (ty, tx)
+        transform[:3, 3] = -R_mat @ np.array([ty, tx, 0.0])
 
         # Collect all candidate solutions (rotation peaks × translation candidates)
         all_solutions = []
@@ -198,7 +201,8 @@ class FS2DRegistration(BaseRegistrationMethod):
             for trans in rot_peak.potentialTranslations:
                 t = np.eye(4)
                 t[:3, :3] = rot_R
-                t[:3, 3] = [trans.translationSI[0], trans.translationSI[1], 0.0]
+                tx_s, ty_s = trans.translationSI
+                t[:3, 3] = -rot_R @ np.array([ty_s, tx_s, 0.0])
                 all_solutions.append(t)
 
         elapsed = time.time() - t0
