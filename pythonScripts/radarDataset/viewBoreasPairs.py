@@ -41,16 +41,16 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "loftr"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
-N = 832         #256 128               # Image grid size (N x N)
-RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
+N = 256         #256 128               # Image grid size (N x N)
+RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically) 150 
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame
-START_FRAME = 140                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
+START_FRAME = 85                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
@@ -528,6 +528,10 @@ def main():
 
         # Print results
         gt_trans, gt_rot = gt_error
+
+        # gt_yaw_tmp = gt_yaw % (2 * np.pi)
+        # if gt_yaw_tmp > 0.2 and gt_yaw_tmp < 2 * np.pi - 0.2:
+        #     print("here the rotation is big")
         gt_trans_norm = np.linalg.norm(gt_trans)
         print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
         print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
