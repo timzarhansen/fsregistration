@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import csv
+import inspect
 import json
 import os
 import sys
@@ -140,14 +141,15 @@ def run_benchmark(
             # Get GT transformation
             gt_transform = seq.get_gt_transform(prev_idx, curr_idx)
 
-            # Load per-scan point clouds for ICP/NDT methods
+            # Load per-scan point clouds for methods that accept them (ICP/NDT)
             reg_kwargs = {}
             try:
                 pcd_prev = seq.get_raw_point_cloud(prev_idx)
                 pcd_curr = seq.get_raw_point_cloud(curr_idx)
                 if pcd_prev is not None and pcd_curr is not None:
-                    reg_kwargs["pcd1"] = pcd_prev
-                    reg_kwargs["pcd2"] = pcd_curr
+                    if "pcd1" in inspect.signature(method.register).parameters:
+                        reg_kwargs["pcd1"] = pcd_prev
+                        reg_kwargs["pcd2"] = pcd_curr
             except Exception:
                 pass  # fall back to image-based registration
 
