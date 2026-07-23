@@ -29,6 +29,7 @@ from bremenMssDatasetLoader import (
     load_single_sequence,
 )
 from boreasRegistrationMethods import RegistrationFactory
+from scipy.spatial.transform import Rotation as R
 
 
 
@@ -279,26 +280,53 @@ def get_config_from_file():
 PLOT_DATA_DIR = "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data_bremenmss"
 
 
-def get_affine_matrix(input_matrix: np.ndarray,
-                       pixel_size: float = 1.0,
-                       img_size: int = 0) -> np.ndarray:
-    """Extract 2D affine transform from 4x4 matrix.
+def fix_fs2d_transform(transform: np.ndarray) -> np.ndarray:
+    """Convert FS2D result.transform (C++ convention) to standard SE3.
 
-    Args:
-        input_matrix: 4x4 world transform.
-        pixel_size: Meters per pixel for converting translation to pixel units.
-        img_size: Image dimension N for rotation center compensation.
-                  0 = no compensation (backward compatible).
-
-    Returns:
-        3x3 affine matrix suitable for cv2.warpPerspective.
+    The C++ code returns translationSI = (-dy, -dx) where (dx, dy) is the
+    phase correlation shift in the rotation-aligned frame. The correct SE3
+    transform is: T = [R_z(yaw) | t] with t = -R_z(yaw) * (translationSI.y, translationSI.x)
     """
-    input_matrix = np.linalg.inv(input_matrix)
+    yaw = np.arctan2(transform[1, 0], transform[0, 0])
+    tx, ty = transform[0, 3], transform[1, 3]
+    R_mat = R.from_euler("z", yaw).as_matrix()
+    T = np.eye(4)
+    T[:3, :3] = R_mat
+    T[:3, 3] = -R_mat @ np.array([ty, tx, 0.0])
+    return T
+
+
+def compute_se3_error(T_est: np.ndarray, T_gt: np.ndarray) -> tuple:
+    """Compute 2D rotation (deg) and translation (m) error between two SE3 transforms.
+
+    Only compares the yaw (z-axis rotation) and xy-translation, since FS2D
+    is a 2D registration method while GT may contain pitch/roll components.
+    """
+    yaw_est = np.arctan2(T_est[1, 0], T_est[0, 0])
+    yaw_gt = np.arctan2(T_gt[1, 0], T_gt[0, 0])
+    rot_error_deg = float(np.degrees(abs(yaw_est - yaw_gt)))
+    rot_error_deg = (rot_error_deg + 180) % 360 - 180
+    if rot_error_deg < 0:
+        rot_error_deg = -rot_error_deg
+    trans_error_m = float(np.linalg.norm(T_est[:2, 3] - T_gt[:2, 3]))
+    return rot_error_deg, trans_error_m
+
+
+def get_bremenmss_affine(transform_se3: np.ndarray,
+                          pixel_size: float = 1.0,
+                          img_size: int = 0) -> np.ndarray:
+    """Convert standard SE3 transform to image warp affine for Bremen-MSS.
+
+    Bremen-MSS images map local-frame (lx, ly) directly to pixel (gx, gy):
+      lx = (gx - N/2) * pixel_size
+      ly = (gy - N/2) * pixel_size
+    So no axis swapping is needed (unlike Boreas).
+    """
+    T_inv = np.linalg.inv(transform_se3)
     result = np.eye(3)
-    result[:2, :2] = input_matrix[:2, :2]
-    result[0, 2] = -input_matrix[1, 3] / pixel_size
-    result[1, 2] = input_matrix[0, 3] / pixel_size
-    # Rotation center compensation (rotate around image center)
+    result[:2, :2] = T_inv[:2, :2]
+    result[0, 2] = T_inv[0, 3] / pixel_size
+    result[1, 2] = T_inv[1, 3] / pixel_size
     if img_size > 0:
         c = img_size / 2.0
         T_c = np.eye(3)
@@ -307,30 +335,6 @@ def get_affine_matrix(input_matrix: np.ndarray,
         T_c_inv[:2, 2] = [-c, -c]
         result = T_c @ result @ T_c_inv
     return result
-
-
-def transform_diff(matrix1: np.ndarray, matrix2: np.ndarray) -> tuple:
-    """Compute translation and rotation difference between two 3x3 affine matrices.
-
-    Args:
-        matrix1: First 3x3 affine matrix.
-        matrix2: Second 3x3 affine matrix.
-
-    Returns:
-        Tuple of (translation_diff, rotation_angle_diff_degrees).
-    """
-    t1 = np.array([matrix1[0, 2], matrix1[1, 2]])
-    t2 = np.array([matrix2[0, 2], matrix2[1, 2]])
-    trans_diff = t2 - t1
-
-    r1 = matrix1[:2, :2]
-    r2 = matrix2[:2, :2]
-    angle_diff = np.degrees(
-        np.arctan2(r2[1, 0], r2[0, 0]) - np.arctan2(r1[1, 0], r1[0, 0])
-    )
-    # Normalize to [-180, 180] for correct angle wrapping
-    angle_diff = (angle_diff + 180) % 360 - 180
-    return trans_diff, angle_diff
 
 
 def apply_circular_mask(image: np.ndarray) -> np.ndarray:
@@ -358,7 +362,6 @@ def run_pair(
         img2 = apply_circular_mask(img2)
 
     gt_transform = seq.get_gt_transform(idx1, idx2)
-    gt_affine = get_affine_matrix(gt_transform)
 
     # Registration — use PCD data for point-cloud methods if configured
     sig = inspect.signature(method.register)
@@ -368,14 +371,16 @@ def run_pair(
         result = method.register(img1, img2, pcd1=raw1, pcd2=raw2)
     else:
         result = method.register(img1, img2)
-    transform = result.transform
+
+    # FS2D returns transform in C++ convention. Fix to standard SE3 and
+    # store back into result so downstream code gets correct values.
+    result.transform = fix_fs2d_transform(result.transform)
 
     # Compute GT error
-    est_affine = get_affine_matrix(transform)
-    gt_error = transform_diff(gt_affine, est_affine)
+    gt_error = compute_se3_error(result.transform, gt_transform)
 
     # Create blended image
-    fs2d_affine = get_affine_matrix(transform, pixel_size=SIZE_OF_PIXEL, img_size=N)
+    fs2d_affine = get_bremenmss_affine(result.transform, pixel_size=SIZE_OF_PIXEL, img_size=N)
     warped = cv2.warpPerspective(img2, fs2d_affine, (img1.shape[1], img1.shape[0]))
     blended = cv2.addWeighted((img1 * 255).astype(np.uint8), 0.5, (warped * 255).astype(np.uint8), 0.5, 0)
 
@@ -534,7 +539,7 @@ def main():
         cv2.imwrite(str(save_dir / "image2.png"), cv2.cvtColor((img2 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))
         cv2.imwrite(str(save_dir / "blended.png"), blended)
 
-        # Extract estimated yaw/translation from result.transform (method-agnostic)
+        # Extract estimated yaw/translation from result.transform (now fixed)
         est_transform = result.transform
         est_yaw = np.arctan2(est_transform[1, 0], est_transform[0, 0])
         if est_yaw < 0:

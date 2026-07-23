@@ -37,6 +37,7 @@ if os.path.isdir(_install_lib):
 
 from bremenMssDatasetLoader import BremenMSSSequence, load_sequence, list_sequences
 from boreasRegistrationMethods import RegistrationFactory, RegistrationResult
+from scipy.spatial.transform import Rotation as R
 
 
 # ============================================================================
@@ -138,7 +139,6 @@ def run_benchmark(
 
             # Get GT transformation
             gt_transform = seq.get_gt_transform(prev_idx, curr_idx)
-            gt_affine = get_affine_matrix(gt_transform)
 
             # Load per-scan point clouds for ICP/NDT methods
             reg_kwargs = {}
@@ -157,24 +157,23 @@ def run_benchmark(
             elapsed = time.time() - t0
             total_time += elapsed
 
-            # Compute estimated affine and errors
-            est_affine = get_affine_matrix(result.transform)
-            trans_error, rot_error = transform_diff(gt_affine, est_affine)
-            trans_norm = np.linalg.norm(trans_error)
+            # FS2D returns transform in C++ convention. Fix to standard SE3.
+            est_transform = fix_fs2d_transform(result.transform)
 
-            # Extract error components
-            trans_x_error = trans_error[0]
-            trans_y_error = trans_error[1]
+            # Compute error directly in SE3 space
+            rot_error, trans_norm = compute_se3_error(est_transform, gt_transform)
+            trans_x_error = est_transform[0, 3] - gt_transform[0, 3]
+            trans_y_error = est_transform[1, 3] - gt_transform[1, 3]
 
-            # Extract estimated pose components
-            est_yaw = np.degrees(np.arctan2(est_affine[1, 0], est_affine[0, 0]))
-            est_tx = est_affine[0, 2]
-            est_ty = est_affine[1, 2]
+            # Extract estimated pose components (from fixed transform)
+            est_yaw = np.degrees(np.arctan2(est_transform[1, 0], est_transform[0, 0]))
+            est_tx = est_transform[0, 3]
+            est_ty = est_transform[1, 3]
 
-            # Extract GT pose components
-            gt_yaw = np.degrees(np.arctan2(gt_affine[1, 0], gt_affine[0, 0]))
-            gt_tx = gt_affine[0, 2]
-            gt_ty = gt_affine[1, 2]
+            # Extract GT pose components (directly from 4x4 GT)
+            gt_yaw = np.degrees(np.arctan2(gt_transform[1, 0], gt_transform[0, 0]))
+            gt_tx = gt_transform[0, 3]
+            gt_ty = gt_transform[1, 3]
 
             # Find best solution among all candidates (closest to GT)
             best_rot_error = float('inf')
@@ -184,12 +183,11 @@ def run_benchmark(
             best_ty = 0.0
             all_solutions = result.metadata.get("all_solutions", [])
             for sol in all_solutions:
-                sol_affine = get_affine_matrix(sol)
-                s_trans_err, s_rot_err = transform_diff(gt_affine, sol_affine)
-                s_trans_norm = np.linalg.norm(s_trans_err)
-                s_rot_deg = np.degrees(np.arctan2(sol_affine[1, 0], sol_affine[0, 0]))
-                s_tx = sol_affine[0, 2]
-                s_ty = sol_affine[1, 2]
+                sol_fixed = fix_fs2d_transform(sol)
+                s_rot_err, s_trans_norm = compute_se3_error(sol_fixed, gt_transform)
+                s_rot_deg = np.degrees(np.arctan2(sol_fixed[1, 0], sol_fixed[0, 0]))
+                s_tx = sol_fixed[0, 3]
+                s_ty = sol_fixed[1, 3]
                 if abs(s_rot_err) < abs(best_rot_error) or (abs(s_rot_err) == abs(best_rot_error) and s_trans_norm < best_trans_error):
                     best_rot_error = s_rot_err
                     best_trans_error = s_trans_norm
@@ -225,8 +223,8 @@ def run_benchmark(
 
             # Save blended image if requested
             if save_blended and blended_dir is not None:
-                warp_affine = get_affine_matrix(result.transform,
-                                                pixel_size=size_of_pixel, img_size=N)
+                warp_affine = get_bremenmss_affine(est_transform,
+                                                   pixel_size=size_of_pixel, img_size=N)
                 warped = cv2.warpPerspective(
                     img_curr, warp_affine,
                     (img_prev.shape[1], img_prev.shape[0])
@@ -362,26 +360,59 @@ def run_benchmark(
 # Math helpers (copied from boreasDatasetLoader for self-contained usage)
 # ============================================================================
 
-def get_affine_matrix(input_matrix: np.ndarray,
-                       pixel_size: float = 1.0,
-                       img_size: int = 0) -> np.ndarray:
-    """Extract 2D affine transform from 4x4 matrix.
+def fix_fs2d_transform(transform: np.ndarray) -> np.ndarray:
+    """Convert FS2D result.transform (C++ convention) to standard SE3.
 
-    Args:
-        input_matrix: 4x4 world transform.
-        pixel_size: Meters per pixel for converting translation to pixel units.
-        img_size: Image dimension N for rotation center compensation.
-                  0 = no compensation (backward compatible).
-
-    Returns:
-        3x3 affine matrix suitable for cv2.warpPerspective.
+    The C++ code returns translationSI = (-dy, -dx) where (dx, dy) is the
+    phase correlation shift in the rotation-aligned frame. The correct SE3
+    transform is: T = [R_z(yaw) | t] with t = -R_z(yaw) * (translationSI.y, translationSI.x)
     """
-    input_matrix = np.linalg.inv(input_matrix)
+    yaw = np.arctan2(transform[1, 0], transform[0, 0])
+    tx, ty = transform[0, 3], transform[1, 3]
+    R_mat = R.from_euler("z", yaw).as_matrix()
+    T = np.eye(4)
+    T[:3, :3] = R_mat
+    T[:3, 3] = -R_mat @ np.array([ty, tx, 0.0])
+    return T
+
+
+def compute_se3_error(T_est: np.ndarray, T_gt: np.ndarray) -> tuple:
+    """Compute 2D rotation (deg) and translation (m) error between two SE3 transforms.
+
+    Only compares the yaw (z-axis rotation) and xy-translation, since FS2D
+    is a 2D registration method while GT may contain pitch/roll components.
+    """
+    # Rotation error: compare yaw only
+    yaw_est = np.arctan2(T_est[1, 0], T_est[0, 0])
+    yaw_gt = np.arctan2(T_gt[1, 0], T_gt[0, 0])
+    rot_error_deg = float(np.degrees(abs(yaw_est - yaw_gt)))
+    rot_error_deg = (rot_error_deg + 180) % 360 - 180
+    if rot_error_deg < 0:
+        rot_error_deg = -rot_error_deg
+
+    # Translation error: 2D Euclidean distance (ignore z)
+    trans_error_m = float(np.linalg.norm(T_est[:2, 3] - T_gt[:2, 3]))
+
+    return rot_error_deg, trans_error_m
+
+
+def get_bremenmss_affine(transform_se3: np.ndarray,
+                          pixel_size: float = 1.0,
+                          img_size: int = 0) -> np.ndarray:
+    """Convert standard SE3 transform to image warp affine for Bremen-MSS.
+
+    Bremen-MSS images map local-frame (lx, ly) directly to pixel (gx, gy):
+      lx = (gx - N/2) * pixel_size
+      ly = (gy - N/2) * pixel_size
+    So no axis swapping is needed (unlike Boreas).
+    """
+    # Inverse: maps destination (prev) pixels to source (curr) coordinates
+    T_inv = np.linalg.inv(transform_se3)
     result = np.eye(3)
-    result[:2, :2] = input_matrix[:2, :2]
-    result[0, 2] = -input_matrix[1, 3] / pixel_size
-    result[1, 2] = input_matrix[0, 3] / pixel_size
-    # Rotation center compensation (rotate around image center)
+    result[:2, :2] = T_inv[:2, :2]
+    result[0, 2] = T_inv[0, 3] / pixel_size
+    result[1, 2] = T_inv[1, 3] / pixel_size
+    # Rotation center compensation
     if img_size > 0:
         c = img_size / 2.0
         T_c = np.eye(3)
@@ -390,30 +421,6 @@ def get_affine_matrix(input_matrix: np.ndarray,
         T_c_inv[:2, 2] = [-c, -c]
         result = T_c @ result @ T_c_inv
     return result
-
-
-def transform_diff(matrix1: np.ndarray, matrix2: np.ndarray) -> tuple:
-    """Compute translation and rotation difference between two 3x3 affine matrices.
-
-    Args:
-        matrix1: First 3x3 affine matrix.
-        matrix2: Second 3x3 affine matrix.
-
-    Returns:
-        Tuple of (translation_diff, rotation_angle_diff_degrees).
-    """
-    t1 = np.array([matrix1[0, 2], matrix1[1, 2]])
-    t2 = np.array([matrix2[0, 2], matrix2[1, 2]])
-    trans_diff = t2 - t1
-
-    r1 = matrix1[:2, :2]
-    r2 = matrix2[:2, :2]
-    angle_diff = np.degrees(
-        np.arctan2(r2[1, 0], r2[0, 0]) - np.arctan2(r1[1, 0], r1[0, 0])
-    )
-    # Normalize to [-180, 180] for correct angle wrapping
-    angle_diff = (angle_diff + 180) % 360 - 180
-    return trans_diff, angle_diff
 
 
 # ============================================================================
