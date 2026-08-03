@@ -322,12 +322,18 @@ def get_lidarsim_affine(transform_se3: np.ndarray,
       lx = (gx - N/2) * pixel_size
       ly = (gy - N/2) * pixel_size
     So no axis swapping is needed (unlike Boreas).
+
+    NOTE: the affine must be built from T itself (NOT T_inv).
+    cv2.warpPerspective maps dst = M @ src, and for these images the
+    correct M is exactly the SE3 transform T (linear part + translation).
+    Using T_inv here applied the inverse motion, so blended.png showed
+    no overlap even when the registration result was correct.
     """
-    T_inv = np.linalg.inv(transform_se3)
+    T = transform_se3
     result = np.eye(3)
-    result[:2, :2] = T_inv[:2, :2]
-    result[0, 2] = T_inv[0, 3] / pixel_size
-    result[1, 2] = T_inv[1, 3] / pixel_size
+    result[:2, :2] = T[:2, :2]
+    result[0, 2] = T[0, 3] / pixel_size
+    result[1, 2] = T[1, 3] / pixel_size
     if img_size > 0:
         c = img_size / 2.0
         T_c = np.eye(3)
