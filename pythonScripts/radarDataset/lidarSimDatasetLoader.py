@@ -22,6 +22,64 @@ import numpy as np
 import yaml
 
 
+# ========================================================================
+# Noise models (same scheme as the 3D matching profiling benchmark)
+# ========================================================================
+
+NOISE_LEVELS = [
+    "None",
+    "low",
+    "high",
+    "low_gauss",
+    "high_gauss",
+    "low_salt_pepper",
+    "high_salt_pepper",
+]
+
+# noise_level -> (gaussian_std_m, salt_pepper_fraction)
+_NOISE_PARAMS = {
+    "None": (0.0, 0.0),
+    "low": (0.01, 0.01),
+    "high": (0.05, 0.05),
+    "low_gauss": (0.01, 0.0),
+    "high_gauss": (0.05, 0.0),
+    "low_salt_pepper": (0.0, 0.01),
+    "high_salt_pepper": (0.0, 0.05),
+}
+
+
+def _apply_noise_to_points(x: np.ndarray, y: np.ndarray, noise_level: str,
+                           seed: Optional[int] = None):
+    """Add Gaussian and/or salt-pepper noise to 2D points (in meters).
+
+    Mirrors the 3D profiling benchmark:
+      - gaussian: every point += N(0, std)
+      - salt/pepper: a fraction of points is replaced by uniform random
+        positions inside the scan bounding box
+
+    Returns:
+        (x_noisy, y_noisy) arrays.
+    """
+    gauss_std, sp_fraction = _NOISE_PARAMS[noise_level]
+    if seed is not None:
+        np.random.seed(seed)
+
+    if gauss_std > 0:
+        x = x + np.random.normal(0.0, gauss_std, x.shape)
+        y = y + np.random.normal(0.0, gauss_std, y.shape)
+
+    if sp_fraction > 0:
+        mask = np.random.rand(len(x)) < sp_fraction
+        if mask.any():
+            x_min, x_max = x.min(), x.max()
+            y_min, y_max = y.min(), y.max()
+            n = int(mask.sum())
+            x[mask] = np.random.uniform(x_min, x_max, n)
+            y[mask] = np.random.uniform(y_min, y_max, n)
+
+    return x, y
+
+
 class LidarSimSequence:
     """Adapter for a single gazebo-sim dataset sequence.
 
@@ -30,7 +88,12 @@ class LidarSimSequence:
     get_gt_transform, get_raw_point_cloud).
     """
 
-    def __init__(self, seq_dir: str):
+    def __init__(self, seq_dir: str, noise_level: str = "None"):
+        if noise_level not in _NOISE_PARAMS:
+            raise ValueError(
+                f"Unknown noise level: {noise_level!r}. "
+                f"Valid levels: {NOISE_LEVELS}")
+        self.noise_level = noise_level
         self.seq_dir = Path(seq_dir)
         if not self.seq_dir.is_dir():
             raise FileNotFoundError(f"Dataset directory not found: {seq_dir}")
@@ -115,6 +178,10 @@ class LidarSimSequence:
         x = ranges * np.cos(angles)   # forward (robot x)
         y = ranges * np.sin(angles)   # left    (robot y)
 
+        # Apply noise to the points BEFORE rasterization
+        if self.noise_level != "None":
+            x, y = _apply_noise_to_points(x, y, self.noise_level)
+
         # Maple to pixel grid
         half = N / 2.0
         px = ((x / size_of_pixel) + half).astype(np.int32)
@@ -195,6 +262,10 @@ class LidarSimSequence:
         y = ranges * np.sin(angles)
         intensity = np.ones_like(x)
 
+        # Apply noise to the points before returning
+        if self.noise_level != "None":
+            x, y = _apply_noise_to_points(x, y, self.noise_level)
+
         return np.column_stack([x, y, intensity]).astype(np.float64)
 
     # ================================================================
@@ -227,15 +298,19 @@ def list_sequences(data_dir: str) -> List[Tuple[int, str, str]]:
     data_path = Path(data_dir)
     sequences = []
 
+    def _is_sequence(d: Path) -> bool:
+        return ((d / "metadata.yaml").is_file()
+                and (d / "poses.csv").is_file()
+                and (d / "scans").is_dir())
+
+    # data_dir itself may be a single dataset directory
+    if _is_sequence(data_path):
+        return [(1, data_path.name, str(data_path))]
+
     for d in sorted(data_path.iterdir()):
         if not d.is_dir():
             continue
-        # Must contain the minimal signature of a valid dataset
-        if not (d / "metadata.yaml").is_file():
-            continue
-        if not (d / "poses.csv").is_file():
-            continue
-        if not (d / "scans").is_dir():
+        if not _is_sequence(d):
             continue
 
         seq_name = d.name
@@ -246,12 +321,15 @@ def list_sequences(data_dir: str) -> List[Tuple[int, str, str]]:
     return sequences
 
 
-def load_single_sequence(data_dir: str, seq_name: str) -> LidarSimSequence:
+def load_single_sequence(data_dir: str, seq_name: str,
+                         noise_level: str = "None") -> LidarSimSequence:
     """Load a single simulation dataset by name.
 
     Args:
         data_dir: Parent directory containing dataset subdirectories.
         seq_name: Dataset directory name, e.g. '20260729_152030'.
+        noise_level: Noise model applied to points before image/pcd
+                     generation. See NOISE_LEVELS.
 
     Returns:
         LidarSimSequence instance.
@@ -260,4 +338,4 @@ def load_single_sequence(data_dir: str, seq_name: str) -> LidarSimSequence:
     if not seq_path.is_dir():
         raise FileNotFoundError(f"Dataset not found: {seq_path}")
 
-    return LidarSimSequence(str(seq_path))
+    return LidarSimSequence(str(seq_path), noise_level=noise_level)

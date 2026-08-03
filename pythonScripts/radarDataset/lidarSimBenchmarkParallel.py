@@ -36,7 +36,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from lidarSimDatasetLoader import list_sequences, load_single_sequence
+from lidarSimDatasetLoader import (LidarSimSequence, NOISE_LEVELS,
+                                   list_sequences)
 from bremenMssBenchmark import run_benchmark
 
 
@@ -75,7 +76,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
     try:
         pid = os.getpid()
         print(f"[Worker {pid}] Loading sequence {seq_num} ({seq_name})...")
-        seq = load_single_sequence(data_dir, seq_name)
+        seq = LidarSimSequence(
+            seq_path, noise_level=method_config.get("noise_level", "None"))
         print(f"[Worker {pid}] Sequence {seq_num}: {seq.length} scans")
 
         csv_path, summary = run_benchmark(
@@ -119,6 +121,10 @@ def main():
                         help="Scene radius in meters (pixel_size = 2*radius/N). Default: 15")
     parser.add_argument("--num-workers", type=int, default=4,
                         help="Number of parallel worker processes. Default: 4")
+    parser.add_argument("--noise-level", type=str, default="None",
+                        choices=NOISE_LEVELS,
+                        help="Noise model applied to points before image/pcd "
+                             f"generation. Choices: {NOISE_LEVELS}")
     parser.add_argument("--max-frames", type=int, default=None,
                         help="Cap sequence length (None = full).")
     parser.add_argument("--output-dir", type=str, default="benchmark_results",
@@ -161,6 +167,7 @@ def main():
           f"(pixel_size: {(2.0 * args.radius) / args.N:.3f} m)")
     print(f"Workers: {args.num_workers}")
     print(f"Max frames per seq: {args.max_frames if args.max_frames else 'full'}")
+    print(f"Noise level: {args.noise_level}")
     print(f"Output: {args.output_dir}")
     print()
 
@@ -169,6 +176,7 @@ def main():
         "N": args.N,
         "radius": args.radius,
         "size_of_pixel": (2.0 * args.radius) / args.N,
+        "noise_level": args.noise_level,
     }
 
     # Parse method config overrides

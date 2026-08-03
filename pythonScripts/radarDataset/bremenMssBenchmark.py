@@ -97,7 +97,9 @@ def run_benchmark(
     # Setup output directory
     px_int = int(size_of_pixel * 100)
     seq_label = f"seq{sequence_number:02d}"
-    output_subdir = f"{seq_label}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}"
+    noise_level = method_config.get("noise_level", "None")
+    noise_suffix = f"_{noise_level}" if noise_level != "None" else ""
+    output_subdir = f"{seq_label}_{method_name}_N{N:03d}_p{px_int}_s{matching_step}{noise_suffix}"
     save_dir = Path(output_dir) / output_subdir
     save_dir.mkdir(parents=True, exist_ok=True)
 
