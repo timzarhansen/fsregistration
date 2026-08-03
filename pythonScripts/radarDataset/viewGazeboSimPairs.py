@@ -38,7 +38,7 @@ from scipy.spatial.transform import Rotation as R
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
 SEQUENCE_NUMBER = 1
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-REGISTRATION_METHOD = "icp"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "ndt_p2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
@@ -568,9 +568,7 @@ def main():
         # Save current pair images and meta to plot data directory
         try:
             os.makedirs(PLOT_DATA_DIR, exist_ok=True)
-            gt_trans, gt_rot = gt_error
-            gt_trans_norm = np.linalg.norm(gt_trans)
-            np.savetxt(os.path.join(PLOT_DATA_DIR, "input1.csv"), img1, fmt='%.10f', delimiter=' ')
+            gt_rot, gt_trans = gt_error   # compute_se3_error returns (rot_err_deg, trans_err_m)
             np.savetxt(os.path.join(PLOT_DATA_DIR, "input2.csv"), img2, fmt='%.10f', delimiter=' ')
             header = "frame1,frame2,rot_angle_deg,tx_m,ty_m,confidence,time_ms,gt_rot_err_deg,gt_trans_err_m,N,n_solutions,radius_m,pixel_size_m,method"
             row = [
@@ -595,9 +593,7 @@ def main():
             print(f"  [WARN] Could not save plot data: {e}")
 
         # Print results
-        gt_trans, gt_rot = gt_error
-        gt_trans_norm = np.linalg.norm(gt_trans)
-        print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
+        gt_rot, gt_trans = gt_error   # compute_se3_error returns (rot_err_deg, trans_err_m)
         print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
