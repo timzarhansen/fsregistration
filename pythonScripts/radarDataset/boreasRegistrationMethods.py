@@ -271,15 +271,22 @@ class ICPRegistration(BaseRegistrationMethod):
             o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=self.max_iteration)
             )
 
-        # Convert Open3D point-cloud frame to vehicle frame (x-forward, y-right user convention)
-        # Boreas radar standard: x = r*cos(θ) (forward), y = r*sin(θ) (left for CCW)
-        # Our pc frame: pc_x = y_Boreas (left), pc_y = x_Boreas (forward)
-        # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
+        # Convert point-cloud result to the standard SE3 contract
+        # (T maps current-scan frame -> previous-scan frame, matching GT).
         T_pc = reg.transformation
-        transform = np.eye(4)
-        transform[:3, :3] = T_pc[:3, :3]
-        transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
-        transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
+        pc_frame = self.config.get("pc_frame", "boreas_pc")
+        if pc_frame == "vehicle":
+            # Gazebo-sim raw clouds are already in the vehicle frame
+            # (x=forward, y=left). Open3D returns source->target =
+            # frame1->frame2, so invert to get frame2->frame1. No swap needed.
+            transform = np.linalg.inv(T_pc)
+        else:
+            # Boreas pc frame: pc_x = left, pc_y = -forward
+            # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
+            transform = np.eye(4)
+            transform[:3, :3] = T_pc[:3, :3]
+            transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
+            transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
 
         fitness = reg.fitness
         rmse = reg.inlier_rmse
@@ -393,12 +400,16 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
         if PCLNDT_AVAILABLE:
             ndt = pybind_ndt.PCLNDTWrapper()
             guess_veh = np.asarray(self.config.get("initial_guess", np.eye(4)), dtype=np.float64)
-            # Convert initial guess from vehicle frame to PCL frame:
-            #   pc_x = -veh_y,  pc_y = -veh_x,  rotation preserved (z-axis invariant)
-            guess_pcl = np.eye(4, dtype=np.float64)
-            guess_pcl[:3, :3] = guess_veh[:3, :3]
-            guess_pcl[0, 3] = -guess_veh[1, 3]
-            guess_pcl[1, 3] = -guess_veh[0, 3]
+            if self.config.get("pc_frame", "boreas_pc") == "vehicle":
+                # Gazebo raw clouds are already in the vehicle frame: use guess as-is.
+                guess_pcl = guess_veh.copy()
+            else:
+                # Convert initial guess from vehicle frame to PCL frame:
+                #   pc_x = -veh_y,  pc_y = -veh_x,  rotation preserved (z-axis invariant)
+                guess_pcl = np.eye(4, dtype=np.float64)
+                guess_pcl[:3, :3] = guess_veh[:3, :3]
+                guess_pcl[0, 3] = -guess_veh[1, 3]
+                guess_pcl[1, 3] = -guess_veh[0, 3]
             result = ndt.align(
                 source_pts, target_pts,
                 resolution=self.resolution,
@@ -433,14 +444,21 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
             convergence = True
             n_iter = 0
 
-        # Convert PCL/Open3D point-cloud frame to vehicle frame
-        # Boreas radar standard: x = r*cos(θ) (forward), y = r*sin(θ) (left for CCW)
-        # Our pc frame: pc_x = y_Boreas (left), pc_y = x_Boreas (forward)
-        # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
-        transform = np.eye(4)
-        transform[:3, :3] = T_pc[:3, :3]
-        transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
-        transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
+        # Convert point-cloud result to the standard SE3 contract
+        # (T maps current-scan frame -> previous-scan frame, matching GT).
+        pc_frame = self.config.get("pc_frame", "boreas_pc")
+        if pc_frame == "vehicle":
+            # Gazebo-sim raw clouds are already in the vehicle frame
+            # (x=forward, y=left). Registration returns source->target =
+            # frame1->frame2, so invert to get frame2->frame1. No swap needed.
+            transform = np.linalg.inv(T_pc)
+        else:
+            # Boreas pc frame: pc_x = left, pc_y = -forward
+            # R_veh = R_pc (invariant for z-axis rotation), t_veh_x = -pc_ty, t_veh_y = -pc_tx
+            transform = np.eye(4)
+            transform[:3, :3] = T_pc[:3, :3]
+            transform[0, 3] = -T_pc[1, 3]   # veh_x = -pc_y
+            transform[1, 3] = -T_pc[0, 3]   # veh_y = -pc_x
 
         confidence = 1.0 / (1.0 + fitness) if fitness > 0 else 0.0
         elapsed = time.time() - t0

@@ -38,7 +38,7 @@ from scipy.spatial.transform import Rotation as R
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
 SEQUENCE_NUMBER = 1
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "icp"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
@@ -47,7 +47,7 @@ RADIUS = 15.0                   # Scene radius in meters (pixel_size = 2*radius/
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 1                # Match every Nth scan (1 = consecutive)
-START_FRAME = 0                  # First scan index
+START_FRAME = 10                  # First scan index
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewGazeboSimOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
@@ -381,7 +381,9 @@ def run_pair(
 
     # FS2D returns transform in C++ convention. Fix to standard SE3 and
     # store back into result so downstream code gets correct values.
-    result.transform = fix_fs2d_transform(result.transform)
+    # (Only FS2D — other methods already return standard SE3.)
+    if result.method_name == "fs2d":
+        result.transform = fix_fs2d_transform(result.transform)
 
     # Compute GT error
     gt_error = compute_se3_error(result.transform, gt_transform)
@@ -453,6 +455,7 @@ def main():
         "icp_threshold_pct": ICP_THRESHOLD_PCT,
         "icp_voxel_size": ICP_VOXEL_SIZE,
         "initial_guess": np.eye(4),
+        "pc_frame": "vehicle",  # gazebo raw point clouds are already in vehicle frame (x=forward, y=left)
         # ---- NDT params ----
         "ndt_voxel_size": NDT_VOXEL_SIZE,
         "ndt_max_iteration": NDT_MAX_ITERATION,
