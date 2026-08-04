@@ -35,18 +35,18 @@ from scipy.spatial.transform import Rotation as R
 # ============================================================================
 # CONFIGURATION - Edit these to test different settings
 # ============================================================================
-DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
-SEQUENCE_NUMBER = 1
+DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"  # Dataset root (2D-Scan-Gazebo, maze worlds)
+SEQUENCE_NUMBER = 1                                              # Which sequence/world to load (1..N, listed at startup)
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-RENDER_MODE = "gaussian"  # Options: binary (no blur), gaussian (light blur), average (old pipeline)
-REGISTRATION_METHOD = "loftr"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+RENDER_MODE = "average"  # Options: binary (no blur), gaussian (light blur), average (old pipeline)
+REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
 N = 256                         # Image grid size (N x N)
 RADIUS = 10.0                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
-DEBUG_MODE = True
+DEBUG_MODE = True                # Verbose debug output
 MATCHING_STEP = 1                # Match every Nth scan (1 = consecutive)
 START_FRAME = 10                  # First scan index
 MAX_FRAMES = None                # None = full sequence, or cap it
@@ -62,86 +62,86 @@ ROUND = False  # If True, apply circular mask (corners -> 0)
 USE_RAW_POINTCLOUD = True        # True = load PCD for point-cloud methods, False = cartesian image only
 RAW_INTENSITY_THRESHOLD = 0.0    # Noise floor for PCD intensity (0.0 = all points)
 
-# ICP-specific config
-ICP_MAX_DISTANCE = 10.0
-ICP_MAX_ITERATION = 200
-ICP_SCALE = 1.0
-ICP_THRESHOLD_PCT = 20.0
-ICP_VOXEL_SIZE = 1.0             # Downsampling in meters (0 = skip)
+# ICP-specific config (Open3D point-to-point ICP on raw point cloud)
+ICP_MAX_DISTANCE = 10.0            # Max correspondence distance (m)
+ICP_MAX_ITERATION = 200            # Iteration limit
+ICP_SCALE = 1.0                    # Intensity-as-z multiplier
+ICP_THRESHOLD_PCT = 20.0           # Intensity percentile filter (drop points below)
+ICP_VOXEL_SIZE = 1.0               # Downsampling voxel size (m, 0 = skip)
 
-# NDT_P2D-specific config
-NDT_VOXEL_SIZE = 3.0
-NDT_MAX_ITERATION = 50
-NDT_TRANSFORMATION_EPSILON = 0.001
-NDT_STEP_SIZE = 1.0
-NDT_SCALE = 1.0
-NDT_THRESHOLD_PCT = 5.0
+# NDT_P2D-specific config (PCL Normal Distributions Transform)
+NDT_VOXEL_SIZE = 3.0               # Voxel grid resolution (m; coarser = faster, less precise)
+NDT_MAX_ITERATION = 50             # Iteration limit
+NDT_TRANSFORMATION_EPSILON = 0.001  # Convergence threshold on transform change
+NDT_STEP_SIZE = 1.0                # Line-search step size
+NDT_SCALE = 1.0                    # Intensity-as-z multiplier
+NDT_THRESHOLD_PCT = 5.0            # Intensity percentile filter (drop points below)
 
-# Fourier-Mellin config
-FM_HIGHPASS = True
+# Fourier-Mellin config (Fourier-Mellin phase correlation)
+FM_HIGHPASS = True                 # High-pass filter in Fourier domain (suppresses low-freq differences)
 
-# SIFT-specific config
-SIFT_NFEATURES = 0
-SIFT_N_OCTAVE_LAYERS = 3
-SIFT_CONTRAST_THRESHOLD = 0.04
-SIFT_EDGE_THRESHOLD = 10
-SIFT_SIGMA = 1.6
-SIFT_RATIO_THRESHOLD = 0.75
-SIFT_RANSAC_THRESHOLD = 1.0
-SIFT_RANSAC_CONFIDENCE = 0.99
+# SIFT-specific config (SIFT keypoints + RANSAC)
+SIFT_NFEATURES = 0                 # 0 = auto; cap on keypoints
+SIFT_N_OCTAVE_LAYERS = 3           # Octave layers per octave
+SIFT_CONTRAST_THRESHOLD = 0.04     # Min keypoint contrast (higher = fewer)
+SIFT_EDGE_THRESHOLD = 10           # Edge-response filter (lower = rejects more edge points)
+SIFT_SIGMA = 1.6                   # Base Gaussian sigma
+SIFT_RATIO_THRESHOLD = 0.75        # Lowe's ratio test (lower = stricter matches)
+SIFT_RANSAC_THRESHOLD = 1.0        # RANSAC inlier distance (m)
+SIFT_RANSAC_CONFIDENCE = 0.99      # RANSAC confidence
 
 # SURF-specific config (requires opencv-contrib-python)
-SURF_HESSIAN_THRESHOLD = 400
-SURF_N_OCTAVES = 4
-SURF_N_OCTAVE_LAYERS = 3
-SURF_EXTENDED = True
-SURF_UPRIGHT = False
-SURF_RATIO_THRESHOLD = 0.75
-SURF_RANSAC_THRESHOLD = 3.0
-SURF_RANSAC_CONFIDENCE = 0.99
+SURF_HESSIAN_THRESHOLD = 400       # Detector sensitivity (higher = fewer, stronger points)
+SURF_N_OCTAVES = 4                 # Number of octaves
+SURF_N_OCTAVE_LAYERS = 3           # Layers per octave
+SURF_EXTENDED = True               # Use 128-d descriptors (False = 64-d)
+SURF_UPRIGHT = False               # Skip orientation estimation (True = faster, rotation-variant)
+SURF_RATIO_THRESHOLD = 0.75        # Lowe's ratio test (lower = stricter matches)
+SURF_RANSAC_THRESHOLD = 3.0        # RANSAC inlier distance (m)
+SURF_RANSAC_CONFIDENCE = 0.99      # RANSAC confidence
 
-# KAZE-specific config
-KAZE_EXTENDED = False
-KAZE_UPRIGHT = False
-KAZE_THRESHOLD = 0.001
-KAZE_N_OCTAVES = 4
-KAZE_N_OCTAVE_LAYERS = 4
-KAZE_DIFFUSIVITY = 1
-KAZE_RATIO_THRESHOLD = 0.75
-KAZE_RANSAC_THRESHOLD = 3.0
-KAZE_RANSAC_CONFIDENCE = 0.99
+# KAZE-specific config (nonlinear-scale KAZE)
+KAZE_EXTENDED = False              # Use 128-d descriptors (False = 64-d)
+KAZE_UPRIGHT = False               # Skip orientation estimation
+KAZE_THRESHOLD = 0.001             # Detector response threshold (higher = fewer keypoints)
+KAZE_N_OCTAVES = 4                 # Number of octaves
+KAZE_N_OCTAVE_LAYERS = 4           # Layers per octave
+KAZE_DIFFUSIVITY = 1               # Nonlinear diffusion: 1=PM_G2, 2=Weickert (edge-preserving)
+KAZE_RATIO_THRESHOLD = 0.75        # Lowe's ratio test (lower = stricter matches)
+KAZE_RANSAC_THRESHOLD = 3.0        # RANSAC inlier distance (m)
+KAZE_RANSAC_CONFIDENCE = 0.99      # RANSAC confidence
 
-# AKAZE-specific config
-AKAZE_DESCRIPTOR_TYPE = "MLDB"
-AKAZE_DESCRIPTOR_SIZE = 0
-AKAZE_DESCRIPTOR_CHANNELS = 3
-AKAZE_THRESHOLD = 0.001
-AKAZE_N_OCTAVES = 4
-AKAZE_N_OCTAVE_LAYERS = 4
-AKAZE_DIFFUSIVITY = 2
-AKAZE_RATIO_THRESHOLD = 0.75
-AKAZE_RANSAC_THRESHOLD = 3.0
-AKAZE_RANSAC_CONFIDENCE = 0.99
+# AKAZE-specific config (accelerated KAZE)
+AKAZE_DESCRIPTOR_TYPE = "MLDB"     # Descriptor: MLDB | KAZE | KAZE_UPRIGHT | MLDB_UPRIGHT
+AKAZE_DESCRIPTOR_SIZE = 0          # 0 = full size
+AKAZE_DESCRIPTOR_CHANNELS = 3      # Descriptor channels (MLDB: 1-3)
+AKAZE_THRESHOLD = 0.001            # Detector response threshold (higher = fewer keypoints)
+AKAZE_N_OCTAVES = 4                # Number of octaves
+AKAZE_N_OCTAVE_LAYERS = 4          # Layers per octave
+AKAZE_DIFFUSIVITY = 2              # Nonlinear diffusion: 1=PM_G2, 2=Weickert (edge-preserving)
+AKAZE_RATIO_THRESHOLD = 0.75       # Lowe's ratio test (lower = stricter matches)
+AKAZE_RANSAC_THRESHOLD = 3.0       # RANSAC inlier distance (m)
+AKAZE_RANSAC_CONFIDENCE = 0.99     # RANSAC confidence
 
-# LoFTR-specific config
-LOFTR_RANSAC_THRESHOLD = 3.0
-LOFTR_RANSAC_CONFIDENCE = 0.99
-LOFTR_CONFIDENCE_THRESHOLD = 0.5
+# LoFTR-specific config (transformer-based dense matching)
+LOFTR_RANSAC_THRESHOLD = 3.0       # RANSAC inlier distance (m)
+LOFTR_RANSAC_CONFIDENCE = 0.99     # RANSAC confidence
+LOFTR_CONFIDENCE_THRESHOLD = 0.5   # Min match confidence to keep a correspondence
 
 # EfficientLoFTR-specific config
-ELOFTR_MODEL_TYPE = "full"
-ELOFTR_RANSAC_THRESHOLD = 3.0
-ELOFTR_RANSAC_CONFIDENCE = 0.99
-ELOFTR_CONFIDENCE_THRESHOLD = 0.5
+ELOFTR_MODEL_TYPE = "full"         # Model: full | tiny (tiny = smaller/faster)
+ELOFTR_RANSAC_THRESHOLD = 3.0      # RANSAC inlier distance (m)
+ELOFTR_RANSAC_CONFIDENCE = 0.99    # RANSAC confidence
+ELOFTR_CONFIDENCE_THRESHOLD = 0.5  # Min match confidence to keep a correspondence
 
-# LightGlue-specific config
-LIGHTGLUE_FEATURES = "superpoint"
-LIGHTGLUE_MAX_NUM_KEYPOINTS = 2048
-LIGHTGLUE_DEPTH_CONFIDENCE = 0.95
-LIGHTGLUE_WIDTH_CONFIDENCE = 0.99
-LIGHTGLUE_FILTER_THRESHOLD = 0.1
-LIGHTGLUE_RANSAC_THRESHOLD = 3.0
-LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
+# LightGlue-specific config (LightGlue matcher)
+LIGHTGLUE_FEATURES = "superpoint"  # Extractor: superpoint | disk
+LIGHTGLUE_MAX_NUM_KEYPOINTS = 2048  # Cap on keypoints
+LIGHTGLUE_DEPTH_CONFIDENCE = 0.95  # Transformer depth early-exit confidence
+LIGHTGLUE_WIDTH_CONFIDENCE = 0.99  # Transformer width early-exit confidence
+LIGHTGLUE_FILTER_THRESHOLD = 0.1   # Min match score after filtering
+LIGHTGLUE_RANSAC_THRESHOLD = 3.0   # RANSAC inlier distance (m)
+LIGHTGLUE_RANSAC_CONFIDENCE = 0.99  # RANSAC confidence
 # ============================================================================
 
 
