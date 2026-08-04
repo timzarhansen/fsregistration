@@ -38,7 +38,7 @@ from scipy.spatial.transform import Rotation as R
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
 SEQUENCE_NUMBER = 1
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-REGISTRATION_METHOD = "ndt_p2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
@@ -600,6 +600,8 @@ def main():
         print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
         print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
+        if result.confidence == 0.0 and result.metadata:
+            print(f"  [FAIL] metadata: {result.metadata}")
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
         print(f"  -> Saved to {save_dir}/ (image1.png, image2.png, blended.png)")

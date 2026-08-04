@@ -124,6 +124,31 @@ class BaseRegistrationMethod(ABC):
     def get_name(self) -> str:
         return self._name
 
+    def _to_uint8(self, img: np.ndarray) -> np.ndarray:
+        """Convert float image to uint8 with full-contrast stretch.
+
+        The loader returns [0,1] floats whose max can be far below 1.0
+        (e.g. ~0.05 after Gaussian blur), so a plain `* 255` produces a
+        nearly black image that starves keypoint detectors. Min-max
+        normalization stretches the image to the full 0-255 range.
+        """
+        import cv2
+        mn, mx = float(img.min()), float(img.max())
+        if mx - mn < 1e-6:      # degenerate (e.g. all-zero) image
+            return np.zeros(img.shape, np.uint8)
+        return cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    def _to_float01(self, img: np.ndarray) -> np.ndarray:
+        """Min-max normalize float image to [0, 1].
+
+        Same rationale as _to_uint8, for methods (LoFTR, LightGlue, ...)
+        that consume float tensors directly.
+        """
+        mn, mx = float(img.min()), float(img.max())
+        if mx - mn < 1e-6:      # degenerate (e.g. all-zero) image
+            return np.zeros(img.shape, np.float32)
+        return (img.astype(np.float32) - mn) / (mx - mn)
+
 
 class FS2DRegistration(BaseRegistrationMethod):
     """SOFT-based FS2D registration via pybind_registration_2d."""
@@ -499,8 +524,8 @@ class SIFTRegistration(BaseRegistrationMethod):
         import cv2
         t0 = time.time()
 
-        img1_u8 = (img1 * 255).astype(np.uint8)
-        img2_u8 = (img2 * 255).astype(np.uint8)
+        img1_u8 = self._to_uint8(img1)
+        img2_u8 = self._to_uint8(img2)
 
         detector = cv2.SIFT_create(
             nfeatures=self.nfeatures,
@@ -608,8 +633,8 @@ class SURFRegistration(BaseRegistrationMethod):
         import cv2
         t0 = time.time()
 
-        img1_u8 = (img1 * 255).astype(np.uint8)
-        img2_u8 = (img2 * 255).astype(np.uint8)
+        img1_u8 = self._to_uint8(img1)
+        img2_u8 = self._to_uint8(img2)
 
         detector = cv2.xfeatures2d.SURF_create(
             hessianThreshold=self.hessian_threshold,
@@ -696,8 +721,8 @@ class KAZERegistration(BaseRegistrationMethod):
         import cv2
         t0 = time.time()
 
-        img1_u8 = (img1 * 255).astype(np.uint8)
-        img2_u8 = (img2 * 255).astype(np.uint8)
+        img1_u8 = self._to_uint8(img1)
+        img2_u8 = self._to_uint8(img2)
 
         detector = cv2.KAZE_create(
             extended=self.extended,
@@ -796,8 +821,8 @@ class AKAZERegistration(BaseRegistrationMethod):
         }
         desc_type = _desc_map.get(self.descriptor_type.upper(), cv2.AKAZE_DESCRIPTOR_MLDB)
 
-        img1_u8 = (img1 * 255).astype(np.uint8)
-        img2_u8 = (img2 * 255).astype(np.uint8)
+        img1_u8 = self._to_uint8(img1)
+        img2_u8 = self._to_uint8(img2)
 
         detector = cv2.AKAZE_create(
             descriptor_type=desc_type,
@@ -973,6 +998,9 @@ class LoFTRRegistration(BaseRegistrationMethod):
             img1 = cv2.resize(img1, (w, h))
             img2 = cv2.resize(img2, (w, h))
 
+        img1 = self._to_float01(img1)
+        img2 = self._to_float01(img2)
+
         img0_tensor = torch.from_numpy(img1.astype(np.float32))[None][None]
         img1_tensor = torch.from_numpy(img2.astype(np.float32))[None][None]
         batch = {"image0": img0_tensor, "image1": img1_tensor}
@@ -1079,6 +1107,9 @@ class EfficientLoFTRRegistration(BaseRegistrationMethod):
             img1 = cv2.resize(img1, (w, h))
             img2 = cv2.resize(img2, (w, h))
 
+        img1 = self._to_float01(img1)
+        img2 = self._to_float01(img2)
+
         img0_tensor = torch.from_numpy(img1.astype(np.float32))[None][None]
         img1_tensor = torch.from_numpy(img2.astype(np.float32))[None][None]
         batch = {"image0": img0_tensor, "image1": img1_tensor}
@@ -1182,6 +1213,9 @@ class LightGlueRegistration(BaseRegistrationMethod):
     def register(self, img1: np.ndarray, img2: np.ndarray) -> RegistrationResult:
         import torch
         t0 = time.time()
+
+        img1 = self._to_float01(img1)
+        img2 = self._to_float01(img2)
 
         img0_tensor = torch.from_numpy(img1.astype(np.float32))[None]
         img1_tensor = torch.from_numpy(img2.astype(np.float32))[None]
