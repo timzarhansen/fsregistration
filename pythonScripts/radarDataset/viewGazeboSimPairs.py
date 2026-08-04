@@ -436,6 +436,10 @@ def main():
     method_config = {
         "N": N,
         "size_of_pixel": SIZE_OF_PIXEL,
+        # Gazebo-sim images map directly to the vehicle frame (col=x_veh,
+        # row=y_veh); feature methods must invert the keypoint affine and
+        # skip the pyboreas axis swap (see _keypoints_to_transform).
+        "image_frame": "lidarsim",
         # ---- FS2D params ----
         "use_clahe": False,
         "use_hamming": True,

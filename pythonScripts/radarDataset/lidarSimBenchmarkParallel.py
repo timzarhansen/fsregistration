@@ -177,6 +177,10 @@ def main():
         "radius": args.radius,
         "size_of_pixel": (2.0 * args.radius) / args.N,
         "noise_level": args.noise_level,
+        # Gazebo-sim images map directly to the vehicle frame (col=x_veh,
+        # row=y_veh); feature methods must invert the keypoint affine and
+        # skip the pyboreas axis swap (see _keypoints_to_transform).
+        "image_frame": "lidarsim",
     }
 
     # Parse method config overrides
