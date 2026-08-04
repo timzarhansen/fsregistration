@@ -1220,6 +1220,9 @@ class LightGlueRegistration(BaseRegistrationMethod):
         "doghardnet": "DoGHardNet",
     }
 
+    _OTHER_METHODS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otherMethods")
+    _LIGHTGLUE_DIR = os.path.join(_OTHER_METHODS_DIR, "LightGlue")
+
     def __init__(self, config: dict):
         super().__init__(config)
         self._name = "lightglue"
@@ -1231,6 +1234,8 @@ class LightGlueRegistration(BaseRegistrationMethod):
         self.filter_threshold = config.get("lightglue_filter_threshold", config.get("filter_threshold", 0.1))
         self.ransac_threshold = config.get("lightglue_ransac_threshold", config.get("ransac_threshold", 3.0))
         self.ransac_confidence = config.get("lightglue_ransac_confidence", config.get("ransac_confidence", 0.99))
+
+        sys.path.insert(0, self._LIGHTGLUE_DIR)
 
         from lightglue import LightGlue
         from lightglue.utils import match_pair
