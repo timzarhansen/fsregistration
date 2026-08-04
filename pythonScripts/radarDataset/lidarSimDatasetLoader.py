@@ -55,7 +55,7 @@ def _apply_noise_to_points(x: np.ndarray, y: np.ndarray, noise_level: str,
     Mirrors the 3D profiling benchmark:
       - gaussian: every point += N(0, std)
       - salt/pepper: a fraction of points is replaced by uniform random
-        positions inside the scan bounding box
+        positions inside the scan's circular footprint (uniform in disc)
 
     Returns:
         (x_noisy, y_noisy) arrays.
@@ -71,11 +71,13 @@ def _apply_noise_to_points(x: np.ndarray, y: np.ndarray, noise_level: str,
     if sp_fraction > 0:
         mask = np.random.rand(len(x)) < sp_fraction
         if mask.any():
-            x_min, x_max = x.min(), x.max()
-            y_min, y_max = y.min(), y.max()
             n = int(mask.sum())
-            x[mask] = np.random.uniform(x_min, x_max, n)
-            y[mask] = np.random.uniform(y_min, y_max, n)
+            # Uniform inside the disc covered by the scan (not the square bbox)
+            r_max = float(np.hypot(x, y).max())
+            r = r_max * np.sqrt(np.random.uniform(0.0, 1.0, n))
+            theta = np.random.uniform(-np.pi, np.pi, n)
+            x[mask] = r * np.cos(theta)
+            y[mask] = r * np.sin(theta)
 
     return x, y
 
