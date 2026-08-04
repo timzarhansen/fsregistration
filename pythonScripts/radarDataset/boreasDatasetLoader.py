@@ -173,11 +173,13 @@ def get_affine_matrix(input_matrix: np.ndarray,
     Returns:
         3x3 affine matrix suitable for cv2.warpPerspective.
     """
-    input_matrix = np.linalg.inv(input_matrix)
     result = np.eye(3)
     result[:2, :2] = input_matrix[:2, :2]
-    result[0, 2] = -input_matrix[1, 3] / pixel_size
-    result[1, 2] = input_matrix[0, 3] / pixel_size
+    # pyboreas image convention: row = -x_veh/cs (forward = up),
+    # col = y_veh/cs (left = right), so a vehicle translation (tx, ty)
+    # shifts the image by (col, row) = (ty, -tx) pixels.
+    result[0, 2] = input_matrix[1, 3] / pixel_size
+    result[1, 2] = -input_matrix[0, 3] / pixel_size
     # Rotation center compensation (rotate around image center)
     if img_size > 0:
         c = img_size / 2.0

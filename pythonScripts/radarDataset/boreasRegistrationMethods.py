@@ -570,7 +570,8 @@ class SIFTRegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -677,7 +678,8 @@ class SURFRegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -767,7 +769,8 @@ class KAZERegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -869,7 +872,8 @@ class AKAZERegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             src_pts, dst_pts, cell_size, self.ransac_threshold, self.confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -895,7 +899,7 @@ class AKAZERegistration(BaseRegistrationMethod):
         )
 
 
-def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransac_confidence, frame="boreas"):
+def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransac_confidence, frame="boreas", img_size=0):
     """Estimate rigid transform (rotation + translation, scale=1) from matched keypoints and convert to vehicle frame.
 
     Args:
@@ -905,12 +909,17 @@ def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransa
         ransac_threshold: RANSAC reprojection threshold in pixels.
         ransac_confidence: RANSAC confidence level.
         frame: Image-to-vehicle frame convention:
-            "boreas"   - pyboreas convention (row = -x_veh, col = y_veh).
-                         The affine (image 0 -> image 1) is used directly.
-            "lidarsim" - Gazebo-sim convention (col = x_veh, row = y_veh, no
-                         axis swap). The affine maps prev -> curr, but the
-                         required SE3 maps curr -> prev, so the affine is
-                         inverted.
+            "boreas"   - pyboreas convention: x_veh = -row*cell_size,
+                         y_veh = col*cell_size (forward = up).
+            "lidarsim" - Gazebo-sim convention: x_veh = col*cell_size,
+                         y_veh = row*cell_size (no axis swap).
+            Both share the same math: the RANSAC affine maps image 0
+            (prev) -> image 1 (curr), but the required SE3 maps curr ->
+            prev, so the affine is inverted. Images rotate about their
+            center (= vehicle origin), so the rotation-center offset
+            (c - R@c) is subtracted from the translation.
+        img_size: Image width/height N for the rotation center c = N/2.
+                  0 = no center compensation (backward compatible).
 
     Returns:
         (transform, affine, n_inliers, n_matches) or (None, None, 0, n) on failure.
@@ -937,7 +946,10 @@ def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransa
     if inlier_mask is not None and n_inliers >= 2:
         src_flat = src_pts.reshape(-1, 2)
         dst_flat = dst_pts.reshape(-1, 2)
-        mask_flat = inlier_mask.flatten()
+        # inlier_mask is uint8 0/1 from OpenCV; must be cast to bool,
+        # otherwise numpy treats it as INTEGER indices (rows 0/1) and the
+        # translation mean gets polluted by repeated outlier rows.
+        mask_flat = inlier_mask.flatten().astype(bool)
         src_in = src_flat[mask_flat]
         dst_in = dst_flat[mask_flat]
         t_vec = np.mean(dst_in - (R_2x2 @ src_in.T).T, axis=0)
@@ -948,21 +960,25 @@ def _keypoints_to_transform(src_pts, dst_pts, cell_size, ransac_threshold, ransa
         ty_px = affine[1, 2]
 
     transform = np.eye(4)
+    # The affine maps image 0 (prev) -> image 1 (curr) in corner coordinates.
+    # The required SE3 maps curr -> prev, i.e. the inverse of the affine:
+    #   R_T = R(-angle), t_T = -R_T @ t_affine.
+    # Images rotate about their center (= vehicle origin), so in corner
+    # coordinates the affine translation absorbs the offset (c - R_T@c),
+    # which must be subtracted before converting to meters.
+    R_T = R_2x2.T
+    t_T = -R_T @ np.array([tx_px, ty_px])
+    if img_size and img_size > 0:
+        c = img_size / 2.0
+        t_T = t_T - (c - R_T @ np.array([c, c]))
+
+    transform[:3, :3] = R.from_euler("z", -angle_rad).as_matrix()
     if frame == "lidarsim":
-        # The affine maps image 0 (prev) -> image 1 (curr), but the required
-        # SE3 maps curr -> prev, i.e. the inverse of the affine. Gazebo-sim
-        # images map directly to the vehicle frame (col = x_veh, row = y_veh),
-        # so no axis swap is applied (unlike the pyboreas convention below).
-        R_inv = R_2x2.T
-        t_inv = -R_inv @ np.array([tx_px, ty_px])
-        transform[:3, :3] = R.from_euler("z", -angle_rad).as_matrix()
-        transform[:3, 3] = [t_inv[0] * cell_size, t_inv[1] * cell_size, 0.0]
+        # Gazebo-sim: col = x_veh/cs, row = y_veh/cs (no axis swap)
+        transform[:3, 3] = [t_T[0] * cell_size, t_T[1] * cell_size, 0.0]
     else:
-        transform[:3, :3] = R.from_euler("z", angle_rad).as_matrix()
-        # Image frame to vehicle frame (pyboreas convention):
-        #   row = -x_veh/cs (forward = up = decreasing row)
-        #   col =  y_veh/cs (left = right = increasing column)
-        transform[:3, 3] = [ty_px * cell_size, -tx_px * cell_size, 0.0]
+        # pyboreas: row = -x_veh/cs, col = y_veh/cs (forward = up)
+        transform[:3, 3] = [-t_T[1] * cell_size, t_T[0] * cell_size, 0.0]
 
     return transform, affine, n_inliers, len(src_pts)
 
@@ -1048,7 +1064,8 @@ class LoFTRRegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -1161,7 +1178,8 @@ class EfficientLoFTRRegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
@@ -1270,7 +1288,8 @@ class LightGlueRegistration(BaseRegistrationMethod):
         cell_size = self.config.get("size_of_pixel", 0.01)
         transform, affine, n_inliers, n_matches = _keypoints_to_transform(
             mkpts0, mkpts1, cell_size, self.ransac_threshold, self.ransac_confidence,
-            frame=self.config.get("image_frame", "boreas")
+            frame=self.config.get("image_frame", "boreas"),
+            img_size=self.config.get("N", 0)
         )
 
         if transform is None:
