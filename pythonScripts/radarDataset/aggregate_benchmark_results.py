@@ -1,5 +1,6 @@
 import csv
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -8,9 +9,11 @@ import numpy as np
 # ============================================================================
 # Configuration — edit as needed
 # ============================================================================
-INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/ResultsRadar_DFKI/boreas2d")
+INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/2D_registration_results/ResultsRadar_DFKI/boreas2d")
 # INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/paramBenchMethods/benchmark_sweep")
 OUTPUT_PATH = INPUT_FOLDER / "aggregated_results.csv"
+OUTPUT_SUMMARY_PAPER = INPUT_FOLDER / "aggregated_summary_paper.csv"
+OUTPUT_OUTLIER_PAPER = INPUT_FOLDER / "aggregated_outlier_matrix_paper.csv"
 
 OUTLIER_ROT_THRESH_DEG = 10.0
 OUTLIER_TRANS_THRESH_M = 4.0
@@ -159,6 +162,119 @@ def process_subdirectory(subdir: Path) -> dict | None:
     }
 
 
+def collect_raw_data(subdir: Path) -> dict | None:
+    """Extract method, sequence, and raw (rot, trans) pairs from a results.csv."""
+    csv_path = subdir / "results.csv"
+    if not csv_path.is_file():
+        return None
+
+    rows = read_data_rows(csv_path)
+    if not rows:
+        return None
+
+    # Parse metadata from header comments
+    method = None
+    sequence = None
+    with open(csv_path, "r") as f:
+        for line in f:
+            if not line.startswith("#"):
+                break
+            if line.startswith("# method:"):
+                method = line.split(":")[-1].strip()
+            if line.startswith("# sequence:"):
+                sequence = line.split(":")[-1].strip()
+
+    pairs = []
+    for r in rows:
+        nc = numeric_cols(r)
+        gt_trans_norm = np.sqrt(nc["gt_tx_m"]**2 + nc["gt_ty_m"]**2)
+        if gt_trans_norm < MIN_GT_TRANS_M:
+            continue
+        pairs.append((nc["rot_error_deg"], nc["trans_error_m"]))
+
+    if method is None or sequence is None:
+        return None
+
+    return {"method": method, "sequence": sequence, "pairs": pairs}
+
+
+def build_paper_tabulars(raw_data_list: list[dict]) -> None:
+    """Produce two CSV files for the paper:
+    1. aggregated_summary_paper.csv — per-method stats with outlier rejection
+    2. aggregated_outlier_matrix_paper.csv — per-sequence outlier count matrix
+    """
+    # Group pairs by method and count outliers per (sequence, method)
+    # Also track per-sequence total pair counts (use max across methods)
+    method_pairs: dict[str, list] = defaultdict(list)
+    seq_method_outliers: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    seq_total_pairs: dict[str, int] = defaultdict(int)
+
+    for entry in raw_data_list:
+        method = entry["method"]
+        sequence = entry["sequence"]
+        n_pairs = len(entry["pairs"])
+        if n_pairs > seq_total_pairs[sequence]:
+            seq_total_pairs[sequence] = n_pairs
+        for rot, trans in entry["pairs"]:
+            method_pairs[method].append((rot, trans))
+            if abs(rot) > OUTLIER_ROT_THRESH_DEG or trans > OUTLIER_TRANS_THRESH_M:
+                seq_method_outliers[sequence][method] += 1
+
+    # --- Tabular 1: summary with outlier rejection ---
+    methods = sorted(method_pairs.keys())
+    summary_rows = []
+    for method in methods:
+        pairs = method_pairs[method]
+        inlier_rots = []
+        inlier_trans = []
+        outlier_count = 0
+        for rot, trans in pairs:
+            if abs(rot) > OUTLIER_ROT_THRESH_DEG or trans > OUTLIER_TRANS_THRESH_M:
+                outlier_count += 1
+            else:
+                inlier_rots.append(rot)
+                inlier_trans.append(trans)
+
+        rot_s = compute_stats(inlier_rots)
+        trans_s = compute_stats(inlier_trans)
+
+        summary_rows.append({
+            "method": method,
+            "total_pairs": len(pairs),
+            "rot_mean_deg": rot_s["mean"],
+            "rot_std_deg": rot_s["std"],
+            "rot_median_deg": rot_s["median"],
+            "trans_mean_m": trans_s["mean"],
+            "trans_std_m": trans_s["std"],
+            "trans_median_m": trans_s["median"],
+            "outlier_count": outlier_count,
+        })
+
+    summary_fields = [
+        "method", "total_pairs",
+        "rot_mean_deg", "rot_std_deg", "rot_median_deg",
+        "trans_mean_m", "trans_std_m", "trans_median_m", "outlier_count",
+    ]
+    with open(OUTPUT_SUMMARY_PAPER, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=summary_fields)
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    print(f"Paper summary -> {OUTPUT_SUMMARY_PAPER}")
+
+    # --- Tabular 2: per-sequence outlier matrix ---
+    sequences = sorted(seq_method_outliers.keys(), key=int)
+    outlier_fields = ["sequence", "total_pairs"] + methods
+    with open(OUTPUT_OUTLIER_PAPER, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=outlier_fields)
+        writer.writeheader()
+        for seq in sequences:
+            row = {"sequence": seq, "total_pairs": seq_total_pairs.get(seq, 0)}
+            for method in methods:
+                row[method] = seq_method_outliers[seq].get(method, 0)
+            writer.writerow(row)
+    print(f"Paper outlier matrix -> {OUTPUT_OUTLIER_PAPER}")
+
+
 def main():
     if not INPUT_FOLDER.is_dir():
         print(f"ERROR: {INPUT_FOLDER} is not a directory")
@@ -191,6 +307,15 @@ def main():
     print(f"Aggregated {len(results)} runs -> {OUTPUT_PATH}")
     if skipped:
         print(f"Skipped {skipped} subdirectories (no results.csv)")
+
+    # --- Paper tabulars (additional output, same data) ---
+    raw_data_list = []
+    for sd in subdirs:
+        rd = collect_raw_data(sd)
+        if rd is not None:
+            raw_data_list.append(rd)
+
+    build_paper_tabulars(raw_data_list)
 
 
 if __name__ == "__main__":

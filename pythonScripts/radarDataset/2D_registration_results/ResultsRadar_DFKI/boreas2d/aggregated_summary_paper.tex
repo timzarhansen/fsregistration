@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Aggregated registration performance with outlier rejection (N = 38,761 total pairs). Outlier thresholds: rotation $>10^\circ$ or translation $>4$\,m. FS2D produces the fewest outliers (482).}
+\label{tab:reg_summary}
+\small
+\begin{tabular}{lcrcrr}
+\toprule
+{Method} & \multicolumn{2}{c}{Rot. err. (	extdegree )} & \multicolumn{2}{c}{Trans. err. (m)} & {outlier\_count} \\
+\cmidrule(r){2-3}\cmidrule(r){4-5}
+ & {mean $\pm$ std} & {median} & {mean $\pm$ std} & {median} &  \\
+\midrule
+akaze & 0.66 $\pm$ 0.62 & 0.47 & 1.488 $\pm$ 1.001 & 1.242 & 17191 \\
+eloftr & 0.75 $\pm$ 0.95 & 0.43 & 1.848 $\pm$ 1.046 & 1.717 & 22479 \\
+fourier\_mellin & 1.98 $\pm$ 2.43 & 0.76 & 0.569 $\pm$ 0.421 & 0.561 & 5089 \\
+fs2d & \bf{0.57 $\pm$ 0.75} & \bf{0.34} & \bf{0.413 $\pm$ 0.299} & \bf{0.370} & \bf{482} \\
+icp & 1.98 $\pm$ 2.09 & 1.32 & 2.216 $\pm$ 1.148 & 2.322 & 33346 \\
+kaze & 0.64 $\pm$ 0.63 & 0.44 & 1.490 $\pm$ 0.982 & 1.254 & 16489 \\
+lightglue & 0.72 $\pm$ 0.79 & 0.48 & 2.083 $\pm$ 1.009 & 2.048 & 21445 \\
+loftr & 0.73 $\pm$ 0.86 & 0.42 & 1.744 $\pm$ 0.988 & 1.593 & 19897 \\
+ndt\_p2d & 2.42 $\pm$ 2.50 & 1.65 & 2.244 $\pm$ 1.102 & 2.291 & 32024 \\
+sift & 0.70 $\pm$ 0.78 & 0.46 & 1.706 $\pm$ 1.032 & 1.534 & 23880 \\
+\bottomrule
+\end{tabular}
+\end{table}
