@@ -569,6 +569,8 @@ def main():
         try:
             os.makedirs(PLOT_DATA_DIR, exist_ok=True)
             gt_rot, gt_trans = gt_error   # compute_se3_error returns (rot_err_deg, trans_err_m)
+            gt_trans_norm = np.linalg.norm(gt_trans)
+            np.savetxt(os.path.join(PLOT_DATA_DIR, "input1.csv"), img1, fmt='%.10f', delimiter=' ')
             np.savetxt(os.path.join(PLOT_DATA_DIR, "input2.csv"), img2, fmt='%.10f', delimiter=' ')
             header = "frame1,frame2,rot_angle_deg,tx_m,ty_m,confidence,time_ms,gt_rot_err_deg,gt_trans_err_m,N,n_solutions,radius_m,pixel_size_m,method"
             row = [
@@ -594,6 +596,8 @@ def main():
 
         # Print results
         gt_rot, gt_trans = gt_error   # compute_se3_error returns (rot_err_deg, trans_err_m)
+        gt_trans_norm = np.linalg.norm(gt_trans)
+        print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
         print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
