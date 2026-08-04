@@ -90,12 +90,18 @@ class LidarSimSequence:
     get_gt_transform, get_raw_point_cloud).
     """
 
-    def __init__(self, seq_dir: str, noise_level: str = "None"):
+    def __init__(self, seq_dir: str, noise_level: str = "None",
+                 render_mode: str = "gaussian"):
         if noise_level not in _NOISE_PARAMS:
             raise ValueError(
                 f"Unknown noise level: {noise_level!r}. "
                 f"Valid levels: {NOISE_LEVELS}")
+        if render_mode not in ("binary", "gaussian", "average"):
+            raise ValueError(
+                f"Unknown render_mode: {render_mode!r}. "
+                f"Valid modes: binary, gaussian, average")
         self.noise_level = noise_level
+        self.render_mode = render_mode
         self.seq_dir = Path(seq_dir)
         if not self.seq_dir.is_dir():
             raise FileNotFoundError(f"Dataset directory not found: {seq_dir}")
@@ -195,14 +201,21 @@ class LidarSimSequence:
         img = np.zeros((N, N), dtype=np.float64)
         np.add.at(img, (py, px), 1)        # accumulate overlapping hits
 
-        # Binary occupancy: 1 where at least one return, 0 elsewhere
-        img = (img > 0).astype(np.float64)
-
-        # Small blur so feature detectors find gradients on the binary edges
-        # (tiny: keeps noise specks visible, unlike the old full blur)
-        if N >= 20:
-            k = max(3, (N // 28) | 1)      # odd kernel, 9 for N=256
-            img = cv2.GaussianBlur(img, (k, k), 0)
+        if self.render_mode == "average":
+            # Old pipeline: normalize by peak count, then full blur
+            max_val = img.max()
+            if max_val > 0:
+                img /= max_val
+            if N >= 20:
+                k = max(3, (N // 20) | 1)      # odd kernel ≈ N/20 (13 for N=256)
+                img = cv2.GaussianBlur(img, (k, k), 0)
+        else:
+            # Binary occupancy: 1 where at least one return, 0 elsewhere
+            img = (img > 0).astype(np.float64)
+            if self.render_mode == "gaussian" and N >= 20:
+                # Light blur so feature detectors find gradients on binary edges
+                k = max(3, (N // 28) | 1)      # odd kernel, 9 for N=256
+                img = cv2.GaussianBlur(img, (k, k), 0)
 
         return img
 

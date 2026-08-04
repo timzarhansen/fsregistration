@@ -38,12 +38,13 @@ from scipy.spatial.transform import Rotation as R
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
 SEQUENCE_NUMBER = 1
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+RENDER_MODE = "gaussian"  # Options: binary (no blur), gaussian (light blur), average (old pipeline)
+REGISTRATION_METHOD = "loftr"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
 N = 256                         # Image grid size (N x N)
-RADIUS = 15.0                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
+RADIUS = 10.0                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically)
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 1                # Match every Nth scan (1 = consecutive)
@@ -411,6 +412,7 @@ def main():
     print(f"  DATA_DIR: {DATA_DIR}")
     print(f"  SEQUENCE_NUMBER: {SEQUENCE_NUMBER}")
     print(f"  NOISE_LEVEL: {NOISE_LEVEL}")
+    print(f"  RENDER_MODE: {RENDER_MODE}")
     print(f"  DEBUG_MODE: {DEBUG_MODE}")
     print(f"  N: {N}, RADIUS: {RADIUS} m, pixel_size: {SIZE_OF_PIXEL:.3f} m")
     print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
@@ -428,7 +430,7 @@ def main():
             f"(1-{len(sequences)}): {[name for _, name, _ in sequences]}")
     seq_num, seq_name, seq_dir = sequences[SEQUENCE_NUMBER - 1]
     print(f"Loading sequence {seq_num} ({seq_name}) from {DATA_DIR}...")
-    seq = LidarSimSequence(seq_dir, noise_level=NOISE_LEVEL)
+    seq = LidarSimSequence(seq_dir, noise_level=NOISE_LEVEL, render_mode=RENDER_MODE)
     print(f"Sequence has {seq.length} scans")
     print()
 
