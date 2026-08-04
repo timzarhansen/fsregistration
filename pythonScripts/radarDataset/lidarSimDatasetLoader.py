@@ -198,6 +198,12 @@ class LidarSimSequence:
         # Binary occupancy: 1 where at least one return, 0 elsewhere
         img = (img > 0).astype(np.float64)
 
+        # Small blur so feature detectors find gradients on the binary edges
+        # (tiny: keeps noise specks visible, unlike the old full blur)
+        if N >= 20:
+            k = max(3, (N // 28) | 1)      # odd kernel, 9 for N=256
+            img = cv2.GaussianBlur(img, (k, k), 0)
+
         return img
 
     def get_gt_transform(self, prev_idx: int, curr_idx: int) -> np.ndarray:

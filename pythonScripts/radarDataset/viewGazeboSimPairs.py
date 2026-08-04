@@ -38,7 +38,7 @@ from scipy.spatial.transform import Rotation as R
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"
 SEQUENCE_NUMBER = 1
 NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
@@ -82,11 +82,11 @@ FM_HIGHPASS = True
 # SIFT-specific config
 SIFT_NFEATURES = 0
 SIFT_N_OCTAVE_LAYERS = 3
-SIFT_CONTRAST_THRESHOLD = 0.08
+SIFT_CONTRAST_THRESHOLD = 0.04
 SIFT_EDGE_THRESHOLD = 10
 SIFT_SIGMA = 1.6
 SIFT_RATIO_THRESHOLD = 0.75
-SIFT_RANSAC_THRESHOLD = 5.0
+SIFT_RANSAC_THRESHOLD = 1.0
 SIFT_RANSAC_CONFIDENCE = 0.99
 
 # SURF-specific config (requires opencv-contrib-python)
