@@ -39,12 +39,12 @@ NOISE_LEVELS = [
 # noise_level -> (gaussian_std_m, salt_pepper_fraction)
 _NOISE_PARAMS = {
     "None": (0.0, 0.0),
-    "low": (0.01, 0.01),
-    "high": (0.05, 0.05),
-    "low_gauss": (0.01, 0.0),
-    "high_gauss": (0.05, 0.0),
-    "low_salt_pepper": (0.0, 0.01),
-    "high_salt_pepper": (0.0, 0.05),
+    "low": (0.05, 0.05),
+    "high": (0.10, 0.10),
+    "low_gauss": (0.05, 0.0),
+    "high_gauss": (0.10, 0.0),
+    "low_salt_pepper": (0.0, 0.05),
+    "high_salt_pepper": (0.0, 0.10),
 }
 
 
