@@ -195,15 +195,8 @@ class LidarSimSequence:
         img = np.zeros((N, N), dtype=np.float64)
         np.add.at(img, (py, px), 1)        # accumulate overlapping hits
 
-        # Normalise to [0, 1]
-        max_val = img.max()
-        if max_val > 0:
-            img /= max_val
-
-        # Gentle blur for feature-based methods
-        if N >= 20:
-            k = max(3, (N // 20) | 1)      # odd kernel ≈ N/20
-            img = cv2.GaussianBlur(img, (k, k), 0)
+        # Binary occupancy: 1 where at least one return, 0 elsewhere
+        img = (img > 0).astype(np.float64)
 
         return img
 
