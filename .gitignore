@@ -23,3 +23,5 @@ release
 .DS_Store
 config.json
 *.npy
+# Third-party ML registration repos (nested git repos, imported via sys.path)
+pythonScripts/radarDataset/otherMethods/

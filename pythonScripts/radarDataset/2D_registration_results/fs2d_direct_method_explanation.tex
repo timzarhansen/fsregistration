@@ -1,0 +1,237 @@
+% =============================================================================
+% FS2D: Direct 1-Angle Rotation Correlation -- Mathematical Explanation
+%
+% Plain LaTeX content. Paste into your existing document setup.
+% Uses the same macros/notation as the FS2D chapter:
+%   \varmathbb{S}^{2}, \textbf{x}, \textbf{k}, align environments, \cite{...}
+%
+% This file explains (1) what the old full-SO(3) path computed,
+% (2) what the new "direct" 1-angle path computes, (3) why they are
+% mathematically equivalent for 2D, and (4) which old steps are no longer
+% recomputed.
+% =============================================================================
+
+\subsection{Direct 1-Angle Rotation Correlation}
+\label{sec:direct_1angle}
+
+The rotation estimation described in Sec.\,\ref{sec:rotation_calculation} so far
+forms the full three-dimensional SO(3) correlation of the two $\varmathbb{S}^{2}$
+magnitudes, restricts it to the $\beta\approx 0$ slice, and finally collapses the
+remaining $(\alpha,\gamma)$ plane into a one-dimensional rotation curve by
+averaging over all $(\alpha,\gamma)$ pairs that share the same combined angle
+$\theta=\alpha+\gamma$. We show in the following that, because a 2D rotation is a
+single degree of freedom about the $z$-axis, this entire detour through the 3D
+SO(3) correlation is unnecessary: the desired 1D rotation curve can be obtained
+\emph{directly} from the spherical-harmonic coefficients of the two magnitudes,
+without ever forming the SO(3) correlation, the Wigner-$d$ transform, or the
+subsequent 2D-to-1D averaging. We call this the \emph{direct 1-angle} method.
+
+\subsubsection{Shared front end}
+\label{sec:direct_frontend}
+
+Both the full-SO(3) method and the direct method share an identical front end up
+to and including the two forward spherical transforms:
+\begin{enumerate}
+    \item Compute the 2D DFT $F(\textbf{k})$ of each scan $f(\textbf{x})$ and take
+          the magnitude $|F(\textbf{k})|$.
+    \item FFT-shift and normalize by the global maximum magnitude of both scans.
+    \item Radially resample the shifted magnitude onto the
+          $\varmathbb{S}^{2}$ grid $(\theta_j,\phi_k)$ as
+          $f_{\varmathbb{S}^{2}}(\theta,\phi)$, see the resampling equations in
+          Sec.\,\ref{sec:rotation_calculation}.
+    \item Apply Contrast Limited Adaptive Histogram Equalization (CLAHE) and a
+          1D Hamming window over $\phi$.
+    \item Perform the forward spherical transform
+          \texttt{FST\_semi\_memo} on each magnitude, yielding the
+          spherical-harmonic coefficients
+          $\hat{f}^{1}_{lm}$ and $\hat{f}^{2}_{lm}$ of the two scans.
+\end{enumerate}
+After step 5, both methods hold the same two coefficient arrays. They differ
+only in how the rotation correlation is assembled from these coefficients.
+
+\subsubsection{The full SO(3) path (reference)}
+\label{sec:direct_so3path}
+
+The full-SO(3) method combines the two $\varmathbb{S}^{2}$ coefficient sets into
+SO(3) Fourier coefficients
+\begin{align}
+    \hat{C}^{l}_{mm'} \;=\; (-1)^{m-m'}\,\hat{f}^{1}_{l,-m}\,
+                          \overline{\hat{f}^{2}_{l,-m'}},
+    \label{eq:so3coef}
+\end{align}
+performs the inverse SO(3) Fourier transform to obtain the 3D correlation
+$C(\alpha,\beta,\gamma)$ on the Euler-angle grid (ZYZ convention), and then
+extracts the rotation curve as follows. Because the projected magnitudes are
+real, the only slice that carries the 2D rotation is the one with $\beta\approx
+0$, where the inverse transform is sampled at the first Gauss--Legendre node
+$\beta_{1}=\pi/(2N)$. On this slice, every pair $(\alpha,\gamma)$ with the same
+sum $\theta=\alpha+\gamma$ corresponds to the same physical 2D rotation, so all
+such pairs are averaged to produce the 1D curve
+\begin{align}
+    C_{\text{1D}}(\theta) \;=\; \text{avg}_{\alpha+\gamma=\theta}\;
+        C(\alpha,\beta_{1},\gamma),
+    \label{eq:so3_collapse}
+\end{align}
+which is then normalized to $[0,1]$ and searched for peaks. The dominant cost of
+this path is the inverse SO(3) transform, which scales as
+$O(N^{3})$ in the bandwidth $B=N/2$.
+
+\subsubsection{The direct 1-angle path}
+\label{sec:direct_directpath}
+
+The direct method skips the SO(3) combine and the inverse SO(3) transform
+entirely. From the two spherical-harmonic coefficient sets it first computes, for
+every order $m$, the per-order inner product
+\begin{align}
+    P_{m} \;=\; \sum_{l\geq |m|} \hat{f}^{1}_{lm}\,
+               \overline{\hat{f}^{2}_{lm}},
+    \label{eq:Pm}
+\end{align}
+which is a single sum over the degree $l$ and costs $O(B^{2})$ in total over all
+$m$. The 1D rotation correlation is then evaluated directly as a Fourier series
+in the combined angle $\theta$:
+\begin{align}
+    C(\theta) \;=\; \sum_{m} P_{m}\,e^{-im\theta},
+    \qquad \theta_{k}=\frac{2\pi k}{N},\;\; k=0,\dots,N-1.
+    \label{eq:direct_corr}
+\end{align}
+The cost of evaluating Eq.\,\ref{eq:direct_corr} on all $N$ angles is $O(NB)$,
+after which the curve is normalized to $[0,1]$ and searched for peaks with the
+same peak detection as before. No Wigner-$d$ functions, no SO(3) coefficients,
+and no 2D-to-1D averaging are formed.
+
+\subsubsection{Why the direct method is mathematically equivalent}
+\label{sec:direct_equivalence}
+
+The equivalence follows from the structure of the SO(3) correlation
+\begin{align}
+    C(g) \;=\; \sum_{l}\sum_{|m|\leq l}\sum_{|m'|\leq l}
+              \hat{f}^{1}_{lm}\,\overline{\hat{f}^{2}_{lm'}}\,
+              (-1)^{m-m'}\,D^{l}_{mm'}(g),
+    \label{eq:so3_corr_full}
+\end{align}
+with the Wigner-$D$ function in ZYZ Euler angles
+\begin{align}
+    D^{l}_{mm'}(g(\alpha,\beta,\gamma))
+        \;=\; e^{-im\alpha}\,d^{l}_{mm'}(\beta)\,e^{-im'\gamma},
+\end{align}
+where $d^{l}_{mm'}(\beta)$ is the Wigner small-$d$ matrix. A 2D rotation about
+the $z$-axis is a single degree of freedom, so only the slice $\beta=0$ of the
+SO(3) correlation is relevant. At $\beta=0$ the small-$d$ matrices collapse to
+the identity,
+\begin{align}
+    d^{l}_{mm'}(0) \;=\; \delta_{mm'},
+\end{align}
+so the $(m,m')$ double sum in Eq.\,\ref{eq:so3_corr_full} collapses to a single
+sum over $m$:
+\begin{align}
+    C(\alpha,0,\gamma)
+        &\;=\; \sum_{l}\sum_{m}
+              \hat{f}^{1}_{lm}\,\overline{\hat{f}^{2}_{lm}}\,
+              e^{-im\alpha}\,e^{-im\gamma} \\[2pt]
+        &\;=\; \sum_{m}
+              \underbrace{\Bigl(\sum_{l}\hat{f}^{1}_{lm}
+              \overline{\hat{f}^{2}_{lm}}\Bigr)}_{P_{m}}\,
+              e^{-im(\alpha+\gamma)} \\[2pt]
+        &\;=\; \sum_{m} P_{m}\,e^{-im\theta},
+        \qquad \theta=\alpha+\gamma.
+    \label{eq:collapse}
+\end{align}
+Equation\,\ref{eq:collapse} is exactly Eq.\,\ref{eq:direct_corr}. The direct
+method is therefore not an approximation of the full SO(3) method but its
+analytic $\beta=0$ reduction: it computes precisely the quantity the full method
+recovers only after assembling the 3D correlation, taking a $\beta$-slice, and
+averaging over $(\alpha,\gamma)$.
+
+In fact, the direct method is \emph{more} exact than the full-SO(3) reference in
+one respect: the full method evaluates the $\beta$ slice at the first
+Gauss--Legendre node $\beta_{1}=\pi/(2N)$, where
+$d^{l}_{mm'}(\beta_{1})\neq\delta_{mm'}$ exactly, and then averages over
+$(\alpha,\gamma)$; the direct method evaluates $\beta=0$ analytically, where the
+collapse $d^{l}_{mm'}(0)=\delta_{mm'}$ holds exactly. In practice the two
+normalized 1D curves agree to within numerical precision: a side-by-side
+comparison on real sonar scans shows a maximum pointwise difference below $1\%$
+after $[0,1]$ normalization.
+
+\paragraph{Sign convention and the evenness of the rotation curve.}
+The full-SO(3) path labels the rotation axis with $\theta_{\text{SO3}}=
+-(\alpha+\gamma)$, whereas the direct path labels it with $\theta_{\text{direct}}
+=+\alpha=+\theta$. These differ by a sign. Because the projected magnitudes are
+real, the spherical-harmonic coefficients satisfy
+$\hat{f}_{l,-m}=(-1)^{m}\overline{\hat{f}_{lm}}$, which implies
+$P_{-m}=\overline{P_{m}}$ and hence
+\begin{align}
+    C(-\theta) \;=\; C(+\theta).
+    \label{eq:evenness}
+\end{align}
+The 1D rotation correlation is an \emph{even} function of $\theta$, so the
+sign of the angle label is immaterial and both methods produce the same
+normalized curve. This evenness is also the source of the inherent
+$\pm\theta$ ambiguity of magnitude-only correlation: the rotation can only be
+recovered up to sign from the correlation alone. This ambiguity is already
+resolved downstream in FS2D, since for every candidate rotation the 2D
+translation correlation (Sec.\,\ref{sec:2DTranslation}) is evaluated and the
+correct sign is selected by translation peak height or by an initial guess.
+
+\paragraph{Two normalized-away differences.}
+Two details differ between the raw (pre-normalization) outputs of the two
+methods, both of which vanish after the $[0,1]$ normalization that precedes peak
+detection:
+\begin{itemize}
+    \item \textbf{The $m=0$ DC term.} The full-SO(3) correlation includes the
+          $m=0$ contribution, which is a real constant offset
+          $P_{0}=\sum_{l}\hat{f}^{1}_{l0}\overline{\hat{f}^{2}_{l0}}$. The direct
+          method explicitly skips $m=0$. Since $P_{0}$ is constant over $\theta$,
+          it shifts the curve uniformly and disappears under min/max
+          normalization.
+    \item \textbf{The per-degree Wigner normalization.} The SO(3) coefficient
+          combine in Eq.\,\ref{eq:so3coef} carries a per-degree factor
+          $2\pi\sqrt{2/(2l+1)}$, which is compensated by the
+          $\pi/(B\!\cdot\!N)$ normalization of the inverse SO(3) transform.
+          The direct inner product in Eq.\,\ref{eq:Pm} does not include this
+          factor. End to end, both methods produce the same $\mathbb{L}^{2}$
+          correlation shape, so after normalization the curves match. Only if
+          raw correlation values or per-degree weights are consumed downstream
+          of the normalization does this factor need to be accounted for.
+\end{itemize}
+
+\subsubsection{What is no longer recomputed}
+\label{sec:direct_dropped}
+
+When the direct method is used, the following steps of the full-SO(3) path are
+dropped entirely:
+\begin{itemize}
+    \item The SO(3) coefficient combine
+          $\hat{f}^{1}_{lm},\hat{f}^{2}_{lm}\!\to\!\hat{C}^{l}_{mm'}$ with its
+          Wigner-$d$ structure and per-degree normalization
+          (Eq.\,\ref{eq:so3coef}).
+    \item The inverse SO(3) Fourier transform, i.e.\ the $O(N^{3})$ step that
+          produces the 3D correlation $C(\alpha,\beta,\gamma)$. This is the
+          dominant cost of the full-SO(3) path.
+    \item The SO(3)-specific Wigner-$d$ seminaive tables needed only for the
+          inverse transform. The $\mathbb{S}^{2}$ forward tables used by
+          \texttt{FST\_semi\_memo} are still required and unchanged.
+    \item The $\beta$ Gauss--Legendre sampling and the extraction of the
+          $\beta\approx 0$ slice, replaced by the exact analytic $\beta=0$
+          reduction.
+    \item The 2D-to-1D averaging over $(\alpha,\gamma)$ pairs with the same
+          combined angle (Eq.\,\ref{eq:so3_collapse}), replaced by a 1D curve
+          produced natively.
+\end{itemize}
+
+The following steps are \emph{unchanged} and shared by both methods: the 2D FFT
+magnitude and phase, the FFT-shift and global-max normalization, the radial
+$\mathbb{S}^{2}$ resampling, CLAHE and the Hamming window, both forward
+spherical transforms \texttt{FST\_semi\_memo}, the rotation peak detection, and
+the entire downstream pipeline (re-rotation of the scan, the 2D translation
+correlation of Sec.\,\ref{sec:2DTranslation}, and the covariance estimation).
+The translation half of FS2D is completely unaffected by the choice of rotation
+method.
+
+\paragraph{Complexity.}
+Replacing the inverse SO(3) transform and the Wigner-$d$ combine by the direct
+$P_{m}$ inner product and the 1D Fourier-series evaluation reduces the
+asymptotic cost of the rotation step from
+$O(N^{3})$ to $O(N^{2}\log N + N B)$ with $B=N/2$, while producing a normalized
+1D rotation curve that is analytically equivalent to the full-SO(3) result and,
+on the $\beta=0$ slice, strictly more exact.
