@@ -309,7 +309,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
      bool useDirect, bool multipleRadii, bool useClahe,
      bool useHamming, bool debug, BenchmarkTimings2D* timings,
      std::vector<rotationPeakfs2D>* outPeaks,
-     double level_potential_rotation) {
+     double level_potential_rotation, int numAngles) {
     auto spectrumStart = std::chrono::high_resolution_clock::now();
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
         this->phase1, false);
@@ -567,7 +567,8 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
         }
 
         auto extractStart = std::chrono::high_resolution_clock::now();
-        int nAlpha = N;
+        int nAlpha = (numAngles > 0) ? numAngles : N;
+        std::vector<double> corr1D(nAlpha);
         for (int m = 0; m < 2 * bwIn; m++) {
             this->PmR[m] = 0;
             this->PmI[m] = 0;
@@ -604,7 +605,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
                 double phase = -m * alpha;
                 corrR += this->PmR[mPos] * cos(phase) - this->PmI[mPos] * sin(phase);
             }
-            this->correlation1D[k] = corrR;
+            corr1D[k] = corrR;
         }
 
         if (debug) {
@@ -613,7 +614,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
             corrFile.open(DEBUG_RESULTS_2D "correlation1D_1angle.csv");
             PmFile.open(DEBUG_RESULTS_2D "Pm_1angle.csv");
             for (int k = 0; k < nAlpha; k++) {
-                corrFile << this->correlation1D[k] << "\n";
+                corrFile << corr1D[k] << "\n";
             }
             for (int m = 0; m < 2 * bwIn; m++) {
                 PmFile << this->PmR[m] << "," << this->PmI[m] << "\n";
@@ -625,7 +626,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
         std::vector<float> correlationAveraged(nAlpha);
         std::vector<float> angleList(nAlpha);
         for (int k = 0; k < nAlpha; k++) {
-            correlationAveraged[k] = (float)this->correlation1D[k];
+            correlationAveraged[k] = (float)corr1D[k];
             angleList[k] = (float)(2.0 * M_PI * k / nAlpha);
         }
 
@@ -710,9 +711,11 @@ softRegistrationClass::compute1AngleCorrelationArraySO3(double voxelData1Input[]
 
 std::pair<std::vector<float>, std::vector<float>>
 softRegistrationClass::compute1AngleCorrelationArrayDirect(double voxelData1Input[], double voxelData2Input[],
-    bool multipleRadii, bool useClahe, bool useHamming, bool debug) {
+    bool multipleRadii, bool useClahe, bool useHamming, bool debug, int numAngles) {
     auto result = computeRotationCorrelation1D(voxelData1Input, voxelData2Input,
-        /*useDirect=*/true, multipleRadii, useClahe, useHamming, debug, nullptr);
+        /*useDirect=*/true, multipleRadii, useClahe, useHamming, debug,
+        /*timings=*/nullptr, /*outPeaks=*/nullptr,
+        /*level_potential_rotation=*/0.1, numAngles);
     if (debug) {
         generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
         std::ofstream myFile;

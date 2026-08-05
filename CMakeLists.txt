@@ -170,6 +170,25 @@ target_link_libraries(test_1angle_comparison
 )
 target_include_directories(test_1angle_comparison PUBLIC ${OpenCV_INCLUDE_DIRS})
 
+# numAngles test executable (direct 1-angle method with configurable grid)
+add_executable(test_more_angles
+    src/test_more_angles.cpp
+    src/softRegistrationClass.cpp
+    src/softCorrelationClass.cpp
+    src/PeakFinder.cpp
+    include/PeakFinder.h
+)
+
+target_link_libraries(test_more_angles
+    fftw3
+    generalhelpfullib
+    soft20::soft20
+    findpeaks
+    ${OpenCV_LIBS}
+    OpenMP::OpenMP_CXX
+)
+target_include_directories(test_more_angles PUBLIC ${OpenCV_INCLUDE_DIRS})
+
 # Full 2D registration comparison test executable
 add_executable(test_full_registration_comparison2D
     src/test_full_registration_comparison2D.cpp

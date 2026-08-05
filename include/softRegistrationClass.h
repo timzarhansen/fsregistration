@@ -267,7 +267,7 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
     compute1AngleCorrelationArrayDirect(double voxelData1Input[], double voxelData2Input[],
                                          bool multipleRadii = false,
                                          bool useClahe = true, bool useHamming = true,
-                                         bool debug = false);
+                                         bool debug = false, int numAngles = -1);
 
     std::vector<translationPeakfs2D>
     peakDetectionOf2DCorrelationSimpleDouble1D(double maximumCorrelation, double cellSize, int impactOfNoiseFactor = 2,
@@ -350,7 +350,8 @@ private://here everything is created. malloc is done in the constructor
                                                             bool useDirect, bool multipleRadii, bool useClahe,
                                                             bool useHamming, bool debug, BenchmarkTimings2D* timings,
                                                             std::vector<rotationPeakfs2D>* outPeaks = nullptr,
-                                                            double level_potential_rotation = 0.1);
+                                                            double level_potential_rotation = 0.1,
+                                                            int numAngles = -1);
 
     rotationPeakfs2D findClosestRotationAngle(const std::vector<rotationPeakfs2D>& allAnglesList, double goodGuessAlpha);
 
