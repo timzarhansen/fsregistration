@@ -52,6 +52,7 @@ START_FRAME = 10                  # First scan index
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewGazeboSimOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
+NUM_ANGLES = -1                # Rotation grid size for the direct 1-angle method (-1 = N, i.e. image size)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
@@ -148,7 +149,7 @@ LIGHTGLUE_RANSAC_CONFIDENCE = 0.99  # RANSAC confidence
 def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, NOISE_LEVEL, N, RADIUS, SIZE_OF_PIXEL
-    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND
+    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
     global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT
@@ -210,6 +211,7 @@ def get_config_from_file():
     MAX_FRAMES = extract_var("MAX_FRAMES", MAX_FRAMES)
     OUTPUT_DIR = extract_var("OUTPUT_DIR", OUTPUT_DIR)
     USE_DIRECT = extract_var("USE_DIRECT", USE_DIRECT)
+    NUM_ANGLES = extract_var("NUM_ANGLES", NUM_ANGLES)
     LEVEL_POTENTIAL_ROTATION = extract_var("LEVEL_POTENTIAL_ROTATION", LEVEL_POTENTIAL_ROTATION)
     POTENTIAL_NECCESSARY_FOR_PEAK = extract_var("POTENTIAL_NECCESSARY_FOR_PEAK", POTENTIAL_NECCESSARY_FOR_PEAK)
     ROUND = extract_var("ROUND", ROUND)
@@ -449,6 +451,7 @@ def main():
         "multiple_radii": True,
         "use_gauss": False,
         "use_direct": USE_DIRECT,
+        "num_angles": NUM_ANGLES,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
         "use_weighted_peak_score": True,

@@ -683,11 +683,11 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
      bool useHamming,
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
-     bool useDirect) {
+     bool useDirect, int numAngles) {
 
     std::vector<rotationPeakfs2D> peaks;
     auto result = computeRotationCorrelation1D(voxelData1Input, voxelData2Input,
-        useDirect, multipleRadii, useClahe, useHamming, debug, timings, &peaks, level_potential_rotation);
+        useDirect, multipleRadii, useClahe, useHamming, debug, timings, &peaks, level_potential_rotation, numAngles);
 
     return peaks;
 }
@@ -1012,7 +1012,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
      int normalization,
-     bool usePhaseCorrelation) {
+     bool usePhaseCorrelation, int numAngles) {
 
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
@@ -1024,10 +1024,10 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
         debug, multipleRadii, useClahe,
-        useHamming, pTimings, level_potential_rotation, useDirect);
+        useHamming, pTimings, level_potential_rotation, useDirect, numAngles);
 
-    int numAngles = estimatedAnglePeak.size();
-    listOfTransformations.reserve(numAngles);
+    int numAnglePeaks = estimatedAnglePeak.size();
+    listOfTransformations.reserve(numAnglePeaks);
 
     std::vector<double> voxelData1_local(this->N * this->N);
     std::vector<double> voxelData2_local(this->N * this->N);
@@ -1036,7 +1036,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     double totalTranslationTime = 0;
     std::vector<double> transPerAngleTimes;
 
-    for (int angleIndex = 0; angleIndex < numAngles; angleIndex++) {
+    for (int angleIndex = 0; angleIndex < numAnglePeaks; angleIndex++) {
             auto& estimatedAngle = estimatedAnglePeak[angleIndex];
 
             auto preprocessStart = std::chrono::high_resolution_clock::now();
@@ -1087,7 +1087,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     }
 
     if (benchmark || timings) {
-        localTimings.numAngles = numAngles;
+        localTimings.numAngles = numAnglePeaks;
         localTimings.totalTransPeaks = totalTransPeaks;
         localTimings.totalTranslationTime = totalTranslationTime;
         localTimings.transPreprocessingTime = totalPreprocessingTime;

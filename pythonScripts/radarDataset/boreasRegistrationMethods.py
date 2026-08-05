@@ -164,6 +164,7 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.multiple_radii = config.get("multiple_radii", True)
         self.use_gauss = config.get("use_gauss", False)
         self.use_direct = config.get("use_direct", False)
+        self.num_angles = config.get("num_angles", -1)
         self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
         self.normalization = config.get("normalization", 1)
         self.use_weighted_peak_score = config.get("use_weighted_peak_score", True)
@@ -188,6 +189,7 @@ class FS2DRegistration(BaseRegistrationMethod):
             useClahe=self.use_clahe,
             useHamming=self.use_hamming,
             useDirect=self.use_direct,
+            numAngles=self.num_angles,
             levelPotentialRotation=self.level_potential_rotation,
             normalization=self.normalization,
             usePhaseCorrelation=self.use_phase_correlation

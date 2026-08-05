@@ -205,7 +205,7 @@ public:
                                                     bool useClahe = true, bool useHamming = true,
                                                     BenchmarkTimings2D* timings = nullptr,
                                                     double level_potential_rotation = 0.1,
-                                                    bool useDirect = false);
+                                                    bool useDirect = false, int numAngles = -1);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -239,7 +239,8 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                       BenchmarkTimings2D* timings = nullptr,
                                                                                       double level_potential_rotation = 0.0,
                                                                                       int normalization = 1,
-                                                                                      bool usePhaseCorrelation = false);
+                                                                                      bool usePhaseCorrelation = false,
+                                                                                      int numAngles = -1);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
