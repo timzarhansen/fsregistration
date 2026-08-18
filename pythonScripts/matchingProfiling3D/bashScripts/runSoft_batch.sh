@@ -42,8 +42,17 @@ fi
 
 echo "Noise levels to process: ${NOISE_LEVELS[*]}"
 
+DATA_TYPES=()
+if [ -n "${DATA_SUBSET:-}" ]; then
+    IFS=',' read -ra DATA_TYPES <<< "$DATA_SUBSET"
+else
+    DATA_TYPES=(val train)
+fi
+
+echo "Data types to process: ${DATA_TYPES[*]}"
+
 for noise_level in "${NOISE_LEVELS[@]}"; do
-    for data_type in val train; do
+    for data_type in "${DATA_TYPES[@]}"; do
         echo ""
         echo "=============================================="
         echo "Processing: $noise_level / $data_type"
