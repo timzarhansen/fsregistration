@@ -41,7 +41,7 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config

@@ -37,9 +37,9 @@ from scipy.spatial.transform import Rotation as R
 # ============================================================================
 DATA_DIR = "/home/tim-external/dataFolder/2D-Scan-Gazebo-Dataset"  # Dataset root (2D-Scan-Gazebo, maze worlds)
 SEQUENCE_NUMBER = 1                                              # Which sequence/world to load (1..N, listed at startup)
-NOISE_LEVEL = "None"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
-RENDER_MODE = "average"  # Options: binary (no blur), gaussian (light blur), average (old pipeline)
-REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+NOISE_LEVEL = "high"  # Options: None, low, high, low_gauss, high_gauss, low_salt_pepper, high_salt_pepper
+RENDER_MODE = "binary"  # Options: binary (no blur), gaussian (light blur), average (old pipeline)
+REGISTRATION_METHOD = "lightglue"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
