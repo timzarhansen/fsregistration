@@ -1,31 +1,60 @@
 #!/usr/bin/env python3
 """Convert paper CSV outputs to LaTeX tabulars.
 
-Reads the two _paper.csv files from aggregate_benchmark_results.py and
+Reads the _paper.csv files produced by aggregate_benchmark_results.py and
 generates corresponding .tex table files with booktabs + siunitx formatting.
 
 Usage:
-    python3 csv_to_latex.py \\
-        --summary path/to/aggregated_summary_paper.csv \\
-        --outlier path/to/aggregated_outlier_matrix_paper.csv
+    python3 csv_to_latex.py
 """
 
-import argparse
 import csv
 import math
+import sys
 from pathlib import Path
 
 
 # ============================================================================
 # Configuration — edit as needed
 # ============================================================================
+RESULTS_BASE = Path(__file__).resolve().parent / "ResultsRadar_DFKI"
 
-# Default input files (edit these to run without CLI args)
-INPUT_SUMMARY = Path(__file__).parent / "ResultsRadar_DFKI" / "boreas2d" / "aggregated_summary_paper.csv"
-INPUT_OUTLIER = Path(__file__).parent / "ResultsRadar_DFKI" / "boreas2d" / "aggregated_outlier_matrix_paper.csv"
+# Map dataset name → list of (output_prefix, summary_csv, outlier_csv)
+# For datasets without noise variants: one entry.
+# For simulation: one entry per noise level.
+SIMULATION_NOISE_LEVELS = [
+    "base", "high", "low",
+    "high_gauss", "high_salt_pepper",
+    "low_gauss", "low_salt_pepper",
+]
+
+DATASETS: dict[str, list[tuple[str, Path, Path]]] = {
+    "boreas": [
+        (
+            "boreas",
+            RESULTS_BASE / "boreas2d" / "boreas_aggregated_summary_paper.csv",
+            RESULTS_BASE / "boreas2d" / "boreas_aggregated_outlier_matrix_paper.csv",
+        ),
+    ],
+    "bremen": [
+        (
+            "bremen",
+            RESULTS_BASE / "bremenmss2d" / "bremen_aggregated_summary_paper.csv",
+            RESULTS_BASE / "bremenmss2d" / "bremen_aggregated_outlier_matrix_paper.csv",
+        ),
+    ],
+    "simulation": [
+        (
+            f"simulation_{noise}",
+            RESULTS_BASE / "simulation_gazebo_scans" / f"simulation_{noise}_aggregated_summary_paper.csv",
+            RESULTS_BASE / "simulation_gazebo_scans" / f"simulation_{noise}_aggregated_outlier_matrix_paper.csv",
+        )
+        for noise in SIMULATION_NOISE_LEVELS
+    ],
+}
 
 # Bold the best value in each column by default
-BOLD_BEST_DEFAULT = True
+BOLD_BEST = True
 
 # Decimal places per column (summary table)
 PRECISION: dict[str, int] = {
@@ -83,6 +112,13 @@ def format_value(val, decimals: int) -> str:
     return f"{float(val):.{decimals}f}"
 
 
+def read_csv(path: Path) -> list[dict]:
+    """Read a CSV file and return a list of row dicts (all values as strings)."""
+    with open(path, "r") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+
 # ============================================================================
 # Table generators
 # ============================================================================
@@ -136,9 +172,6 @@ def generate_summary_table(rows: list[dict], bold_best: bool = False) -> str:
             best_vals[outlier_col] = min(valid_oc)
 
     # Build column spec: method | (mean\pmstd, median) x2 | outlier
-    # Plain c/r columns (right-aligned) instead of siunitx S:
-    # all values in a column share the same format, so right-alignment
-    # gives identical decimal alignment — and \bf{} works reliably.
     spec = "l" + "cr" * len(groups) + "r"
 
     # Build header: two-level
@@ -190,7 +223,6 @@ def generate_summary_table(rows: list[dict], bold_best: bool = False) -> str:
     lines.append(" & ".join(header_bot) + " \\\\")
     lines.append("\\midrule")
 
-    # Helper to check if a value is the best
     def _is_best(col: str, raw_val) -> bool:
         if not bold_best or col not in best_vals:
             return False
@@ -201,7 +233,6 @@ def generate_summary_table(rows: list[dict], bold_best: bool = False) -> str:
             return False
 
     def _maybe_bold(col: str, raw_val, formatted: str) -> str:
-        """Wrap a value in \\bf{} if it is the best in its column."""
         if _is_best(col, raw_val):
             return f"\\bf{{{formatted}}}"
         return formatted
@@ -211,26 +242,22 @@ def generate_summary_table(rows: list[dict], bold_best: bool = False) -> str:
         method = row.get("method", "")
         cells = [latex_escape(method)]
         for mean_col, std_col, median_col, _ in groups:
-            # Build mean $\\pm$ std cell
             mean_raw = row.get(mean_col)
             std_raw = row.get(std_col)
             d = PRECISION.get(mean_col, 2)
             mean_str = format_value(mean_raw, d)
             std_str = format_value(std_raw, d)
             combined = f"{mean_str} $\\pm$ {std_str}"
-            # Bold entire combined cell if mean is best
             if _is_best(mean_col, mean_raw):
                 combined = f"\\bf{{{combined}}}"
             cells.append(combined)
 
-            # Median cell
             med_raw = row.get(median_col)
             d_m = PRECISION.get(median_col, 2)
             med_str = format_value(med_raw, d_m)
             med_str = _maybe_bold(median_col, med_raw, med_str)
             cells.append(med_str)
 
-        # Outlier count
         oc_raw = row.get(outlier_col)
         oc_str = format_value(oc_raw, 0)
         oc_str = _maybe_bold(outlier_col, oc_raw, oc_str)
@@ -255,20 +282,18 @@ def generate_outlier_matrix(rows: list[dict]) -> str:
     if not rows:
         return ""
 
-    # Detect columns: sequence is first, total_pairs is second, then method columns
     all_keys = list(rows[0].keys())
     seq_col = all_keys[0]  # 'sequence'
     total_col = all_keys[1]  # 'total_pairs'
     methods = sorted(all_keys[2:])
     n_methods = len(methods)
 
-    # Column spec: sequence + one S per method + total_pairs
     spec = "l" + OUTLIER_CELL_FORMAT * n_methods + OUTLIER_CELL_FORMAT
 
     lines = []
     lines.append("\\begin{table}[t]")
     lines.append("\\centering")
-    lines.append("\\caption{Outlier counts per sequence and method. The ``Total'' column shows "
+    lines.append("\\caption{Outlier counts per sequence and method. The ``Total'' shows "
                  "the number of registration pairs in each sequence.}")
     lines.append("\\label{tab:outlier_matrix}")
     lines.append("\\small")
@@ -276,7 +301,6 @@ def generate_outlier_matrix(rows: list[dict]) -> str:
     lines.append(f"\\begin{{tabular}}{{{spec}}}")
     lines.append("\\toprule")
 
-    # Header
     header_cells = ["{Seq}"]
     for m in methods:
         header_cells.append(f"{{{latex_escape(m)}}}")
@@ -284,7 +308,6 @@ def generate_outlier_matrix(rows: list[dict]) -> str:
     lines.append(" & ".join(header_cells) + " \\\\")
     lines.append("\\midrule")
 
-    # Data rows
     for row in rows:
         seq = row.get(seq_col, "")
         cells = [latex_escape(seq)]
@@ -292,7 +315,6 @@ def generate_outlier_matrix(rows: list[dict]) -> str:
             val = row.get(m, "0")
             formatted = format_value(val, 0)
             cells.append(formatted)
-        # Total column
         total_val = row.get(total_col, "0")
         total_formatted = format_value(total_val, 0)
         cells.append(total_formatted)
@@ -312,73 +334,41 @@ def generate_outlier_matrix(rows: list[dict]) -> str:
 # ============================================================================
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Convert aggregate_benchmark_results _paper CSVs to LaTeX tabulars."
-    )
-    parser.add_argument(
-        "--summary",
-        default=str(INPUT_SUMMARY),
-        help=f"Path to aggregated_summary_paper.csv (default: {INPUT_SUMMARY})",
-    )
-    parser.add_argument(
-        "--outlier",
-        default=str(INPUT_OUTLIER),
-        help=f"Path to aggregated_outlier_matrix_paper.csv (default: {INPUT_OUTLIER})",
-    )
-    parser.add_argument(
-        "--bold-best",
-        action="store_true",
-        default=BOLD_BEST_DEFAULT,
-        help="Bold the best (lowest) value in each numeric column of the summary table",
-    )
-    parser.add_argument(
-        "--outdir",
-        default=None,
-        help="Output directory for .tex files (default: same directory as input CSVs)",
-    )
-    args = parser.parse_args()
+    for dataset_name, entries in DATASETS.items():
+        print(f"\n{'='*60}")
+        print(f"Dataset: {dataset_name}")
+        print(f"{'='*60}")
 
-    summary_path = Path(args.summary)
-    outlier_path = Path(args.outlier)
+        for prefix, summary_csv, outlier_csv in entries:
+            print(f"\n  {prefix}:")
 
-    if not summary_path.is_file():
-        print(f"ERROR: --summary file not found: {summary_path}")
-        sys.exit(1)
-    if not outlier_path.is_file():
-        print(f"ERROR: --outlier file not found: {outlier_path}")
-        sys.exit(1)
+            if not summary_csv.is_file():
+                print(f"    SKIP: summary CSV not found: {summary_csv.name}")
+                continue
+            if not outlier_csv.is_file():
+                print(f"    SKIP: outlier CSV not found: {outlier_csv.name}")
+                continue
 
-    outdir = Path(args.outdir) if args.outdir else summary_path.parent
-    outdir.mkdir(parents=True, exist_ok=True)
+            outdir = summary_csv.parent
+            summary_rows = read_csv(summary_csv)
+            outlier_rows = read_csv(outlier_csv)
 
-    # Read CSVs
-    summary_rows = read_csv(summary_path)
-    outlier_rows = read_csv(outlier_path)
+            if summary_rows:
+                tex_summary = generate_summary_table(summary_rows, bold_best=BOLD_BEST)
+                out_summary = outdir / f"{prefix}_aggregated_summary_paper.tex"
+                out_summary.write_text(tex_summary)
+                print(f"    Written: {out_summary.name}")
+            else:
+                print(f"    WARNING: summary CSV empty, no .tex generated")
 
-    if not summary_rows:
-        print("WARNING: summary CSV is empty — no .tex generated")
-    else:
-        tex_summary = generate_summary_table(summary_rows, bold_best=args.bold_best)
-        out_summary = outdir / "aggregated_summary_paper.tex"
-        out_summary.write_text(tex_summary)
-        print(f"Written: {out_summary}")
-
-    if not outlier_rows:
-        print("WARNING: outlier CSV is empty — no .tex generated")
-    else:
-        tex_outlier = generate_outlier_matrix(outlier_rows)
-        out_outlier = outdir / "aggregated_outlier_matrix_paper.tex"
-        out_outlier.write_text(tex_outlier)
-        print(f"Written: {out_outlier}")
-
-
-def read_csv(path: Path) -> list[dict]:
-    """Read a CSV file and return a list of row dicts (all values as strings)."""
-    with open(path, "r") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
+            if outlier_rows:
+                tex_outlier = generate_outlier_matrix(outlier_rows)
+                out_outlier = outdir / f"{prefix}_aggregated_outlier_matrix_paper.tex"
+                out_outlier.write_text(tex_outlier)
+                print(f"    Written: {out_outlier.name}")
+            else:
+                print(f"    WARNING: outlier CSV empty, no .tex generated")
 
 
 if __name__ == "__main__":
-    import sys
     main()

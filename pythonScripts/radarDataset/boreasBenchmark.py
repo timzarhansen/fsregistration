@@ -98,6 +98,8 @@ def run_benchmark(
     output_dir: str,
     pcd1: Optional[np.ndarray] = None,
     pcd2: Optional[np.ndarray] = None,
+    use_raw_pointcloud: bool = False,
+    raw_intensity_threshold: float = 0.3,
 ) -> Tuple[Path, dict]:
     """Run benchmark on a single sequence with a single method.
 
@@ -113,6 +115,9 @@ def run_benchmark(
         output_dir: Base output directory.
         pcd1: Optional raw point cloud for first frame (used by ICP/NDT).
         pcd2: Optional raw point cloud for second frame (used by ICP/NDT).
+        use_raw_pointcloud: If True, load raw point clouds per-pair (correct
+            for ICP/NDT) instead of relying on precomputed pcd1/pcd2.
+        raw_intensity_threshold: Intensity floor for raw point clouds.
 
     Returns:
         Tuple of (results_csv_path, summary_dict).
@@ -189,7 +194,12 @@ def run_benchmark(
             # Run registration
             t0 = time.time()
             reg_kwargs = {}
-            if pcd1 is not None and pcd2 is not None:
+            if use_raw_pointcloud:
+                # Load the correct clouds for THIS pair (per-pair, not the
+                # sequence's first/last frame). Needed for realistic ICP/NDT.
+                reg_kwargs["pcd1"] = seq.get_raw_point_cloud(prev_idx, raw_intensity_threshold)
+                reg_kwargs["pcd2"] = seq.get_raw_point_cloud(curr_idx, raw_intensity_threshold)
+            elif pcd1 is not None and pcd2 is not None:
                 reg_kwargs["pcd1"] = pcd1
                 reg_kwargs["pcd2"] = pcd2
             result = method.register(img_prev, img_curr, **reg_kwargs)

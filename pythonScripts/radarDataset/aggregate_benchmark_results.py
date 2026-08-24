@@ -1,4 +1,5 @@
 import csv
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -9,16 +10,45 @@ import numpy as np
 # ============================================================================
 # Configuration — edit as needed
 # ============================================================================
-INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/2D_registration_results/ResultsRadar_DFKI/boreas2d")
-# INPUT_FOLDER = Path("/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/paramBenchMethods/benchmark_sweep")
-OUTPUT_PATH = INPUT_FOLDER / "aggregated_results.csv"
-OUTPUT_SUMMARY_PAPER = INPUT_FOLDER / "aggregated_summary_paper.csv"
-OUTPUT_OUTLIER_PAPER = INPUT_FOLDER / "aggregated_outlier_matrix_paper.csv"
+RESULTS_BASE = Path(__file__).resolve().parent / "2D_registration_results" / "ResultsRadar_DFKI"
+
+DATASETS = {
+    "boreas": RESULTS_BASE / "boreas2d",
+    "bremen": RESULTS_BASE / "bremenmss2d",
+    "simulation": RESULTS_BASE / "simulation_gazebo_scans",
+}
 
 OUTLIER_ROT_THRESH_DEG = 10.0
 OUTLIER_TRANS_THRESH_M = 4.0
 MIN_GT_TRANS_M = 0.01
 
+
+# ============================================================================
+# Directory name parser (for simulation noise variants)
+# ============================================================================
+DIR_PATTERN = re.compile(r"seq(\d+)_(.+)_N(\d+)_p(\d+)_s(\d+)(?:_(.*))?")
+
+
+def parse_dir_name(name: str) -> dict | None:
+    """Extract seq, method, N, p, s and noise level from a directory name
+    like 'seq01_fourier_mellin_N256_p23_s1_high_gauss'.
+    Runs without a noise suffix get noise = 'base'."""
+    m = DIR_PATTERN.match(name)
+    if not m:
+        return None
+    return {
+        "seq": int(m.group(1)),
+        "method": m.group(2),
+        "N": int(m.group(3)),
+        "p": int(m.group(4)),
+        "s": int(m.group(5)),
+        "noise": m.group(6) if m.group(6) else "base",
+    }
+
+
+# ============================================================================
+# CSV helpers
+# ============================================================================
 
 def read_data_rows(filepath: Path) -> list[dict]:
     rows = []
@@ -163,7 +193,7 @@ def process_subdirectory(subdir: Path) -> dict | None:
 
 
 def collect_raw_data(subdir: Path) -> dict | None:
-    """Extract method, sequence, and raw (rot, trans) pairs from a results.csv."""
+    """Extract method, sequence, noise, and raw (rot, trans) pairs from a results.csv."""
     csv_path = subdir / "results.csv"
     if not csv_path.is_file():
         return None
@@ -184,6 +214,10 @@ def collect_raw_data(subdir: Path) -> dict | None:
             if line.startswith("# sequence:"):
                 sequence = line.split(":")[-1].strip()
 
+    # Parse noise level from directory name
+    dir_info = parse_dir_name(subdir.name)
+    noise = dir_info["noise"] if dir_info else "base"
+
     pairs = []
     for r in rows:
         nc = numeric_cols(r)
@@ -195,14 +229,17 @@ def collect_raw_data(subdir: Path) -> dict | None:
     if method is None or sequence is None:
         return None
 
-    return {"method": method, "sequence": sequence, "pairs": pairs}
+    return {"method": method, "sequence": sequence, "noise": noise, "pairs": pairs}
 
 
-def build_paper_tabulars(raw_data_list: list[dict]) -> None:
+def build_paper_tabulars(raw_data_list: list[dict], output_dir: Path, prefix: str) -> None:
     """Produce two CSV files for the paper:
-    1. aggregated_summary_paper.csv — per-method stats with outlier rejection
-    2. aggregated_outlier_matrix_paper.csv — per-sequence outlier count matrix
+    1. {prefix}_aggregated_summary_paper.csv — per-method stats with outlier rejection
+    2. {prefix}_aggregated_outlier_matrix_paper.csv — per-sequence outlier count matrix
     """
+    summary_path = output_dir / f"{prefix}_aggregated_summary_paper.csv"
+    outlier_path = output_dir / f"{prefix}_aggregated_outlier_matrix_paper.csv"
+
     # Group pairs by method and count outliers per (sequence, method)
     # Also track per-sequence total pair counts (use max across methods)
     method_pairs: dict[str, list] = defaultdict(list)
@@ -255,16 +292,16 @@ def build_paper_tabulars(raw_data_list: list[dict]) -> None:
         "rot_mean_deg", "rot_std_deg", "rot_median_deg",
         "trans_mean_m", "trans_std_m", "trans_median_m", "outlier_count",
     ]
-    with open(OUTPUT_SUMMARY_PAPER, "w", newline="") as f:
+    with open(summary_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=summary_fields)
         writer.writeheader()
         writer.writerows(summary_rows)
-    print(f"Paper summary -> {OUTPUT_SUMMARY_PAPER}")
+    print(f"Paper summary -> {summary_path}")
 
     # --- Tabular 2: per-sequence outlier matrix ---
     sequences = sorted(seq_method_outliers.keys(), key=int)
     outlier_fields = ["sequence", "total_pairs"] + methods
-    with open(OUTPUT_OUTLIER_PAPER, "w", newline="") as f:
+    with open(outlier_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=outlier_fields)
         writer.writeheader()
         for seq in sequences:
@@ -272,50 +309,74 @@ def build_paper_tabulars(raw_data_list: list[dict]) -> None:
             for method in methods:
                 row[method] = seq_method_outliers[seq].get(method, 0)
             writer.writerow(row)
-    print(f"Paper outlier matrix -> {OUTPUT_OUTLIER_PAPER}")
+    print(f"Paper outlier matrix -> {outlier_path}")
 
 
 def main():
-    if not INPUT_FOLDER.is_dir():
-        print(f"ERROR: {INPUT_FOLDER} is not a directory")
-        sys.exit(1)
+    for dataset_name, input_folder in DATASETS.items():
+        print(f"\n{'='*60}")
+        print(f"Dataset: {dataset_name} ({input_folder})")
+        print(f"{'='*60}")
 
-    subdirs = sorted(d for d in INPUT_FOLDER.iterdir() if d.is_dir())
-    if not subdirs:
-        print(f"No subdirectories found in {INPUT_FOLDER}")
-        sys.exit(1)
+        if not input_folder.is_dir():
+            print(f"  WARNING: directory not found, skipping")
+            continue
 
-    results = []
-    skipped = 0
-    for sd in subdirs:
-        row = process_subdirectory(sd)
-        if row is not None:
-            results.append(row)
+        subdirs = sorted(d for d in input_folder.iterdir() if d.is_dir())
+        if not subdirs:
+            print(f"  WARNING: no subdirectories found, skipping")
+            continue
+
+        # --- General aggregated results (all runs, one row per subdir) ---
+        results = []
+        skipped = 0
+        for sd in subdirs:
+            row = process_subdirectory(sd)
+            if row is not None:
+                results.append(row)
+            else:
+                skipped += 1
+
+        if not results:
+            print(f"  WARNING: no valid results.csv found, skipping")
+            continue
+
+        agg_path = input_folder / "aggregated_results.csv"
+        columns = list(results[0].keys())
+        with open(agg_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(results)
+        print(f"  Aggregated {len(results)} runs -> {agg_path}")
+        if skipped:
+            print(f"  Skipped {skipped} subdirectories (no results.csv)")
+
+        # --- Paper tabulars ---
+        raw_data_list = []
+        for sd in subdirs:
+            rd = collect_raw_data(sd)
+            if rd is not None:
+                raw_data_list.append(rd)
+
+        if not raw_data_list:
+            print(f"  WARNING: no raw data for paper tabulars")
+            continue
+
+        # Detect noise levels present in this dataset
+        noise_levels = sorted({e["noise"] for e in raw_data_list})
+
+        if noise_levels == ["base"]:
+            # No noise variants — single paper tabular set
+            build_paper_tabulars(raw_data_list, input_folder, dataset_name)
         else:
-            skipped += 1
+            # Multiple noise levels — one tabular set per level
+            for noise in noise_levels:
+                filtered = [e for e in raw_data_list if e["noise"] == noise]
+                prefix = f"{dataset_name}_{noise}"
+                print(f"\n  Noise level: {noise} ({len(filtered)} entries)")
+                build_paper_tabulars(filtered, input_folder, prefix)
 
-    if not results:
-        print("No valid results.csv found in any subdirectory")
-        sys.exit(1)
-
-    columns = list(results[0].keys())
-    with open(OUTPUT_PATH, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=columns)
-        writer.writeheader()
-        writer.writerows(results)
-
-    print(f"Aggregated {len(results)} runs -> {OUTPUT_PATH}")
-    if skipped:
-        print(f"Skipped {skipped} subdirectories (no results.csv)")
-
-    # --- Paper tabulars (additional output, same data) ---
-    raw_data_list = []
-    for sd in subdirs:
-        rd = collect_raw_data(sd)
-        if rd is not None:
-            raw_data_list.append(rd)
-
-    build_paper_tabulars(raw_data_list)
+    print(f"\nDone.")
 
 
 if __name__ == "__main__":

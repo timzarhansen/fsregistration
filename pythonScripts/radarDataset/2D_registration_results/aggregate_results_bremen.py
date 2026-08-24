@@ -36,6 +36,10 @@ OUTLIER_TRANS_THRESH_M = 4.0
 MIN_GT_TRANS_M = 0.01
 MIN_GT_MOTION = 1e-6       # skip runs where ALL pairs have zero GT
 
+# Only process these sequences (matches seq number in dir names).
+# Set to None to process all sequences.
+SEQUENCES = [1, 3, 4, 9, 11]
+
 
 def has_valid_gt(rows: list[dict]) -> bool:
     """Return True if at least one pair has measurable GT motion."""
@@ -318,6 +322,10 @@ def main():
         if not csv_path.is_file():
             path_skipped += 1
             continue
+        info = parse_dir_name(sd.name)
+        if info is not None and SEQUENCES is not None and info["seq"] not in SEQUENCES:
+            path_skipped += 1
+            continue
         rows = read_data_rows(csv_path)
         if not rows:
             path_skipped += 1
@@ -336,6 +344,8 @@ def main():
         if info is None:
             continue
         if info["N"] < MIN_N:
+            continue
+        if SEQUENCES is not None and info["seq"] not in SEQUENCES:
             continue
 
         csv_path = sd / "results.csv"

@@ -21,10 +21,13 @@
 # well under 0.001 deg / 0.001 m, so no re-computation is needed.
 #
 # Usage:
-#     python computeOverlapPdf.py [pair_index] [sequence_name]
+#     python computeOverlapPdf.py [pair_index(s)] [sequence_name]
 #
-# Without arguments the config values at the top of the file are used. Set
-# PAIR_INDEX = None (or pass "all") to process every pair under BASE_DIR.
+# Without arguments the config values at the top of the file are used. The
+# PAIR_INDICES config is a list of pair indices to process; put -1 (or leave it
+# empty) to process every pair under BASE_DIR. The list is overridable on the
+# CLI (comma-separated, or "all" / "-" for everything). Pairs are processed in
+# parallel using NUM_THREADS threads.
 #
 ################################################################################
 
@@ -33,8 +36,10 @@ import sys
 import numpy as np
 import cv2
 import matplotlib
+matplotlib.use("Agg")   # force headless backend (thread-safe for parallel PDF generation)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ============================================================================
 # CONFIGURATION - Edit these to select the setup and adjust the plots
@@ -44,9 +49,14 @@ from matplotlib.backends.backend_pdf import PdfPages
 # 150,135,2010 where all work
 # Only FS2D: 1020 1005 3440
 # only FS2D fails: 2725 2730 2135
-PAIR_INDEX = "150"                             # e.g. "85", or None to process all pairs under BASE_DIR
+# List of pair indices to process. Put -1 (or leave the list empty) to process
+# ALL pairs under BASE_DIR. You can restrict to a subset, e.g. [150, 135, 2010].
+# The list is also overridable on the CLI (see Usage/Help below).
+PAIR_INDICES = [150, 135, 2010, -1]          # e.g. [150], [-1], or [] for all
 SEQUENCE_NAME = "boreas-2020-11-26-13-58"     # e.g. 'boreas-2020-11-26-13-58'
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pairComparison")
+
+NUM_THREADS = max(1, (os.cpu_count() or 1) // 2)  # pairs computed simultaneously
 
 # Image geometry - MUST match how the results were produced. The cartesian
 # images are N x N pixels covering +/-RADIUS metres, so pixel_size = 2*RADIUS/N.
@@ -79,16 +89,16 @@ GRAY_GAMMA = 0.35               # tone-map for the grayscale average mode (lower
 
 # Heading arrows (make the rotation visible next to the origin dots)
 SHOW_HEADING_ARROWS = True      # small arrows at each scan's origin pointing along its heading
-ARROW_LENGTH_FRAC = 0.07        # arrow length as a fraction of the axis half-extent (scales with zoom)
-ARROW_LW = 1.6                  # arrow line width in points
-ARROW_HEAD_MUTATION = 14        # arrow head size in points
+ARROW_LENGTH_FRAC = 0.1        # arrow length as a fraction of the axis half-extent (scales with zoom)
+ARROW_LW = 1.9                  # arrow line width in points
+ARROW_HEAD_MUTATION = 17        # arrow head size in points
 SHOW_YAW_ANGLE = False          # print the scan-2 yaw offset in deg next to its arrow
 HEADING_ARROW_COLOR_SCAN1 = "forestgreen"  # scan 1 origin dot + heading arrow (was lime, too light)
 HEADING_ARROW_COLOR_SCAN2 = "magenta"      # scan 2 origin dot + heading arrow
 
 # 'points' mode settings
 POINT_THRESHOLD = 0.05          # cartesian-image intensity above which a pixel becomes a point
-POINT_SIZE = 5                   # scatter marker size
+POINT_SIZE = 8                   # scatter marker size
 POINT_ALPHA = 0.4               # transparency (overlap shows as red+blue -> magenta)
 
 # Per-point intensity styling (how each point's radar return strength changes it)
@@ -475,32 +485,65 @@ def process_setup(pair_dir):
     print(f"  Saved {combined_path} ({len(pages)} pages)")
 
 
-def main():
-    global PAIR_INDEX, SEQUENCE_NAME
+def _safe_process(pair_dir):
+    """process_setup wrapped for parallel workers (prints progress per pair)."""
+    print(f"Processing: {pair_dir}", flush=True)
+    process_setup(pair_dir)
 
+
+def main():
+    global PAIR_INDICES, SEQUENCE_NAME
+
+    # CLI overrides (backward compatible):
+    #   python computeOverlapPdf.py                 -> use PAIR_INDICES config
+    #   python computeOverlapPdf.py all / - / none  -> process everything
+    #   python computeOverlapPdf.py 150 135         -> just those pairs
+    #   python computeOverlapPdf.py 150 135 <seq>   -> pairs in a given sequence
     if len(sys.argv) > 1:
         arg = sys.argv[1]
         if arg.lower() in ("none", "all", "-"):
-            PAIR_INDEX = None
+            PAIR_INDICES = [-1]
         else:
-            PAIR_INDEX = arg
+            PAIR_INDICES = [int(x) for x in arg.split(",") if x.strip()]
     if len(sys.argv) > 2:
         SEQUENCE_NAME = sys.argv[2]
 
-    if PAIR_INDEX:
-        pair_dir = os.path.join(BASE_DIR, str(PAIR_INDEX), SEQUENCE_NAME)
-        print(f"Processing: {pair_dir}")
-        process_setup(pair_dir)
-        return
+    # Resolve the effective list of pair indices.
+    if not PAIR_INDICES or -1 in PAIR_INDICES:
+        indices = sorted((d for d in os.listdir(BASE_DIR)
+                          if os.path.isdir(os.path.join(BASE_DIR, d))), key=int)
+    else:
+        indices = sorted({int(i) for i in PAIR_INDICES})
 
-    indices = sorted((d for d in os.listdir(BASE_DIR) if os.path.isdir(os.path.join(BASE_DIR, d))), key=int)
-    for idx in indices:
-        p = os.path.join(BASE_DIR, idx, SEQUENCE_NAME)
-        print(f"Processing: {p}")
-        try:
-            process_setup(p)
-        except Exception as e:
-            print(f"  [WARN] {type(e).__name__}: {e}")
+    pair_dirs = [os.path.join(BASE_DIR, str(i), SEQUENCE_NAME) for i in indices]
+    print(f"Processing {len(pair_dirs)} pair(s) with {NUM_THREADS} thread(s)")
+
+    failures = []
+
+    if NUM_THREADS <= 1:
+        for d in pair_dirs:
+            try:
+                _safe_process(d)
+            except Exception as e:
+                print(f"  [WARN] {type(e).__name__}: {e}")
+                failures.append((d, e))
+    else:
+        with ThreadPoolExecutor(max_workers=NUM_THREADS) as ex:
+            futs = {ex.submit(_safe_process, d): d for d in pair_dirs}
+            for fut in as_completed(futs):
+                d = futs[fut]
+                try:
+                    fut.result()
+                except Exception as e:
+                    print(f"  [WARN] failed {d}: {type(e).__name__}: {e}")
+                    failures.append((d, e))
+
+    if failures:
+        print("\nFinished with failures:")
+        for d, e in failures:
+            print(f"  {d}: {type(e).__name__}: {e}")
+    else:
+        print("\nAll pairs processed successfully.")
 
 
 if __name__ == "__main__":

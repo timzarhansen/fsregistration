@@ -98,14 +98,9 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
         seq = load_single_sequence(data_dir, seq_name)
         print(f"[Worker {pid}] Sequence {seq_num}: {seq.length} frames")
 
-        pcd1 = pcd2 = None
-        if use_raw_pointcloud:
-            # Load point clouds for ICP/NDT methods that support them
-            first_idx = start_frame
-            last_idx = min(start_frame + (max_frames or seq.length), seq.length) - 1
-            pcd1 = seq.get_raw_point_cloud(first_idx, raw_intensity_threshold)
-            pcd2 = seq.get_raw_point_cloud(last_idx, raw_intensity_threshold)
-
+        # NOTE: raw point clouds for ICP/NDT are loaded PER-PAIR inside
+        # run_benchmark (use_raw_pointcloud=True), so each pair gets the
+        # clouds of its own two frames instead of the sequence's first/last.
         csv_path, summary = run_benchmark(
             seq=seq,
             method_name=method_name,
@@ -116,8 +111,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
             max_frames=max_frames,
             save_blended=save_blended,
             output_dir=output_dir,
-            pcd1=pcd1,
-            pcd2=pcd2,
+            use_raw_pointcloud=use_raw_pointcloud,
+            raw_intensity_threshold=raw_intensity_threshold,
         )
 
         print(f"[Worker {pid}] Sequence {seq_num} done: {csv_path}")

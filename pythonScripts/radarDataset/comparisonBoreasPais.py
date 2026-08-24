@@ -68,7 +68,7 @@ USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of stand
 ROUND = False  # If True, apply circular mask (corners → 0)
 
 # Raw point cloud config (used by ICP, NDT and for saving point clouds)
-USE_RAW_POINTCLOUD = False       # False = cartesian image (matches boreas2d step-3 benchmark; ICP/NDT use _image_to_pointcloud)
+USE_RAW_POINTCLOUD = True        # True = raw polar data (matches boreas2d benchmark; ICP/NDT use raw clouds)
 RAW_INTENSITY_THRESHOLD = 0.3    # Noise floor for raw polar (0.0 = all points)
 PLY_DOWNSAMPLE = 1               # Save every Nth point in .ply files (1 = all points)
 
@@ -89,6 +89,7 @@ NDT_TRANSFORMATION_EPSILON = 0.01
 NDT_STEP_SIZE = 1.0  # matches boreas2d step-3 benchmark
 NDT_SCALE = 1.0
 NDT_THRESHOLD_PCT = 5.0
+NDT_Z_SCALE = 0.1  # matches boreas2d step-3 benchmark
 
 # Fourier-Mellin config # N = 64/128/256 has impact on the result
 FM_HIGHPASS = False  # matches boreas2d step-3 benchmark
@@ -127,13 +128,13 @@ AKAZE_RANSAC_THRESHOLD = 1.0
 AKAZE_RANSAC_CONFIDENCE = 0.99
 
 # LoFTR-specific config
-LOFTR_RANSAC_THRESHOLD = 3.0
+LOFTR_RANSAC_THRESHOLD = 5.0  # matches boreas2d step-3 benchmark
 LOFTR_RANSAC_CONFIDENCE = 0.99
 LOFTR_CONFIDENCE_THRESHOLD = 0.5
 
 # EfficientLoFTR-specific config
 ELOFTR_MODEL_TYPE = "full"
-ELOFTR_RANSAC_THRESHOLD = 3.0
+ELOFTR_RANSAC_THRESHOLD = 5.0  # matches boreas2d step-3 benchmark
 ELOFTR_RANSAC_CONFIDENCE = 0.99
 ELOFTR_CONFIDENCE_THRESHOLD = 0.5
 
@@ -141,7 +142,7 @@ ELOFTR_CONFIDENCE_THRESHOLD = 0.5
 LIGHTGLUE_FEATURES = "superpoint"
 LIGHTGLUE_MAX_NUM_KEYPOINTS = 2048
 LIGHTGLUE_DEPTH_CONFIDENCE = 0.95
-LIGHTGLUE_WIDTH_CONFIDENCE = 0.99
+LIGHTGLUE_WIDTH_CONFIDENCE = -1  # matches boreas2d step-3 benchmark
 LIGHTGLUE_FILTER_THRESHOLD = 0.1
 LIGHTGLUE_RANSAC_THRESHOLD = 3.0
 LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
@@ -156,6 +157,7 @@ _RELOAD_NAMES = [
     "USE_RAW_POINTCLOUD", "RAW_INTENSITY_THRESHOLD", "PLY_DOWNSAMPLE",
     "ICP_MAX_DISTANCE", "ICP_MAX_ITERATION", "ICP_SCALE", "ICP_THRESHOLD_PCT", "ICP_VOXEL_SIZE",
     "NDT_VOXEL_SIZE", "NDT_MAX_ITERATION", "NDT_TRANSFORMATION_EPSILON", "NDT_STEP_SIZE", "NDT_SCALE", "NDT_THRESHOLD_PCT",
+    "NDT_Z_SCALE",
     "FM_HIGHPASS",
     "SIFT_NFEATURES", "SIFT_N_OCTAVE_LAYERS", "SIFT_CONTRAST_THRESHOLD", "SIFT_EDGE_THRESHOLD", "SIFT_SIGMA",
     "SIFT_RATIO_THRESHOLD", "SIFT_RANSAC_THRESHOLD", "SIFT_RANSAC_CONFIDENCE",
@@ -372,6 +374,7 @@ def build_methods():
         "ndt_step_size": NDT_STEP_SIZE,
         "ndt_scale": NDT_SCALE,
         "ndt_threshold_pct": NDT_THRESHOLD_PCT,
+        "ndt_z_scale": NDT_Z_SCALE,
         "ndt_downsample_voxel": NDT_DOWNSAMPLE_VOXEL,
         # ---- Fourier-Mellin params ----
         "fm_highpass": FM_HIGHPASS,

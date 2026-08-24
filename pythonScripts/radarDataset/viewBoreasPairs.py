@@ -46,16 +46,16 @@ REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sif
 
 # FS2D-specific config
 N = 256         #256 128               # Image grid size (N x N)
-RADIUS = 150                   # Scene radius in meters (pixel_size = 2*radius/N computed automatically) 150 
+RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N computed automatically) docker=140.0
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
-MATCHING_STEP = 5                # Match every Nth frame
-START_FRAME = 85                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) good example: 3685
+MATCHING_STEP = 3                # Match every Nth frame (docker default)
+START_FRAME = 0                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
-POTENTIAL_NECCESSARY_FOR_PEAK = 0.1  # 2D peak detection threshold
+POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
@@ -68,28 +68,29 @@ RAW_INTENSITY_THRESHOLD = 0.3    # Noise floor for raw polar (0.0 = all points)
 ICP_MAX_DISTANCE = 10.0
 ICP_MAX_ITERATION = 200
 ICP_SCALE = 1.0
-ICP_THRESHOLD_PCT = 20.0
+ICP_THRESHOLD_PCT = 10.0
 ICP_VOXEL_SIZE = 1.0             # Downsampling in meters (0 = skip)
 
 # NDT_P2D-specific config
-NDT_VOXEL_SIZE = 5.0
+NDT_VOXEL_SIZE = 15.0
 NDT_MAX_ITERATION = 50
 NDT_TRANSFORMATION_EPSILON = 0.01
-NDT_STEP_SIZE = 0.1
+NDT_STEP_SIZE = 1.0
 NDT_SCALE = 1.0
 NDT_THRESHOLD_PCT = 5.0
+NDT_Z_SCALE = 0.1
 
 # Fourier-Mellin config # N = 64/128/256 has impact on the result
-FM_HIGHPASS = True
+FM_HIGHPASS = False
 
 # SIFT-specific config
 SIFT_NFEATURES = 0
 SIFT_N_OCTAVE_LAYERS = 3
-SIFT_CONTRAST_THRESHOLD = 0.08
+SIFT_CONTRAST_THRESHOLD = 0.01
 SIFT_EDGE_THRESHOLD = 10
-SIFT_SIGMA = 1.6
-SIFT_RATIO_THRESHOLD = 0.75
-SIFT_RANSAC_THRESHOLD = 5.0
+SIFT_SIGMA = 1.2
+SIFT_RATIO_THRESHOLD = 0.6
+SIFT_RANSAC_THRESHOLD = 1.0
 SIFT_RANSAC_CONFIDENCE = 0.99
 
 # SURF-specific config (requires opencv-contrib-python)
@@ -104,35 +105,35 @@ SURF_RANSAC_CONFIDENCE = 0.99
 
 # KAZE-specific config
 KAZE_EXTENDED = False
-KAZE_UPRIGHT = False
-KAZE_THRESHOLD = 0.001
+KAZE_UPRIGHT = True
+KAZE_THRESHOLD = 0.0001
 KAZE_N_OCTAVES = 4
 KAZE_N_OCTAVE_LAYERS = 4
-KAZE_DIFFUSIVITY = 1
-KAZE_RATIO_THRESHOLD = 0.75
-KAZE_RANSAC_THRESHOLD = 3.0
+KAZE_DIFFUSIVITY = 3
+KAZE_RATIO_THRESHOLD = 0.6
+KAZE_RANSAC_THRESHOLD = 1.0
 KAZE_RANSAC_CONFIDENCE = 0.99
 
 # AKAZE-specific config
 AKAZE_DESCRIPTOR_TYPE = "MLDB"
 AKAZE_DESCRIPTOR_SIZE = 0
 AKAZE_DESCRIPTOR_CHANNELS = 3
-AKAZE_THRESHOLD = 0.001
+AKAZE_THRESHOLD = 0.0001
 AKAZE_N_OCTAVES = 4
 AKAZE_N_OCTAVE_LAYERS = 4
-AKAZE_DIFFUSIVITY = 2
-AKAZE_RATIO_THRESHOLD = 0.75
-AKAZE_RANSAC_THRESHOLD = 3.0
+AKAZE_DIFFUSIVITY = 1
+AKAZE_RATIO_THRESHOLD = 0.6
+AKAZE_RANSAC_THRESHOLD = 1.0
 AKAZE_RANSAC_CONFIDENCE = 0.99
 
 # LoFTR-specific config
-LOFTR_RANSAC_THRESHOLD = 3.0
+LOFTR_RANSAC_THRESHOLD = 5.0
 LOFTR_RANSAC_CONFIDENCE = 0.99
 LOFTR_CONFIDENCE_THRESHOLD = 0.5
 
 # EfficientLoFTR-specific config
 ELOFTR_MODEL_TYPE = "full"
-ELOFTR_RANSAC_THRESHOLD = 3.0
+ELOFTR_RANSAC_THRESHOLD = 5.0
 ELOFTR_RANSAC_CONFIDENCE = 0.99
 ELOFTR_CONFIDENCE_THRESHOLD = 0.5
 
@@ -140,7 +141,7 @@ ELOFTR_CONFIDENCE_THRESHOLD = 0.5
 LIGHTGLUE_FEATURES = "superpoint"
 LIGHTGLUE_MAX_NUM_KEYPOINTS = 2048
 LIGHTGLUE_DEPTH_CONFIDENCE = 0.95
-LIGHTGLUE_WIDTH_CONFIDENCE = 0.99
+LIGHTGLUE_WIDTH_CONFIDENCE = -1
 LIGHTGLUE_FILTER_THRESHOLD = 0.1
 LIGHTGLUE_RANSAC_THRESHOLD = 3.0
 LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
@@ -153,7 +154,7 @@ def get_config_from_file():
     global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
-    global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT
+    global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT, NDT_Z_SCALE
     global FM_HIGHPASS
     global SIFT_NFEATURES, SIFT_N_OCTAVE_LAYERS, SIFT_CONTRAST_THRESHOLD, SIFT_EDGE_THRESHOLD, SIFT_SIGMA
     global SIFT_RATIO_THRESHOLD, SIFT_RANSAC_THRESHOLD, SIFT_RANSAC_CONFIDENCE
@@ -230,6 +231,7 @@ def get_config_from_file():
     NDT_STEP_SIZE = extract_var("NDT_STEP_SIZE", NDT_STEP_SIZE)
     NDT_SCALE = extract_var("NDT_SCALE", NDT_SCALE)
     NDT_THRESHOLD_PCT = extract_var("NDT_THRESHOLD_PCT", NDT_THRESHOLD_PCT)
+    NDT_Z_SCALE = extract_var("NDT_Z_SCALE", NDT_Z_SCALE)
     FM_HIGHPASS = extract_var("FM_HIGHPASS", FM_HIGHPASS)
     SIFT_NFEATURES = extract_var("SIFT_NFEATURES", SIFT_NFEATURES)
     SIFT_N_OCTAVE_LAYERS = extract_var("SIFT_N_OCTAVE_LAYERS", SIFT_N_OCTAVE_LAYERS)
@@ -369,9 +371,10 @@ def main():
     # Setup method — all keys are unique (method-prefixed to avoid collisions)
     method_config = {
         "N": N,
+        "radius": RADIUS,
         "size_of_pixel": SIZE_OF_PIXEL,
         # ---- FS2D params ----
-        "use_clahe": True,
+        "use_clahe": False,
         "use_hamming": True,
         "potential_for_necessary_peak": POTENTIAL_NECCESSARY_FOR_PEAK,
         "multiple_radii": True,
@@ -379,6 +382,7 @@ def main():
         "use_direct": USE_DIRECT,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
+        "use_weighted_peak_score": True,
         "use_phase_correlation": USE_PHASE_CORRELATION,
         "debug": DEBUG_MODE,
         # ---- ICP params ----
@@ -395,6 +399,7 @@ def main():
         "ndt_step_size": NDT_STEP_SIZE,
         "ndt_scale": NDT_SCALE,
         "ndt_threshold_pct": NDT_THRESHOLD_PCT,
+        "ndt_z_scale": NDT_Z_SCALE,
         # ---- Fourier-Mellin params ----
         "fm_highpass": FM_HIGHPASS,
         # ---- SIFT params ----

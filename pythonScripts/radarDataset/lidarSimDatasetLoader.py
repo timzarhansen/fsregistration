@@ -37,7 +37,7 @@ NOISE_LEVELS = [
 ]
 
 # noise_level -> (gaussian_std_m, salt_pepper_fraction)
-_NOISE_PARAMS = {
+_NOISE_PARAMS = {# 25 cm gaussian as low and 1 merter for high 
     "None": (0.0, 0.0),
     "low": (0.05, 0.05),
     "high": (0.10, 0.10),
