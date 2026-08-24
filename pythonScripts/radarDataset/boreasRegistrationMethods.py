@@ -387,6 +387,7 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
         super().__init__(config)
         self._name = "ndt_p2d"
         self.resolution = config.get("ndt_voxel_size", config.get("voxel_size", 5.0))
+        self.downsample_voxel = config.get("ndt_downsample_voxel", config.get("downsample_voxel", 0.0))
         self.max_iteration = config.get("ndt_max_iteration", config.get("max_iteration", 35))
         self.transformation_epsilon = config.get("ndt_transformation_epsilon", config.get("transformation_epsilon", 0.01))
         self.step_size = config.get("ndt_step_size", config.get("step_size", 0.1))
@@ -415,6 +416,17 @@ class NDT_P2DRegistration(BaseRegistrationMethod):
             if self.z_scale == 0:
                 source_pts[:, 2] = 0.0
                 target_pts[:, 2] = 0.0
+
+        # Downsample both clouds before NDT (mirrors ICP's voxel_down_sample).
+        # Greatly reduces runtime on full raw clouds (~350k pts -> ~10k pts).
+        if self.downsample_voxel > 0:
+            import open3d as o3d
+            def _ds(pts: np.ndarray) -> np.ndarray:
+                pc = o3d.geometry.PointCloud()
+                pc.points = o3d.utility.Vector3dVector(pts)
+                return np.asarray(pc.voxel_down_sample(self.downsample_voxel).points, dtype=np.float64)
+            source_pts = _ds(source_pts)
+            target_pts = _ds(target_pts)
 
         if len(source_pts) < 10 or len(target_pts) < 10:
             elapsed = time.time() - t0
