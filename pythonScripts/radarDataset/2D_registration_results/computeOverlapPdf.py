@@ -82,7 +82,9 @@ SHOW_HEADING_ARROWS = True      # small arrows at each scan's origin pointing al
 ARROW_LENGTH_FRAC = 0.07        # arrow length as a fraction of the axis half-extent (scales with zoom)
 ARROW_LW = 1.6                  # arrow line width in points
 ARROW_HEAD_MUTATION = 14        # arrow head size in points
-SHOW_YAW_ANGLE = True           # print the scan-2 yaw offset in deg next to its arrow
+SHOW_YAW_ANGLE = False          # print the scan-2 yaw offset in deg next to its arrow
+HEADING_ARROW_COLOR_SCAN1 = "forestgreen"  # scan 1 origin dot + heading arrow (was lime, too light)
+HEADING_ARROW_COLOR_SCAN2 = "magenta"      # scan 2 origin dot + heading arrow
 
 # 'points' mode settings
 POINT_THRESHOLD = 0.05          # cartesian-image intensity above which a pixel becomes a point
@@ -429,14 +431,14 @@ def plot_overlap(ax, title, pair_dir, T_veh, img1, img2):
         ax.set_ylim(-eer, eer)
 
     if SHOW_SCAN_ORIGINS:
-        ax.plot(0.0, 0.0, "o", color="lime", ms=6, mec="k", label="scan 1 origin")
-        ax.plot(T_veh[0, 3], T_veh[1, 3], "o", color="magenta", ms=6, mec="k", label="scan 2 origin")
+        ax.plot(0.0, 0.0, "o", color=HEADING_ARROW_COLOR_SCAN1, ms=6, mec="k", label="scan 1 origin")
+        ax.plot(T_veh[0, 3], T_veh[1, 3], "o", color=HEADING_ARROW_COLOR_SCAN2, ms=6, mec="k", label="scan 2 origin")
     if SHOW_HEADING_ARROWS:
         # scan 1 heading is the reference (no rotation); scan 2's heading arrow
         # is rotated by T_veh, so the angle between the two shows the yaw.
-        _draw_heading_arrow(ax, 0.0, 0.0, 1.0, 0.0, "lime")
+        _draw_heading_arrow(ax, 0.0, 0.0, 1.0, 0.0, HEADING_ARROW_COLOR_SCAN1)
         dx, dy = _scan2_heading(T_veh)
-        _draw_heading_arrow(ax, T_veh[0, 3], T_veh[1, 3], dx, dy, "magenta")
+        _draw_heading_arrow(ax, T_veh[0, 3], T_veh[1, 3], dx, dy, HEADING_ARROW_COLOR_SCAN2)
         if SHOW_YAW_ANGLE:
             yaw = np.degrees(np.arctan2(T_veh[1, 0], T_veh[0, 0]))
             h = (ax.get_xlim()[1] - ax.get_xlim()[0]) / 2.0
