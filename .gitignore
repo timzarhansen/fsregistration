@@ -25,3 +25,5 @@ config.json
 *.npy
 # Third-party ML registration repos (nested git repos, imported via sys.path)
 pythonScripts/radarDataset/otherMethods/
+pythonScripts/radarDataset/2D_registration_results/pairComparison
+pythonScripts/radarDataset/2D_registration_results/ResultsRadar_DFKI
