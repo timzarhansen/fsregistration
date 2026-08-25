@@ -237,7 +237,7 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                       bool useDirect = true,
                                                                                       bool benchmark = false,
                                                                                       BenchmarkTimings2D* timings = nullptr,
-                                                                                      double level_potential_rotation = 0.0,
+                                                                                      double level_potential_rotation = 0.001,
                                                                                       int normalization = 1,
                                                                                       bool usePhaseCorrelation = false,
                                                                                       int numAngles = -1);
