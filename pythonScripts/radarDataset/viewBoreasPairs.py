@@ -75,8 +75,8 @@ USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere r
 # uniform [0,360) deg rotation (seeded); otherwise a fixed RAND_ROT_DEG is
 # applied. The GT transform is corrected by the applied rotation (same math
 # as boreasBenchmark.py --apply-rand-rot). 0.0 = original behaviour.
-APPLY_RAND_ROT = False        # Rotate the current scan before registration
-RAND_ROT_DEG = 90.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
+APPLY_RAND_ROT = True        # Rotate the current scan before registration
+RAND_ROT_DEG = 45.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
 RAND_ROT_RANDOM = False       # True: fresh uniform [0,360) deg per pair; False: fixed angle
 RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
 
@@ -350,10 +350,12 @@ def run_pair(
         img2 = apply_circular_mask(img2)
 
     gt_transform = seq.get_gt_transform(idx1, idx2)
-    # Measured on real data (FS2D, raw-pcl ICP): applied +delta on the CURRENT
-    # scan makes the methods report ~-delta, so the corrected GT is
-    # T_gt @ C(delta) (yaw_gt - delta) — same as boreasBenchmark.run_benchmark.
-    gt_corrected = gt_transform @ azimuth_offset_to_rotation(applied_rot_rad)
+    # Measured on real data (FS2D, raw-pcl ICP): an applied azimuth offset
+    # +delta on the CURRENT scan makes the effective relative pose
+    # T_corrected = C(delta) @ T_gt (yaw_gt - delta, translation C(delta) @
+    # t_gt) — verified for rotation AND translation. Same as
+    # boreasBenchmark.run_benchmark.
+    gt_corrected = azimuth_offset_to_rotation(applied_rot_rad) @ gt_transform
     gt_affine = get_affine_matrix(gt_corrected)
 
     # Registration — use raw polar data for point-cloud methods if configured
