@@ -272,12 +272,12 @@ def main():
         sys.exit(f"ERROR: no pairs possible (end={end}, matching_step={cfg.MATCHING_STEP})")
     pairs = [(i - cfg.MATCHING_STEP, i) for i in range(cfg.MATCHING_STEP, end, cfg.MATCHING_STEP)]
 
-    # Output file — name derived from config values + config hash.
+    # Output file — short readable name + config hash at the end.
+    # (full config dump & sequence name are in the CSV header)
     results_dir = os.path.join(SCRIPT_DIR, "results")
     os.makedirs(results_dir, exist_ok=True)
-    px = int(size_of_pixel * 100)
-    out_name = (f"fs2d_{cfg.SEQUENCE_NAME}_N{cfg.N}_r{cfg.RADIUS:g}_"
-                f"s{cfg.MATCHING_STEP}_p{px}_h{config_hash(cfg)}.csv")
+    out_name = (f"fs2d_boreas_N{cfg.N}_r{cfg.RADIUS:g}_"
+                f"s{cfg.MATCHING_STEP}_{config_hash(cfg)}.csv")
     out_path = os.path.join(results_dir, out_name)
 
     print("=" * 80)
