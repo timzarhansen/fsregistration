@@ -54,19 +54,19 @@ RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 135                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 2480                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
 NUM_ANGLES = 4096              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
-LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
+LEVEL_POTENTIAL_ROTATION = 0.0  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
-R_MIN = 13.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
-R_MAX = 100.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
-NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
+R_MIN = 40.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 90.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+NORMALIZATION = 0  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
-CLAHE = True  # If True, apply CLAHE contrast enhancement
+CLAHE = False  # If True, apply CLAHE contrast enhancement
 USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere resampling
 
 
@@ -75,7 +75,7 @@ USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere r
 # uniform [0,360) deg rotation (seeded); otherwise a fixed RAND_ROT_DEG is
 # applied. The GT transform is corrected by the applied rotation (same math
 # as boreasBenchmark.py --apply-rand-rot). 0.0 = original behaviour.
-APPLY_RAND_ROT = True        # Rotate the current scan before registration
+APPLY_RAND_ROT = False        # Rotate the current scan before registration
 RAND_ROT_DEG = 90.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
 RAND_ROT_RANDOM = False       # True: fresh uniform [0,360) deg per pair; False: fixed angle
 RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
@@ -600,13 +600,12 @@ def main():
         #     print("here the rotation is big")
         gt_trans_norm = np.linalg.norm(gt_trans)
         gt_tag = " (corrected)" if applied_rot_deg else ""
-        print(f"  GT Rot: {np.degrees(gt_yaw):.4f} deg{gt_tag}, Est Rot: {np.degrees(est_yaw):.4f} deg")
+        print(f"  GT Rot: {gt_yaw:.4f} rad{gt_tag}, Est Rot: {est_yaw:.4f} rad")
         print(f"  GT Tx: {gt_tx:.4f} m{gt_tag}, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m{gt_tag}, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
         print(f"  -> Saved to {save_dir}/ (image1.png, image2.png, blended.png)")
-        
         
         idx += MATCHING_STEP
 

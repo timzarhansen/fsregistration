@@ -48,17 +48,17 @@ USE_DIRECT = True
 NUM_ANGLES = 4096
 
 # Persistence threshold for rotation peak filtering (only for USE_DIRECT=False).
-LEVEL_POTENTIAL_ROTATION = 0.001
+LEVEL_POTENTIAL_ROTATION = 0.0
 
 # 2D peak detection threshold.
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01
 
 # Radial frequency band in FFT grid units (px); 0.0 = auto (N-dependent).
-R_MIN = 25.0
+R_MIN = 20.0
 R_MAX = 120.0
 
 # Correlation normalization: 0 = 1, 1 = 1/sqrt(norm), 2 = 1/norm.
-NORMALIZATION = 1
+NORMALIZATION = 0
 
 # Use phase correlation instead of standard cross-correlation.
 USE_PHASE_CORRELATION = False

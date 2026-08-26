@@ -8,6 +8,7 @@ build/
 *.log
 *.csv
 *.txt
+*.tex
 *.png
 *.pdf
 *.html
