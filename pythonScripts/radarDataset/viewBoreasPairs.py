@@ -76,7 +76,7 @@ USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere r
 # applied. The GT transform is corrected by the applied rotation (same math
 # as boreasBenchmark.py --apply-rand-rot). 0.0 = original behaviour.
 APPLY_RAND_ROT = True        # Rotate the current scan before registration
-RAND_ROT_DEG = 45.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
+RAND_ROT_DEG = 90.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
 RAND_ROT_RANDOM = False       # True: fresh uniform [0,360) deg per pair; False: fixed angle
 RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
 
@@ -377,12 +377,14 @@ def run_pair(
     warped = cv2.warpPerspective(img2, fs2d_affine, (img1.shape[1], img1.shape[0]))
     blended = cv2.addWeighted((img1 * 255).astype(np.uint8), 0.5, (warped * 255).astype(np.uint8), 0.5, 0)
 
-    # Extract GT yaw and translation from the 4x4 GT matrix
-    gt_yaw = np.arctan2(gt_transform[1, 0], gt_transform[0, 0])
+    # Extract GT yaw and translation from the CORRECTED 4x4 GT matrix (the
+    # one gt_error is computed against), so the displayed GT matches the
+    # reported errors when an azimuth rotation is applied.
+    gt_yaw = np.arctan2(gt_corrected[1, 0], gt_corrected[0, 0])
     if gt_yaw < 0:
         gt_yaw += 2 * np.pi
-    gt_tx = gt_transform[0, 3]
-    gt_ty = gt_transform[1, 3]
+    gt_tx = gt_corrected[0, 3]
+    gt_ty = gt_corrected[1, 3]
 
     return img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty, applied_rot_deg
 
@@ -597,8 +599,9 @@ def main():
         # if gt_yaw_tmp > 0.2 and gt_yaw_tmp < 2 * np.pi - 0.2:
         #     print("here the rotation is big")
         gt_trans_norm = np.linalg.norm(gt_trans)
-        print(f"  GT Rot: {gt_yaw:.4f}, Est Rot: {est_yaw:.4f}")
-        print(f"  GT Tx: {gt_tx:.4f} m, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m, Est Ty: {est_ty:.4f} m")
+        gt_tag = " (corrected)" if applied_rot_deg else ""
+        print(f"  GT Rot: {np.degrees(gt_yaw):.4f} deg{gt_tag}, Est Rot: {np.degrees(est_yaw):.4f} deg")
+        print(f"  GT Tx: {gt_tx:.4f} m{gt_tag}, Est Tx: {est_tx:.4f} m   GT Ty: {gt_ty:.4f} m{gt_tag}, Est Ty: {est_ty:.4f} m")
         print(f"  Confidence: {result.confidence:.4f}")
         print(f"  Time: {result.computation_time * 1000:.1f} ms")
         print(f"  GT RotErr: {abs(gt_rot):.4f} deg, GT TransErr: {gt_trans_norm:.4f} m")
