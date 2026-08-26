@@ -154,11 +154,15 @@ public:
 
         for (int j = 0; j < N; j++) {
             sinThetaLocal[j] = std::sin(M_PI * j / (double) N);
+            // Polar-direction (theta) Hamming taper: attenuates the near-pole
+            // rows (small sinTheta) and boosts the equator rows. The same
+            // weight applies to every azimuth column k, so the window is
+            // rotation equivariant (a window in azimuth would not be).
+            hammingCoeffs[j] = 25.0/46.0 - (1.0 - 25.0/46.0) * std::cos(2.0 * M_PI * j / (double) N);
         }
         for (int k = 0; k < N; k++) {
             cosPhiLocal[k] = std::cos(M_PI * k / (double) bandwidth);
             sinPhiLocal[k] = std::sin(M_PI * k / (double) bandwidth);
-            hammingCoeffs[k] = 25.0/46.0 - (1.0 - 25.0/46.0) * std::cos(2.0 * M_PI * k / (double) N);
         }
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {

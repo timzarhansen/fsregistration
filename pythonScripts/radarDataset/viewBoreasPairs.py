@@ -47,25 +47,28 @@ SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
 REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
-
+# difficult: (135, 285, 2115, 2135, 2465, 2490, 2725, 2730 ±1)
 # FS2D-specific config
 N = 256         #256 128               # Image grid size (N x N)
 RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N computed automatically) docker=140.0
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 4015                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 135                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
 NUM_ANGLES = 4096              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
-R_MIN = 55.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
-R_MAX = 120.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MIN = 13.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 100.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
+CLAHE = True  # If True, apply CLAHE contrast enhancement
+USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere resampling
+
 
 # Random azimuth rotation of the CURRENT scan (bin level, before rendering).
 # With APPLY_RAND_ROT=True and RAND_ROT_RANDOM=True each pair gets a fresh
@@ -169,7 +172,7 @@ LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
 def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, RADIUS, SIZE_OF_PIXEL
-    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX
+    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX, USE_HAMMING
     global APPLY_RAND_ROT, RAND_ROT_DEG, RAND_ROT_RANDOM, RAND_ROT_SEED
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
@@ -239,6 +242,7 @@ def get_config_from_file():
     R_MIN = extract_var("R_MIN", R_MIN)
     R_MAX = extract_var("R_MAX", R_MAX)
     ROUND = extract_var("ROUND", ROUND)
+    USE_HAMMING = extract_var("USE_HAMMING", USE_HAMMING)
     APPLY_RAND_ROT = extract_var("APPLY_RAND_ROT", APPLY_RAND_ROT)
     RAND_ROT_DEG = extract_var("RAND_ROT_DEG", RAND_ROT_DEG)
     RAND_ROT_RANDOM = extract_var("RAND_ROT_RANDOM", RAND_ROT_RANDOM)
@@ -394,6 +398,7 @@ def main():
     print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
     print(f"  ROUND: {ROUND}")
+    print(f"  USE_HAMMING: {USE_HAMMING}")
     print(f"  APPLY_RAND_ROT: {APPLY_RAND_ROT} (fixed {RAND_ROT_DEG} deg / random {RAND_ROT_RANDOM}, seed {RAND_ROT_SEED})")
     print()
 
@@ -413,8 +418,8 @@ def main():
         "radius": RADIUS,
         "size_of_pixel": SIZE_OF_PIXEL,
         # ---- FS2D params ----
-        "use_clahe": False,
-        "use_hamming": True,
+        "use_clahe": CLAHE,
+        "use_hamming": USE_HAMMING,
         "potential_for_necessary_peak": POTENTIAL_NECCESSARY_FOR_PEAK,
         "multiple_radii": True,
         "use_gauss": False,

@@ -398,8 +398,15 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
     for (int r = minRNumber; r < maxRNumber; r++) {
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
-                int xIndex = std::round((double)r * xAngle[j * N + k] + bandwidth) - 1;
-                int yIndex = std::round((double)r * yAngle[j * N + k] + bandwidth) - 1;
+                // No -1 offset: the sampling spiderweb must be centered on the
+                // shifted-DC pixel (bandwidth, bandwidth). With the -1, the
+                // antipodal direction (theta, phi+pi) samples two pixels off
+                // the even-symmetry match (N - xIndex) mod N, which destroys
+                // the evenness of the resampled sphere function in phi and
+                // breaks its rotation equivariance (spurious ~0 deg peak in
+                // the 1D rotation correlation for large rotations).
+                int xIndex = std::round((double)r * xAngle[j * N + k] + bandwidth);
+                int yIndex = std::round((double)r * yAngle[j * N + k] + bandwidth);
                 resampledMagnitudeSO3_1TMP[k + j * bandwidth * 2] = 255 * magnitude1Shifted[yIndex + N * xIndex];
                 resampledMagnitudeSO3_2TMP[k + j * bandwidth * 2] = 255 * magnitude2Shifted[yIndex + N * xIndex];
             }
@@ -420,12 +427,18 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
 
         for (int j = 0; j < N; j++) {
             for (int k = 0; k < N; k++) {
+                // The accumulated array is [j + k*N] with j = azimuth (phi),
+                // k = polar angle (theta) (transposed vs. the TMP buffer), so
+                // the polar Hamming taper must multiply the column index k.
+                // A window along k is identical for every azimuth row and
+                // therefore rotation equivariant.
+                double hw = useHamming ? hammingCoeffs[k] : 1.0;
                 resampledMagnitudeSO3_1[j + k * bandwidth * 2] = resampledMagnitudeSO3_1[j + k * bandwidth * 2] +
                     ((double)magCLAHE1.data[j + k * bandwidth * 2]) /
-                    255.0 * hammingCoeffs[k];
+                    255.0 * hw;
                 resampledMagnitudeSO3_2[j + k * bandwidth * 2] = resampledMagnitudeSO3_2[j + k * bandwidth * 2] +
                     ((double)magCLAHE2.data[j + k * bandwidth * 2]) /
-                    255.0 * hammingCoeffs[k];
+                    255.0 * hw;
             }
         }
     }
