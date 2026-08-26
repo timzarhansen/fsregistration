@@ -309,7 +309,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
      bool useDirect, bool multipleRadii, bool useClahe,
      bool useHamming, bool debug, BenchmarkTimings2D* timings,
      std::vector<rotationPeakfs2D>* outPeaks,
-     double level_potential_rotation, int numAngles) {
+     double level_potential_rotation, int numAngles, double r_min, double r_max) {
     auto spectrumStart = std::chrono::high_resolution_clock::now();
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
         this->phase1, false);
@@ -372,13 +372,28 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
         resampledMagnitudeSO3_2TMP[i] = 0;
     }
 
-    int minRNumber = 1 + floor(N * 0.05);
-    int maxRNumber = N / 2 - floor(N * 0.05);
+    // Radial frequency band used when resampling the 2D Fourier magnitude
+    // onto the sphere. Values are in FFT grid units (pixels of the N x N spectrum).
+    //
+    // r_min / r_max == 0.0  ->  AUTO, keep the N-dependent defaults that were
+    // hardcoded before these parameters existed (i.e. the current behavior):
+    //     minR = 1 + floor(N * 0.05)        (~5% of N, just above DC)
+    //     maxR = N / 2 - floor(N * 0.05)    (~5% of N below the Nyquist radius)
+    // Any value > 0.0 overrides the default (e.g. r_min=32, r_max=96 for N=256).
+    // The `!multipleRadii` collapse to a single radius ring is only applied
+    // when both r_min and r_max are left on auto (matches the original behavior).
+    int minRNumber = (r_min > 0.0) ? (int)r_min : 1 + (int)floor(N * 0.05);
+    int maxRNumber = (r_max > 0.0) ? (int)r_max : N / 2 - (int)floor(N * 0.05);
     int bandwidth = N / 2;
 
-    if (!multipleRadii) {
+    if (!multipleRadii && r_min <= 0.0 && r_max <= 0.0) {
         minRNumber = maxRNumber - 1;
     }
+
+    // Sanitize: the band must be non-empty and within the valid spectrum range.
+    if (maxRNumber > N / 2) maxRNumber = N / 2;
+    if (minRNumber < 1) minRNumber = 1;
+    if (minRNumber >= maxRNumber) minRNumber = maxRNumber - 1;
 
     for (int r = minRNumber; r < maxRNumber; r++) {
         for (int j = 0; j < N; j++) {
@@ -683,11 +698,13 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
      bool useHamming,
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
-     bool useDirect, int numAngles) {
+     bool useDirect, int numAngles, double r_min, double r_max) {
 
     std::vector<rotationPeakfs2D> peaks;
+    // 0.0 r_min/r_max = auto N-dependent defaults (= old hardcoded band).
     auto result = computeRotationCorrelation1D(voxelData1Input, voxelData2Input,
-        useDirect, multipleRadii, useClahe, useHamming, debug, timings, &peaks, level_potential_rotation, numAngles);
+        useDirect, multipleRadii, useClahe, useHamming, debug, timings, &peaks, level_potential_rotation, numAngles,
+        r_min, r_max);
 
     return peaks;
 }
@@ -1012,7 +1029,7 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
      int normalization,
-     bool usePhaseCorrelation, int numAngles) {
+     bool usePhaseCorrelation, int numAngles, double r_min, double r_max) {
 
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
@@ -1022,9 +1039,10 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
 
     auto totalStart = std::chrono::high_resolution_clock::now();
 
+    // 0.0 r_min/r_max = auto N-dependent defaults (= old hardcoded band).
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
         debug, multipleRadii, useClahe,
-        useHamming, pTimings, level_potential_rotation, useDirect, numAngles);
+        useHamming, pTimings, level_potential_rotation, useDirect, numAngles, r_min, r_max);
 
     int numAnglePeaks = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAnglePeaks);

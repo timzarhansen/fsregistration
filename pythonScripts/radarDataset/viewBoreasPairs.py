@@ -41,7 +41,7 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "sift"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 
 # FS2D-specific config
@@ -49,13 +49,16 @@ N = 256         #256 128               # Image grid size (N x N)
 RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N computed automatically) docker=140.0
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
-MATCHING_STEP = 3                # Match every Nth frame (docker default)
-START_FRAME = 0                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+MATCHING_STEP = 5                # Match every Nth frame (docker default)
+START_FRAME = 4015                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
+NUM_ANGLES = -1              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
+R_MIN = 0.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 0.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
@@ -152,7 +155,7 @@ LIGHTGLUE_RANSAC_CONFIDENCE = 0.99
 def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, RADIUS, SIZE_OF_PIXEL
-    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND
+    global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
     global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT, NDT_Z_SCALE, NDT_DOWNSAMPLE_VOXEL
@@ -215,8 +218,11 @@ def get_config_from_file():
     MAX_FRAMES = extract_var("MAX_FRAMES", MAX_FRAMES)
     OUTPUT_DIR = extract_var("OUTPUT_DIR", OUTPUT_DIR)
     USE_DIRECT = extract_var("USE_DIRECT", USE_DIRECT)
+    NUM_ANGLES = extract_var("NUM_ANGLES", NUM_ANGLES)
     LEVEL_POTENTIAL_ROTATION = extract_var("LEVEL_POTENTIAL_ROTATION", LEVEL_POTENTIAL_ROTATION)
     POTENTIAL_NECCESSARY_FOR_PEAK = extract_var("POTENTIAL_NECCESSARY_FOR_PEAK", POTENTIAL_NECCESSARY_FOR_PEAK)
+    R_MIN = extract_var("R_MIN", R_MIN)
+    R_MAX = extract_var("R_MAX", R_MAX)
     ROUND = extract_var("ROUND", ROUND)
     REGISTRATION_METHOD = extract_var("REGISTRATION_METHOD", REGISTRATION_METHOD)
     USE_RAW_POINTCLOUD = extract_var("USE_RAW_POINTCLOUD", USE_RAW_POINTCLOUD)
@@ -382,6 +388,9 @@ def main():
         "multiple_radii": True,
         "use_gauss": False,
         "use_direct": USE_DIRECT,
+        "num_angles": NUM_ANGLES,
+        "r_min": R_MIN,
+        "r_max": R_MAX,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
         "use_weighted_peak_score": True,

@@ -205,7 +205,10 @@ public:
                                                     bool useClahe = true, bool useHamming = true,
                                                     BenchmarkTimings2D* timings = nullptr,
                                                     double level_potential_rotation = 0.1,
-                                                    bool useDirect = false, int numAngles = -1);
+                                                    bool useDirect = false, int numAngles = -1,
+                                                    // Radial frequency band (FFT grid units / px).
+                                                    // 0.0 = auto: N-dependent defaults (current behavior).
+                                                    double r_min = 0.0, double r_max = 0.0);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -240,7 +243,10 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                       double level_potential_rotation = 0.001,
                                                                                       int normalization = 1,
                                                                                       bool usePhaseCorrelation = false,
-                                                                                      int numAngles = -1);
+                                                                                      int numAngles = -1,
+                                                                                      // Radial frequency band (FFT grid units / px).
+                                                                                      // 0.0 = auto: N-dependent defaults (current behavior).
+                                                                                      double r_min = 0.0, double r_max = 0.0);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
@@ -352,7 +358,10 @@ private://here everything is created. malloc is done in the constructor
                                                             bool useHamming, bool debug, BenchmarkTimings2D* timings,
                                                             std::vector<rotationPeakfs2D>* outPeaks = nullptr,
                                                             double level_potential_rotation = 0.1,
-                                                            int numAngles = -1);
+                                                            int numAngles = -1,
+                                                            // Radial frequency band (FFT grid units / px).
+                                                            // 0.0 = auto: N-dependent defaults (current behavior).
+                                                            double r_min = 0.0, double r_max = 0.0);
 
     rotationPeakfs2D findClosestRotationAngle(const std::vector<rotationPeakfs2D>& allAnglesList, double goodGuessAlpha);
 

@@ -123,7 +123,11 @@ public:
         double levelPotentialRotation = 0.1,
         int normalization = 1,
         bool usePhaseCorrelation = false,
-        int numAngles = -1
+        int numAngles = -1,
+        // Radial frequency band in FFT grid units (pixels).
+        // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
+        double r_min = 0.0,
+        double r_max = 0.0
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
@@ -131,7 +135,7 @@ public:
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization, usePhaseCorrelation, numAngles
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization, usePhaseCorrelation, numAngles, r_min, r_max
         );
 
         std::vector<TransformationPeak2D> out;
@@ -318,7 +322,11 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
                  py::arg("levelPotentialRotation") = 0.1,
                  py::arg("normalization") = 1,
                  py::arg("usePhaseCorrelation") = false,
-                 py::arg("numAngles") = -1)
+                 // Radial frequency band in FFT grid units (pixels).
+                 // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
+                 py::arg("numAngles") = -1,
+                 py::arg("r_min") = 0.0,
+                 py::arg("r_max") = 0.0)
          .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
               py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
               py::arg("useInitialAngle") = true,

@@ -165,6 +165,11 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.use_gauss = config.get("use_gauss", False)
         self.use_direct = config.get("use_direct", False)
         self.num_angles = config.get("num_angles", -1)
+        # Radial frequency band in FFT grid units (pixels).
+        # 0.0 = auto: N-dependent defaults (current hardcoded behavior). See
+        # softRegistrationClass.cpp computeRotationCorrelation1D().
+        self.r_min = config.get("r_min", 0.0)
+        self.r_max = config.get("r_max", 0.0)
         self.level_potential_rotation = config.get("level_potential_rotation", 0.1)
         self.normalization = config.get("normalization", 1)
         self.use_weighted_peak_score = config.get("use_weighted_peak_score", True)
@@ -192,7 +197,10 @@ class FS2DRegistration(BaseRegistrationMethod):
             numAngles=self.num_angles,
             levelPotentialRotation=self.level_potential_rotation,
             normalization=self.normalization,
-            usePhaseCorrelation=self.use_phase_correlation
+            usePhaseCorrelation=self.use_phase_correlation,
+            # 0.0 = auto (N-dependent defaults). Only set if explicitly configured.
+            r_min=self.r_min,
+            r_max=self.r_max
         )
 
         best_score = 0.0

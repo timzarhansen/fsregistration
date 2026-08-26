@@ -55,6 +55,40 @@ python boreasRegistrationFramework.py --method fs2d \
 9. LoFTR
 10. E-LoFTR
 
+## FS2D parameters (`viewBoreasPairs.py` / `comparisonBoreasPais.py`)
+
+All FS2D-specific settings live at the top of the scripts in the `FS2D-specific config`
+section. The config dict passed to `RegistrationFactory.create("fs2d", ...)` forwards them
+through `boreasRegistrationMethods.FS2DRegistration` to the C++ wrapper
+(`pybind_registration_2d`) and finally `softRegistrationClass`.
+
+| Config constant | Config key | Default | Meaning |
+|---|---|---|---|
+| `NUM_ANGLES` | `num_angles` | `-1` | Angular resolution of the 1D correlation curve in direct mode (`-1` = auto, i.e. `N`). Only used when `USE_DIRECT = True`. |
+| `R_MIN` | `r_min` | `0.0` | Min radial frequency radius of the FS2D rotation descriptor, in FFT grid units (pixels). **`0.0` = auto: N-dependent default** (`1 + floor(N*0.05)`), i.e. the original behavior. |
+| `R_MAX` | `r_max` | `0.0` | Max radial frequency radius, in FFT grid units (pixels). **`0.0` = auto: N-dependent default** (`N/2 - floor(N*0.05)`). |
+
+### The `0.0 = auto` convention
+
+`r_min`/`r_max` are **absolute pixel values of the N×N FFT spectrum** (same convention as the
+3D wrapper's `r_min`/`r_max`). Setting them keeps the descriptor band fixed regardless of N;
+leaving them `0.0` keeps the original hardcoded, N-dependent defaults:
+
+- `r_min = 0.0` → `minR = 1 + floor(N * 0.05)` (≈ 5% of N above DC)
+- `r_max = 0.0` → `maxR = N / 2 - floor(N * 0.05)` (≈ 5% of N below Nyquist)
+
+Example for N=256: `R_MIN = 32`, `R_MAX = 96` samples the band from radius 32 to 96 px.
+
+Notes:
+- `multipleRadii = False` collapses the band to a single ring `maxR-1` **only when both
+  `r_min` and `r_max` are left on auto** (matches the original behavior).
+- Changing `r_min`/`r_max`/`num_angles` only affects the **rotation** step; the translation
+  step (phase correlation) is unchanged.
+
+> ⚠️ `r_min`/`r_max` are passed as keyword arguments to the pybind wrapper. They are only
+> accepted **after rebuilding** the C++ module: `colcon build --packages-select fsregistration`
+> (then `source install/setup.bash`). With an outdated `.so` the FS2D method raises a TypeError.
+
 
 
 

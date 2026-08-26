@@ -61,8 +61,11 @@ START_FRAME = 0                  # First frame index; first pair = (START_FRAME,
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "2D_registration_results", "pairComparison")  # Base output dir; per-pair subfolder is added automatically
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
+NUM_ANGLES = -1              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold  # matches boreas2d step-3 benchmark
+R_MIN = 0.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 0.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
@@ -153,6 +156,7 @@ _RELOAD_NAMES = [
     "DATA_DIR", "SEQUENCE_NUMBER", "SEQUENCE_NAME", "METHODS_TO_RUN",
     "N", "RADIUS", "MATCHING_STEP", "START_FRAME", "MAX_FRAMES", "OUTPUT_DIR",
     "USE_DIRECT", "LEVEL_POTENTIAL_ROTATION", "POTENTIAL_NECCESSARY_FOR_PEAK",
+    "NUM_ANGLES", "R_MIN", "R_MAX",
     "NORMALIZATION", "USE_PHASE_CORRELATION", "ROUND",
     "USE_RAW_POINTCLOUD", "RAW_INTENSITY_THRESHOLD", "PLY_DOWNSAMPLE",
     "ICP_MAX_DISTANCE", "ICP_MAX_ITERATION", "ICP_SCALE", "ICP_THRESHOLD_PCT", "ICP_VOXEL_SIZE",
@@ -355,6 +359,9 @@ def build_methods():
         "multiple_radii": True,
         "use_gauss": False,
         "use_direct": USE_DIRECT,
+        "num_angles": NUM_ANGLES,
+        "r_min": R_MIN,
+        "r_max": R_MAX,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
         "use_phase_correlation": USE_PHASE_CORRELATION,
