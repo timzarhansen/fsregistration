@@ -26,9 +26,9 @@ import numpy as np
 import cv2
 from scipy.spatial.transform import Rotation as R
 
-from sdk.radar import load_radar, radar_polar_to_cartesian
 from pyboreas import BoreasDataset
 from pyboreas.data.sequence import Sequence
+from pyboreas.utils.radar import radar_polar_to_cartesian
 
 
 @dataclass
@@ -53,7 +53,10 @@ class BoreasSequence:
             azimuth_offset_rad: Artificial rotation (radians) of the raw polar
                 scan around the radar origin, applied at bin level (azimuth
                 shift) before rendering, i.e. without re-interpolating an
-                already-rendered cartesian image. 0.0 = original behaviour.
+                already-rendered cartesian image. The rotation wraps modulo
+                2pi and reorders the polar rows, so no data is lost at the
+                seam (a plain azimuth shift would blank a wedge of the same
+                angular size). 0.0 = original behaviour.
 
         Returns:
             Normalized cartesian image as float64 array in [0, 1].
@@ -61,9 +64,17 @@ class BoreasSequence:
         frame = self.sequence.get_radar(index)
         if azimuth_offset_rad:
             azimuths = np.asarray(frame.azimuths, dtype=np.float32).squeeze()
+            polar = np.asarray(frame.polar, dtype=np.float32)
+            # Exact bin-level rotation: wrap the azimuths modulo 2pi and
+            # reorder the polar rows accordingly. A plain `azimuths + offset`
+            # would push the wrapped-around rows out of the renderer's sample
+            # range (cv2.remap border -> zeros), blanking a wedge of angular
+            # size == offset next to the 2pi seam.
+            az_wrapped = (azimuths + np.float32(azimuth_offset_rad)) % np.float32(2.0 * np.pi)
+            order = np.argsort(az_wrapped)
             img = radar_polar_to_cartesian(
-                azimuths + np.float32(azimuth_offset_rad),
-                np.asarray(frame.polar, dtype=np.float32),
+                az_wrapped[order],
+                polar[order],
                 float(frame.resolution),
                 cart_resolution=size_of_pixel,
                 cart_pixel_width=N,
@@ -96,7 +107,8 @@ class BoreasSequence:
         ])
         return points
 
-    def get_raw_point_cloud(self, index: int, intensity_threshold: float = 0.0) -> np.ndarray:
+    def get_raw_point_cloud(self, index: int, intensity_threshold: float = 0.0,
+                            azimuth_offset_rad: float = 0.0) -> np.ndarray:
         """Extract (x, y, intensity) point cloud directly from raw polar radar data.
 
         Bypasses the cartesian image entirely — each range bin becomes a metric
@@ -106,6 +118,9 @@ class BoreasSequence:
         Args:
             index: Frame index.
             intensity_threshold: Minimum intensity to include a point (0.0 = all).
+            azimuth_offset_rad: Artificial rotation (radians) added to each
+                azimuth before computing point coordinates. sin/cos wrap
+                naturally, so no explicit mod-2pi handling is needed here.
 
         Returns:
             Nx3 array of (x, y, intensity) points in the Open3D/point-cloud frame.

@@ -221,7 +221,11 @@ def run_benchmark(
 
             # Get GT transformation, corrected by the applied scan rotation.
             # Rotating the current scan's points p_curr -> A@p_curr turns the
-            # relative transform T_gt (curr->prev) into T_gt @ A^-1.
+            # relative transform T_gt (curr->prev) into T_gt @ A^-1, A being
+            # the rotation applied to the scan data (measured: image content
+            # rotates by +delta in image coords; the methods' SE3 convention
+            # inverts the fitted affine, so the corrected GT yaw is yaw_gt+
+            # delta, i.e. T_gt @ inv(azimuth_offset_to_rotation(delta))).
             gt_transform = seq.get_gt_transform(prev_idx, curr_idx)
             gt_corrected = gt_transform @ np.linalg.inv(azimuth_offset_to_rotation(applied_rot_rad))
             gt_affine = get_affine_matrix(gt_corrected)
@@ -603,7 +607,8 @@ def main():
     print(f"Start frame: {args.start_frame}")
     print(f"Max frames: {args.max_frames}")
     print(f"Save blended: {args.save_blended}")
-    print(f"Random rotation: {'ON (U[0,360) deg per pair, seed ' + str(args.rand_rot_seed) + ')' if args.apply_rand_rot else 'OFF'}")
+    print(f"Random rotation: ON (U[0,360) deg per pair, seed {args.rand_rot_seed})" if args.apply_rand_rot
+          else "Random rotation: OFF")
     print(f"Output dir: {args.output_dir}")
     print(f"Data dir: {args.data_dir}")
     print(f"Method config: {method_config}")
