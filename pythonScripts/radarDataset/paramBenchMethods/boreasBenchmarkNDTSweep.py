@@ -66,6 +66,7 @@ PARAM_GRID = {
     "ndt_scale": [1.0],
     "ndt_threshold_pct": [5.0],
     "ndt_z_scale": [0.1],
+    "ndt_downsample_voxel": [1.0],
     "round": [False],
 }
 # ============================================================================
@@ -150,6 +151,7 @@ def run_single_combo(args: tuple) -> Tuple[str, dict]:
         "ndt_scale": combo["ndt_scale"],
         "ndt_threshold_pct": combo["ndt_threshold_pct"],
         "ndt_z_scale": combo["ndt_z_scale"],
+        "ndt_downsample_voxel": combo["ndt_downsample_voxel"],
         "initial_guess": np.eye(4).tolist(),
     }
 
