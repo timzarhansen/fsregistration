@@ -85,6 +85,17 @@ USE_WEIGHTED_PEAK_SCORE = True
 DEBUG_MODE = False
 
 # ----------------------------------------------------------------------------
+# Outlier definitions (used for the summary table in the results CSV)
+# ----------------------------------------------------------------------------
+# Rotation outlier: |rot_error_deg| > this threshold.
+OUTLIER_ROT_THRESH_DEG = 5.0
+
+# Translation outlier: trans_error_m > this threshold.
+# (Pairs can be counted in both; stats in the summary are computed over
+#  inliers = pairs failing NEITHER criterion.)
+OUTLIER_TRANS_THRESH_M = 2.0
+
+# ----------------------------------------------------------------------------
 # Parallelism
 # ----------------------------------------------------------------------------
 # Number of parallel worker processes (one core each). 12 = full machine here.

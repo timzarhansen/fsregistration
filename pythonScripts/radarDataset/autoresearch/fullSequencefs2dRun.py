@@ -83,6 +83,86 @@ def apply_circular_mask(image: np.ndarray) -> np.ndarray:
 
 
 # ============================================================================
+# Summary statistics
+# ============================================================================
+
+def compute_summary(rows, rot_thresh_deg, trans_thresh_m):
+    """Aggregate per-pair results into a run summary.
+
+    Outlier definitions:
+      - rotation outlier:    |rot_error_deg| > rot_thresh_deg
+      - translation outlier: trans_error_m    > trans_thresh_m
+    A pair can count in both. Stats (mean/std/median, std with ddof=1 as in
+    aggregate_benchmark_results.py) are computed over inliers = pairs that
+    fail NEITHER criterion.
+    """
+    inlier_rot, inlier_trans = [], []
+    rot_outliers = 0
+    trans_outliers = 0
+    for r in rows:
+        is_rot_out = abs(r["rot_error_deg"]) > rot_thresh_deg
+        is_trans_out = r["trans_error_m"] > trans_thresh_m
+        if is_rot_out:
+            rot_outliers += 1
+        if is_trans_out:
+            trans_outliers += 1
+        if not is_rot_out and not is_trans_out:
+            inlier_rot.append(r["rot_error_deg"])
+            inlier_trans.append(r["trans_error_m"])
+
+    def _stats(vals):
+        a = np.asarray(vals, dtype=np.float64)
+        a = a[~np.isnan(a)]
+        if len(a) == 0:
+            return float("nan"), float("nan"), float("nan")
+        return (float(np.mean(a)), float(np.std(a, ddof=1)), float(np.median(a)))
+
+    rot_mean, rot_std, rot_med = _stats(inlier_rot)
+    trans_mean, trans_std, trans_med = _stats(inlier_trans)
+    return {
+        "rot_mean_deg": rot_mean,
+        "rot_std_deg": rot_std,
+        "rot_median_deg": rot_med,
+        "trans_mean_m": trans_mean,
+        "trans_std_m": trans_std,
+        "trans_median_m": trans_med,
+        "rot_outlier_count": rot_outliers,
+        "trans_outlier_count": trans_outliers,
+        "num_pairs": len(rows),
+        "num_inliers": len(inlier_rot),
+    }
+
+
+def summary_table_lines(summary):
+    """Human-readable (header, data) row for the summary table."""
+    header = ("Method | Rot. err. (deg) mean\u00b1std | Rot median | "
+              "Trans. err. (m) mean\u00b1std | Trans median | "
+              "Rot outliers | Trans outliers")
+    data = (f"fs2d   | {summary['rot_mean_deg']:6.2f} \u00b1 {summary['rot_std_deg']:<5.2f} "
+            f"| {summary['rot_median_deg']:6.2f} "
+            f"| {summary['trans_mean_m']:6.2f} \u00b1 {summary['trans_std_m']:<5.2f} "
+            f"| {summary['trans_median_m']:6.2f} "
+            f"| {summary['rot_outlier_count']}/{summary['num_pairs']:<4d} "
+            f"| {summary['trans_outlier_count']}/{summary['num_pairs']}")
+    return header, data
+
+
+def summary_numeric_lines(summary):
+    """Machine-readable '# key: value' lines for the CSV metadata section."""
+    return [
+        ("summary_rot_err_mean_deg", summary["rot_mean_deg"]),
+        ("summary_rot_err_std_deg", summary["rot_std_deg"]),
+        ("summary_rot_err_median_deg", summary["rot_median_deg"]),
+        ("summary_trans_err_mean_m", summary["trans_mean_m"]),
+        ("summary_trans_err_std_m", summary["trans_std_m"]),
+        ("summary_trans_err_median_m", summary["trans_median_m"]),
+        ("summary_rot_outlier_count", summary["rot_outlier_count"]),
+        ("summary_trans_outlier_count", summary["trans_outlier_count"]),
+        ("summary_num_inliers", summary["num_inliers"]),
+    ]
+
+
+# ============================================================================
 # Worker processes
 # ============================================================================
 
@@ -232,10 +312,21 @@ def main():
     run_elapsed = time.time() - t0
 
     rows_ok.sort(key=lambda r: r["prev_frame"])
+    summary = compute_summary(rows_ok, cfg.OUTLIER_ROT_THRESH_DEG, cfg.OUTLIER_TRANS_THRESH_M)
 
-    # Write CSV: metadata header (# key: value) + column header + data rows.
+    # Write CSV: summary table + metadata header (# key: value) + data rows.
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
+        # --- Summary at the top ---
+        if rows_ok:
+            header, data = summary_table_lines(summary)
+            writer.writerow(["# " + "-" * 78])
+            writer.writerow(["# " + header])
+            writer.writerow(["# " + data])
+            writer.writerow(["# " + "-" * 78])
+            for key, val in summary_numeric_lines(summary):
+                writer.writerow([f"# {key}: {val:.6f}" if isinstance(val, float) else f"# {key}: {val}"])
+        # --- Run metadata ---
         writer.writerow([f"# sequence_name: {cfg.SEQUENCE_NAME}"])
         writer.writerow([f"# total_frames: {total_frames}"])
         writer.writerow([f"# num_pairs_total: {len(pairs)}"])
@@ -266,8 +357,11 @@ def main():
           f"{len(failures)} failed "
           f"({run_elapsed / max(len(rows_ok), 1):.2f}s per pair wall)")
     if rows_ok:
-        print(f"Avg |rot error| : {np.mean(np.abs([r['rot_error_deg'] for r in rows_ok])):.3f} deg")
-        print(f"Avg trans error: {np.mean([r['trans_error_m'] for r in rows_ok]):.3f} m")
+        header, data = summary_table_lines(summary)
+        print()
+        print(header)
+        print(data)
+        print()
         print(f"Avg conf       : {np.mean([r['confidence'] for r in rows_ok]):.3f}")
         print(f"Avg time       : {np.mean([r['time_ms'] for r in rows_ok]):.1f} ms/pair")
     print(f"CSV: {out_path}")
