@@ -42,23 +42,38 @@ class BoreasSequence:
     def length(self) -> int:
         return len(self.sequence.radar_frames)
 
-    def get_cartesian_image(self, index: int, N: int, size_of_pixel: float) -> np.ndarray:
+    def get_cartesian_image(self, index: int, N: int, size_of_pixel: float,
+                            azimuth_offset_rad: float = 0.0) -> np.ndarray:
         """Convert polar radar scan to cartesian image.
 
         Args:
             index: Index of radar frame.
             N: Image grid size (N x N).
             size_of_pixel: Meters per pixel.
+            azimuth_offset_rad: Artificial rotation (radians) of the raw polar
+                scan around the radar origin, applied at bin level (azimuth
+                shift) before rendering, i.e. without re-interpolating an
+                already-rendered cartesian image. 0.0 = original behaviour.
 
         Returns:
             Normalized cartesian image as float64 array in [0, 1].
         """
         frame = self.sequence.get_radar(index)
-        img = frame.polar_to_cart(
-            cart_resolution=size_of_pixel,
-            cart_pixel_width=N,
-            in_place=False,
-        )
+        if azimuth_offset_rad:
+            azimuths = np.asarray(frame.azimuths, dtype=np.float32).squeeze()
+            img = radar_polar_to_cartesian(
+                azimuths + np.float32(azimuth_offset_rad),
+                np.asarray(frame.polar, dtype=np.float32),
+                float(frame.resolution),
+                cart_resolution=size_of_pixel,
+                cart_pixel_width=N,
+            )
+        else:
+            img = frame.polar_to_cart(
+                cart_resolution=size_of_pixel,
+                cart_pixel_width=N,
+                in_place=False,
+            )
         return img
 
     def get_point_cloud(self, index: int, N: int, size_of_pixel: float, threshold: float = 0.01) -> np.ndarray:
@@ -103,7 +118,7 @@ class BoreasSequence:
         num_bins = polar.shape[1]
         ranges = (np.arange(num_bins, dtype=np.float32) + 0.5) * resolution
 
-        angles = azimuths[:, np.newaxis]
+        angles = (azimuths + np.float32(azimuth_offset_rad))[:, np.newaxis]
         pcd_x = ranges[np.newaxis, :] * np.sin(angles)     # horizontal, +right
         pcd_y = ranges[np.newaxis, :] * np.cos(angles)     # aligned with Boreas convention, pc_y = -vehicle_x
         pcd_z = polar
@@ -189,6 +204,28 @@ def get_affine_matrix(input_matrix: np.ndarray,
         T_c_inv[:2, 2] = [-c, -c]
         result = T_c @ result @ T_c_inv
     return result
+
+
+def azimuth_offset_to_rotation(azimuth_offset_rad: float) -> np.ndarray:
+    """Exact 4x4 rotation applied to a scan when rendered with an azimuth offset.
+
+    Shifting a scan's azimuths by delta maps each bin's metric coordinates
+    (x = r*sin(a), y = r*cos(a)) to (x', y') = A @ (x, y) with
+    A = [[cos d, sin d], [-sin d, cos d]] (pure rotation, no translation).
+    The same rotation is applied to a rendered cartesian image (both the raw
+    point cloud and the image consume the same shifted azimuths), and it is
+    frame-invariant, so A is valid in the point-cloud, image and
+    vehicle frames alike.
+
+    Principal use: when the *current* scan of a pair is rotated by A, the
+    ground-truth relative transform must be corrected to T' = T_gt @ A^-1
+    (verified: p_prev = T_gt @ p_curr  <=>  p_prev = T' @ (A @ p_curr)).
+    """
+    c = np.cos(azimuth_offset_rad)
+    s = np.sin(azimuth_offset_rad)
+    A = np.eye(4)
+    A[:2, :2] = [[c, s], [-s, c]]
+    return A
 
 
 def transform_diff(matrix1: np.ndarray, matrix2: np.ndarray) -> tuple:

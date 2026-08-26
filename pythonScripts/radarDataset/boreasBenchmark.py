@@ -27,6 +27,12 @@ Usage:
         --matching_step 3 --start_frame 0 --max_frames 100 \
         --method-config "fs2d.use_direct=1 fs2d.level_potential_rotation=0.01" \
         --output-dir benchmark_results <data_dir>
+
+    # Random azimuth rotation benchmark (fresh U[0,360) deg rotation per pair,
+    # applied to the current scan at bin level, GT corrected):
+    python boreasBenchmark.py --method fs2d --sequence 0 --apply-rand-rot \
+        --rand-rot-seed 42 --N 128 --radius 32.0 --matching_step 5 \
+        --output-dir benchmark_results <data_dir>
 """
 
 import argparse
@@ -55,6 +61,7 @@ from boreasDatasetLoader import (
     load_single_sequence,
     get_affine_matrix,
     transform_diff,
+    azimuth_offset_to_rotation,
 )
 from boreasRegistrationMethods import RegistrationFactory, RegistrationResult
 
@@ -100,6 +107,8 @@ def run_benchmark(
     pcd2: Optional[np.ndarray] = None,
     use_raw_pointcloud: bool = False,
     raw_intensity_threshold: float = 0.3,
+    apply_rand_rot: bool = False,
+    rand_rot_seed: int = 42,
 ) -> Tuple[Path, dict]:
     """Run benchmark on a single sequence with a single method.
 
@@ -118,6 +127,14 @@ def run_benchmark(
         use_raw_pointcloud: If True, load raw point clouds per-pair (correct
             for ICP/NDT) instead of relying on precomputed pcd1/pcd2.
         raw_intensity_threshold: Intensity floor for raw point clouds.
+        apply_rand_rot: If True, rotate the CURRENT scan of every pair by a
+            fresh random azimuth angle ~ U[0, 360) deg, applied at bin level
+            (before rendering image/point cloud). The GT transform is
+            corrected by the applied rotation, and the angle is recorded
+            per-row in the results CSV.
+        rand_rot_seed: RNG seed for the random rotation (reproducibility).
+            The effective seed is rand_rot_seed + sequence_number, so each
+            sequence gets its own deterministic stream (parallel-safe).
 
     Returns:
         Tuple of (results_csv_path, summary_dict).
@@ -136,6 +153,11 @@ def run_benchmark(
     num_pairs = 0
     if end_frame > start_frame + matching_step:
         num_pairs = max(0, (end_frame - start_frame - 1) // matching_step)
+
+    # Random azimuth rotation for the current scan of every pair.
+    # Seeded per sequence => deterministic and different per sequence in
+    # parallel runs (each worker process seeds its own RNG on this value).
+    rng = np.random.default_rng(rand_rot_seed + sequence_number) if apply_rand_rot else None
 
     # Setup output directory
     px_int = int(size_of_pixel * 100)
@@ -160,6 +182,8 @@ def run_benchmark(
     print(f"Sequence has {total_frames} radar scans (processing frames {start_frame} to {end_frame})")
     print(f"Matching every {matching_step}th frame -> {num_pairs} pairs")
     print(f"Method: {method_name}")
+    print(f"Random rotation: ON (U[0,360) deg per pair, seed {rand_rot_seed})" if apply_rand_rot
+          else "Random rotation: OFF")
     print()
 
     # Initialize method
@@ -182,14 +206,25 @@ def run_benchmark(
         prev_idx = start_frame + pair_idx * matching_step
         curr_idx = start_frame + (pair_idx + 1) * matching_step
 
+        applied_rot_deg = 0.0
+        applied_rot_rad = 0.0
         try:
-            # Load images
-            img_prev = seq.get_cartesian_image(prev_idx, N, size_of_pixel)
-            img_curr = seq.get_cartesian_image(curr_idx, N, size_of_pixel)
+            # Fresh random rotation for this pair (uniform in [0, 360) deg)
+            if apply_rand_rot:
+                applied_rot_deg = rng.uniform(0.0, 360.0)
+                applied_rot_rad = np.radians(applied_rot_deg)
 
-            # Get GT transformation
+            # Load images (current scan rotated at bin level if requested)
+            img_prev = seq.get_cartesian_image(prev_idx, N, size_of_pixel)
+            img_curr = seq.get_cartesian_image(curr_idx, N, size_of_pixel,
+                                               azimuth_offset_rad=applied_rot_rad)
+
+            # Get GT transformation, corrected by the applied scan rotation.
+            # Rotating the current scan's points p_curr -> A@p_curr turns the
+            # relative transform T_gt (curr->prev) into T_gt @ A^-1.
             gt_transform = seq.get_gt_transform(prev_idx, curr_idx)
-            gt_affine = get_affine_matrix(gt_transform)
+            gt_corrected = gt_transform @ np.linalg.inv(azimuth_offset_to_rotation(applied_rot_rad))
+            gt_affine = get_affine_matrix(gt_corrected)
 
             # Run registration
             t0 = time.time()
@@ -197,9 +232,17 @@ def run_benchmark(
             if use_raw_pointcloud:
                 # Load the correct clouds for THIS pair (per-pair, not the
                 # sequence's first/last frame). Needed for realistic ICP/NDT.
+                # The current scan gets the same azimuth rotation as the image.
                 reg_kwargs["pcd1"] = seq.get_raw_point_cloud(prev_idx, raw_intensity_threshold)
-                reg_kwargs["pcd2"] = seq.get_raw_point_cloud(curr_idx, raw_intensity_threshold)
+                reg_kwargs["pcd2"] = seq.get_raw_point_cloud(curr_idx, raw_intensity_threshold,
+                                                             azimuth_offset_rad=applied_rot_rad)
             elif pcd1 is not None and pcd2 is not None:
+                if apply_rand_rot:
+                    raise ValueError(
+                        "apply_rand_rot requires per-pair raw point clouds "
+                        "(use_raw_pointcloud=True); externally precomputed pcds "
+                        "cannot be rotated at bin level."
+                    )
                 reg_kwargs["pcd1"] = pcd1
                 reg_kwargs["pcd2"] = pcd2
             result = method.register(img_prev, img_curr, **reg_kwargs)
@@ -220,10 +263,17 @@ def run_benchmark(
             est_tx = est_affine[0, 2]
             est_ty = est_affine[1, 2]
 
-            # Extract GT pose components
-            gt_yaw = np.degrees(np.arctan2(gt_affine[1, 0], gt_affine[0, 0]))
-            gt_tx = gt_affine[0, 2]
-            gt_ty = gt_affine[1, 2]
+            # Extract GT pose components. gt_affine is the rotation-corrected
+            # GT (the one errors are computed against); gt_orig_affine is the
+            # raw vehicle motion, kept for reference/compatibility.
+            gt_orig_affine = get_affine_matrix(gt_transform)
+            gt_yaw = np.degrees(np.arctan2(gt_orig_affine[1, 0], gt_orig_affine[0, 0]))
+            gt_tx = gt_orig_affine[0, 2]
+            gt_ty = gt_orig_affine[1, 2]
+
+            gt_adj_yaw = np.degrees(np.arctan2(gt_affine[1, 0], gt_affine[0, 0]))
+            gt_adj_tx = gt_affine[0, 2]
+            gt_adj_ty = gt_affine[1, 2]
 
             # Find best solution among all candidates (closest to GT)
             best_rot_error = float('inf')
@@ -269,6 +319,10 @@ def run_benchmark(
                 "best_tx_m": best_tx,
                 "best_ty_m": best_ty,
                 "num_solutions": len(all_solutions),
+                "applied_rot_deg": applied_rot_deg,
+                "gt_rot_deg_adj": gt_adj_yaw,
+                "gt_tx_m_adj": gt_adj_tx,
+                "gt_ty_m_adj": gt_adj_ty,
             }
             results.append(row)
 
@@ -301,6 +355,7 @@ def run_benchmark(
                 "pair_idx": pair_idx,
                 "prev_frame": prev_idx,
                 "curr_frame": curr_idx,
+                "applied_rot_deg": applied_rot_deg,
                 "error": str(e),
                 "traceback": traceback.format_exc(),
             })
@@ -326,6 +381,8 @@ def run_benchmark(
         "num_pairs_processed": len(results),
         "num_pairs_failed": len(failures),
         "total_run_time_seconds": total_time,
+        "apply_rand_rot": apply_rand_rot,
+        "rand_rot_seed": rand_rot_seed,
     }
 
     if results:
@@ -357,6 +414,8 @@ def run_benchmark(
             "start_frame": start_frame,
             "max_frames": max_frames,
             "save_blended": save_blended,
+            "apply_rand_rot": apply_rand_rot,
+            "rand_rot_seed": rand_rot_seed,
         },
     }
     with open(save_dir / "config.json", "w") as f:
@@ -381,6 +440,8 @@ def run_benchmark(
             "best_rot_error_deg", "best_trans_error_m",
             "best_rot_deg", "best_tx_m", "best_ty_m",
             "num_solutions",
+            "applied_rot_deg",
+            "gt_rot_deg_adj", "gt_tx_m_adj", "gt_ty_m_adj",
         ]
         writer.writerow(columns)
 
@@ -393,6 +454,7 @@ def run_benchmark(
         with open(save_dir / "failures.log", "w") as f:
             for fail in failures:
                 f.write(f"Pair {fail['pair_idx']} (frames {fail['prev_frame']} -> {fail['curr_frame']}): {fail['error']}\n")
+                f.write(f"  applied_rot_deg={fail.get('applied_rot_deg', 0.0):.4f}\n")
                 f.write(f"{fail['traceback']}\n\n")
 
     # Print summary
@@ -492,6 +554,13 @@ def main():
                              "e.g., 'fs2d.N=128 fs2d.use_clahe=1 fs2d.potential_for_necessary_peak=0.01'")
     parser.add_argument("--save-blended", action="store_true",
                         help="Save blended images for each pair.")
+    parser.add_argument("--apply-rand-rot", action="store_true",
+                        help="Rotate the current scan of every pair by a fresh random "
+                             "azimuth angle ~ U[0, 360) deg (at bin level, before "
+                             "rendering). GT is corrected by the applied rotation.")
+    parser.add_argument("--rand-rot-seed", type=int, default=42,
+                        help="RNG seed for the random rotation (reproducibility). "
+                             "Only used with --apply-rand-rot. Default: 42")
     parser.add_argument("data_dir", type=str,
                         help="Path to Boreas radar data directory.")
 
@@ -534,6 +603,7 @@ def main():
     print(f"Start frame: {args.start_frame}")
     print(f"Max frames: {args.max_frames}")
     print(f"Save blended: {args.save_blended}")
+    print(f"Random rotation: {'ON (U[0,360) deg per pair, seed ' + str(args.rand_rot_seed) + ')' if args.apply_rand_rot else 'OFF'}")
     print(f"Output dir: {args.output_dir}")
     print(f"Data dir: {args.data_dir}")
     print(f"Method config: {method_config}")
@@ -567,6 +637,8 @@ def main():
             max_frames=args.max_frames,
             save_blended=args.save_blended,
             output_dir=args.output_dir,
+            apply_rand_rot=args.apply_rand_rot,
+            rand_rot_seed=args.rand_rot_seed,
         )
     except Exception as e:
         print(f"ERROR: Benchmark failed: {e}")

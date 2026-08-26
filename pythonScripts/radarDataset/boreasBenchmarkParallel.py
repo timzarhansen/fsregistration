@@ -90,7 +90,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
     """
     seq_num, seq_name, data_dir, method_name, method_config, matching_step, \
         start_frame, max_frames, save_blended, output_dir, \
-        use_raw_pointcloud, raw_intensity_threshold = args
+        use_raw_pointcloud, raw_intensity_threshold, \
+        apply_rand_rot, rand_rot_seed = args
 
     try:
         pid = os.getpid()
@@ -113,6 +114,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
             output_dir=output_dir,
             use_raw_pointcloud=use_raw_pointcloud,
             raw_intensity_threshold=raw_intensity_threshold,
+            apply_rand_rot=apply_rand_rot,
+            rand_rot_seed=rand_rot_seed,
         )
 
         print(f"[Worker {pid}] Sequence {seq_num} done: {csv_path}")
@@ -160,6 +163,13 @@ def main():
                         help="Noise threshold for raw point cloud extraction. Default: 0.3")
     parser.add_argument("--save-blended", action="store_true",
                         help="Save blended images for each pair.")
+    parser.add_argument("--apply-rand-rot", action="store_true",
+                        help="Rotate the current scan of every pair by a fresh random "
+                             "azimuth angle ~ U[0, 360) deg (at bin level, before "
+                             "rendering). GT is corrected by the applied rotation.")
+    parser.add_argument("--rand-rot-seed", type=int, default=42,
+                        help="RNG seed for the random rotation (reproducibility). "
+                             "Only used with --apply-rand-rot. Default: 42")
     parser.add_argument("data_dir", type=str,
                         help="Path to Boreas radar data directory.")
 
@@ -191,6 +201,7 @@ def main():
     print(f"N={args.N}, radius={args.radius} m (pixel_size: {(2.0 * args.radius) / args.N:.3f} m), "
           f"matching_step={args.matching_step}")
     print(f"Workers: {args.num_workers}")
+    print(f"Random rotation: {'ON (U[0,360) deg per pair, seed ' + str(args.rand_rot_seed) + ')' if args.apply_rand_rot else 'OFF'}")
     print(f"Output: {args.output_dir}")
     print()
 
@@ -246,6 +257,8 @@ def main():
             args.output_dir,
             args.use_raw_pointcloud,
             args.raw_intensity_threshold,
+            args.apply_rand_rot,
+            args.rand_rot_seed,
         )
         for seq_num in sequence_numbers
     ]
