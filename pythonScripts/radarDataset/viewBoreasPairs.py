@@ -10,7 +10,10 @@
 #     image2.png - current frame
 #     blended.png - warped overlay
 #
-# Edit config at top of file to change settings.
+# Edit config at top of file to change settings. To test the random azimuth
+# rotation feature, set APPLY_RAND_ROT=True (fixed RAND_ROT_DEG angle, or
+# RAND_ROT_RANDOM=True for a fresh U[0,360) deg angle per pair). The GT error
+# is computed against the rotation-corrected GT.
 ################################################################################
 
 import os
@@ -30,6 +33,7 @@ from boreasDatasetLoader import (
     load_single_sequence,
     get_affine_matrix,
     transform_diff,
+    azimuth_offset_to_rotation,
 )
 from boreasRegistrationMethods import RegistrationFactory
 
@@ -54,14 +58,24 @@ START_FRAME = 4015                  # First frame index; first pair = (START_FRA
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
-NUM_ANGLES = -1              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
+NUM_ANGLES = 4096              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
 LEVEL_POTENTIAL_ROTATION = 0.001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
-R_MIN = 0.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
-R_MAX = 0.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MIN = 55.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 120.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 NORMALIZATION = 1  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
+
+# Random azimuth rotation of the CURRENT scan (bin level, before rendering).
+# With APPLY_RAND_ROT=True and RAND_ROT_RANDOM=True each pair gets a fresh
+# uniform [0,360) deg rotation (seeded); otherwise a fixed RAND_ROT_DEG is
+# applied. The GT transform is corrected by the applied rotation (same math
+# as boreasBenchmark.py --apply-rand-rot). 0.0 = original behaviour.
+APPLY_RAND_ROT = False        # Rotate the current scan before registration
+RAND_ROT_DEG = 90.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
+RAND_ROT_RANDOM = False       # True: fresh uniform [0,360) deg per pair; False: fixed angle
+RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
 
 # Raw point cloud config (used by ICP, NDT etc.)
 USE_RAW_POINTCLOUD = True        # True = raw polar data (best), False = cartesian image
@@ -156,6 +170,7 @@ def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, RADIUS, SIZE_OF_PIXEL
     global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX
+    global APPLY_RAND_ROT, RAND_ROT_DEG, RAND_ROT_RANDOM, RAND_ROT_SEED
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
     global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT, NDT_Z_SCALE, NDT_DOWNSAMPLE_VOXEL
@@ -224,6 +239,10 @@ def get_config_from_file():
     R_MIN = extract_var("R_MIN", R_MIN)
     R_MAX = extract_var("R_MAX", R_MAX)
     ROUND = extract_var("ROUND", ROUND)
+    APPLY_RAND_ROT = extract_var("APPLY_RAND_ROT", APPLY_RAND_ROT)
+    RAND_ROT_DEG = extract_var("RAND_ROT_DEG", RAND_ROT_DEG)
+    RAND_ROT_RANDOM = extract_var("RAND_ROT_RANDOM", RAND_ROT_RANDOM)
+    RAND_ROT_SEED = extract_var("RAND_ROT_SEED", RAND_ROT_SEED)
     REGISTRATION_METHOD = extract_var("REGISTRATION_METHOD", REGISTRATION_METHOD)
     USE_RAW_POINTCLOUD = extract_var("USE_RAW_POINTCLOUD", USE_RAW_POINTCLOUD)
     RAW_INTENSITY_THRESHOLD = extract_var("RAW_INTENSITY_THRESHOLD", RAW_INTENSITY_THRESHOLD)
@@ -310,29 +329,40 @@ def run_pair(
     idx1: int,
     idx2: int,
     method: Any,
+    applied_rot_deg: float = 0.0,
 ) -> Tuple:
-    """Register one pair via method.register() and return (img1, img2, blended, result, gt_error)."""
+    """Register one pair via method.register() and return (img1, img2, blended, result, gt_error).
+
+    applied_rot_deg: azimuth rotation (deg) applied to the CURRENT scan at bin
+    level before rendering. The GT transform is corrected by the applied
+    rotation, mirroring boreasBenchmark.run_benchmark.
+    """
+    applied_rot_rad = np.radians(applied_rot_deg)
     img1 = seq.get_cartesian_image(idx1, N, SIZE_OF_PIXEL)
-    img2 = seq.get_cartesian_image(idx2, N, SIZE_OF_PIXEL)
+    img2 = seq.get_cartesian_image(idx2, N, SIZE_OF_PIXEL, azimuth_offset_rad=applied_rot_rad)
 
     if ROUND:
         img1 = apply_circular_mask(img1)
         img2 = apply_circular_mask(img2)
 
     gt_transform = seq.get_gt_transform(idx1, idx2)
-    gt_affine = get_affine_matrix(gt_transform)
+    # Measured on real data (FS2D, raw-pcl ICP): applied +delta on the CURRENT
+    # scan makes the methods report ~-delta, so the corrected GT is
+    # T_gt @ C(delta) (yaw_gt - delta) — same as boreasBenchmark.run_benchmark.
+    gt_corrected = gt_transform @ azimuth_offset_to_rotation(applied_rot_rad)
+    gt_affine = get_affine_matrix(gt_corrected)
 
     # Registration — use raw polar data for point-cloud methods if configured
     sig = inspect.signature(method.register)
     if USE_RAW_POINTCLOUD and "pcd1" in sig.parameters:
         raw1 = seq.get_raw_point_cloud(idx1, RAW_INTENSITY_THRESHOLD)
-        raw2 = seq.get_raw_point_cloud(idx2, RAW_INTENSITY_THRESHOLD)
+        raw2 = seq.get_raw_point_cloud(idx2, RAW_INTENSITY_THRESHOLD, azimuth_offset_rad=applied_rot_rad)
         result = method.register(img1, img2, pcd1=raw1, pcd2=raw2)
     else:
         result = method.register(img1, img2)
     transform = result.transform
 
-    # Compute GT error
+    # Compute GT error (against the rotation-corrected GT)
     est_affine = get_affine_matrix(transform)
     gt_error = transform_diff(gt_affine, est_affine)
 
@@ -348,7 +378,7 @@ def run_pair(
     gt_tx = gt_transform[0, 3]
     gt_ty = gt_transform[1, 3]
 
-    return img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty
+    return img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty, applied_rot_deg
 
 
 def main():
@@ -364,6 +394,7 @@ def main():
     print(f"  MATCHING_STEP: {MATCHING_STEP}, START_FRAME: {START_FRAME}, MAX_FRAMES: {MAX_FRAMES}")
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
     print(f"  ROUND: {ROUND}")
+    print(f"  APPLY_RAND_ROT: {APPLY_RAND_ROT} (fixed {RAND_ROT_DEG} deg / random {RAND_ROT_RANDOM}, seed {RAND_ROT_SEED})")
     print()
 
     # Load sequence
@@ -492,14 +523,23 @@ def main():
     print()
 
     idx = START_FRAME + MATCHING_STEP
+    rng = np.random.default_rng(RAND_ROT_SEED) if (APPLY_RAND_ROT and RAND_ROT_RANDOM) else None
 
     while idx < length_of_radar_scans:
         prev_idx = idx - MATCHING_STEP
 
+        # Rotation of the current scan for this pair (bin level, before rendering)
+        if APPLY_RAND_ROT:
+            applied_rot_deg = rng.uniform(0.0, 360.0) if RAND_ROT_RANDOM else RAND_ROT_DEG
+        else:
+            applied_rot_deg = 0.0
+
         print(f"\n--- Pair: {prev_idx} -> {idx} ---")
+        if applied_rot_deg:
+            print(f"  Applied azimuth rotation to current scan: {applied_rot_deg:.2f} deg")
 
         # Run registration
-        img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty = run_pair(seq, prev_idx, idx, method)
+        img1, img2, blended, result, gt_error, gt_yaw, gt_tx, gt_ty, applied_rot_deg = run_pair(seq, prev_idx, idx, method, applied_rot_deg)
 
         # Save display images (overwrite each time)
         cv2.imwrite(str(save_dir / "image1.png"), cv2.cvtColor((img1 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR))

@@ -220,14 +220,14 @@ def run_benchmark(
                                                azimuth_offset_rad=applied_rot_rad)
 
             # Get GT transformation, corrected by the applied scan rotation.
-            # Rotating the current scan's points p_curr -> A@p_curr turns the
-            # relative transform T_gt (curr->prev) into T_gt @ A^-1, A being
-            # the rotation applied to the scan data (measured: image content
-            # rotates by +delta in image coords; the methods' SE3 convention
-            # inverts the fitted affine, so the corrected GT yaw is yaw_gt+
-            # delta, i.e. T_gt @ inv(azimuth_offset_to_rotation(delta))).
+            # Measured on real data (FS2D + raw-pcl ICP): for an applied
+            # azimuth offset +delta on the CURRENT scan, the methods report
+            # ~-delta (est = gt_raw_yaw - delta when they converge), so the
+            # corrected GT yaw must be yaw_gt - delta, i.e.
+            #   T_corrected = T_gt @ azimuth_offset_to_rotation(delta)
+            # (C(delta) rotates by -delta; T_gt @ C(delta) = yaw_gt - delta).
             gt_transform = seq.get_gt_transform(prev_idx, curr_idx)
-            gt_corrected = gt_transform @ np.linalg.inv(azimuth_offset_to_rotation(applied_rot_rad))
+            gt_corrected = gt_transform @ azimuth_offset_to_rotation(applied_rot_rad)
             gt_affine = get_affine_matrix(gt_corrected)
 
             # Run registration

@@ -232,9 +232,12 @@ def azimuth_offset_to_rotation(azimuth_offset_rad: float) -> np.ndarray:
     frame-invariant, so A is valid in the point-cloud, image and
     vehicle frames alike.
 
-    Principal use: when the *current* scan of a pair is rotated by A, the
-    ground-truth relative transform must be corrected to T' = T_gt @ A^-1
-    (verified: p_prev = T_gt @ p_curr  <=>  p_prev = T' @ (A @ p_curr)).
+    Principal use: when the *current* scan of a pair is rotated by the
+    azimuth shift, the ground-truth transform must be corrected. Measured on
+    real data (FS2D and raw-pcl ICP): an applied +delta makes the methods
+    report ~-delta, so the benchmark uses
+        T_corrected = T_gt @ A            (yaw_gt - delta)
+    (see boreasBenchmark.run_benchmark / viewBoreasPairs.run_pair).
     """
     c = np.cos(azimuth_offset_rad)
     s = np.sin(azimuth_offset_rad)
