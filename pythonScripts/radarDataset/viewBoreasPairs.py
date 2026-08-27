@@ -46,7 +46,7 @@ from boreasRegistrationMethods import RegistrationFactory
 DATA_DIR = "/home/tim-external/dataFolder/radar_boreas"
 SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
-REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
+REGISTRATION_METHOD = "lightglue"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
 # Goods fs2d example 285
 # FS2D-specific config
@@ -55,7 +55,7 @@ RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 285                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 0                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
@@ -78,7 +78,7 @@ USE_WEIGHTED_PEAK_SCORE = True
 # corrected by the applied rotation (same math as boreasBenchmark.py
 # --apply-rand-rot). 0.0 = original behaviour.
 APPLY_RAND_ROT = True         # Rotate the current scan before registration
-RAND_ROT_DEG = 0.0            # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
+RAND_ROT_DEG = 60.0            # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
 RAND_ROT_RANDOM = False       # True: fresh uniform on [-WINDOW, +WINDOW]; False: fixed angle
 RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
 RAND_ROT_WINDOW_RAD = np.pi   # Random-rotation window: uniform in [-WINDOW, +WINDOW] rad (np.pi = full 360 deg)
