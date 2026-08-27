@@ -8,8 +8,9 @@ In addition to the original outputs (aggregated_results.csv, the paper summary
 CSVs/TeX), this version computes OUTLIER STATISTICS PER |GT-ROTATION| ANGLE
 GROUP:
 
-  * percent of outliers per method per angle group (ranges 15-20, 20-25,
-    25-30, >30 deg and cumulative >15, >20, >25, >30 deg),
+  * percent of outliers per method per angle group (ranges 0-5, 5-10,
+    10-15, 15-20, 20-25, 25-30, >30 deg and cumulative >15, >20, >25,
+    >30 deg),
   * absolute outlier counts per method per angle group,
   * absolute number of pairs per angle group (whole dataset),
 
@@ -56,7 +57,7 @@ MIN_GT_TRANS_M = 0.01
 # the absolute GT rotation of a pair (|gt_rot_deg|):
 #   ANGLE_RANGES      -> mutually exclusive ranges [lo, hi) degrees
 #   CUM_THRESHOLDS    -> cumulative "greater than" thresholds (degrees)
-ANGLE_RANGES = [(15, 20), (20, 25), (25, 30), (30, None)]
+ANGLE_RANGES = [(0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30), (30, None)]
 CUM_THRESHOLDS = [15, 20, 25, 30]
 
 # LaTeX options
