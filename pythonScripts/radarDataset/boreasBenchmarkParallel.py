@@ -91,7 +91,7 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
     seq_num, seq_name, data_dir, method_name, method_config, matching_step, \
         start_frame, max_frames, save_blended, output_dir, \
         use_raw_pointcloud, raw_intensity_threshold, \
-        apply_rand_rot, rand_rot_seed = args
+        apply_rand_rot, rand_rot_seed, rand_rot_min_deg, rand_rot_max_deg = args
 
     try:
         pid = os.getpid()
@@ -116,6 +116,8 @@ def worker_process(args: tuple) -> Tuple[int, bool, str, dict]:
             raw_intensity_threshold=raw_intensity_threshold,
             apply_rand_rot=apply_rand_rot,
             rand_rot_seed=rand_rot_seed,
+            rand_rot_min_deg=rand_rot_min_deg,
+            rand_rot_max_deg=rand_rot_max_deg,
         )
 
         print(f"[Worker {pid}] Sequence {seq_num} done: {csv_path}")
@@ -165,11 +167,19 @@ def main():
                         help="Save blended images for each pair.")
     parser.add_argument("--apply-rand-rot", action="store_true",
                         help="Rotate the current scan of every pair by a fresh random "
-                             "azimuth angle ~ U[0, 360) deg (at bin level, before "
-                             "rendering). GT is corrected by the applied rotation.")
+                             "azimuth angle: magnitude U[--rand-rot-min, --rand-rot-max] "
+                             "deg with a random sign (both directions), at bin level "
+                             "before rendering. GT is corrected by the applied rotation.")
     parser.add_argument("--rand-rot-seed", type=int, default=42,
                         help="RNG seed for the random rotation (reproducibility). "
                              "Only used with --apply-rand-rot. Default: 42")
+    parser.add_argument("--rand-rot-min", type=float, default=0.0,
+                        help="Minimum rotation magnitude in DEGREES (>= 0). "
+                             "Only used with --apply-rand-rot. Default: 0.0")
+    parser.add_argument("--rand-rot-max", type=float, default=180.0,
+                        help="Maximum rotation magnitude in DEGREES. With the random "
+                             "sign this spans both directions. Only used with "
+                             "--apply-rand-rot. Default: 180.0")
     parser.add_argument("data_dir", type=str,
                         help="Path to Boreas radar data directory.")
 
@@ -201,7 +211,7 @@ def main():
     print(f"N={args.N}, radius={args.radius} m (pixel_size: {(2.0 * args.radius) / args.N:.3f} m), "
           f"matching_step={args.matching_step}")
     print(f"Workers: {args.num_workers}")
-    print(f"Random rotation: {'ON (U[0,360) deg per pair, seed ' + str(args.rand_rot_seed) + ')' if args.apply_rand_rot else 'OFF'}")
+    print(f"Random rotation: {'ON (±U[' + str(args.rand_rot_min) + '..' + str(args.rand_rot_max) + '] deg per pair, seed ' + str(args.rand_rot_seed) + ')' if args.apply_rand_rot else 'OFF'}")
     print(f"Output: {args.output_dir}")
     print()
 
@@ -259,6 +269,8 @@ def main():
             args.raw_intensity_threshold,
             args.apply_rand_rot,
             args.rand_rot_seed,
+            args.rand_rot_min,
+            args.rand_rot_max,
         )
         for seq_num in sequence_numbers
     ]
