@@ -109,6 +109,7 @@ def run_benchmark(
     raw_intensity_threshold: float = 0.3,
     apply_rand_rot: bool = False,
     rand_rot_seed: int = 42,
+    rand_rot_window: float = np.pi,
 ) -> Tuple[Path, dict]:
     """Run benchmark on a single sequence with a single method.
 
@@ -128,13 +129,15 @@ def run_benchmark(
             for ICP/NDT) instead of relying on precomputed pcd1/pcd2.
         raw_intensity_threshold: Intensity floor for raw point clouds.
         apply_rand_rot: If True, rotate the CURRENT scan of every pair by a
-            fresh random azimuth angle ~ U[0, 360) deg, applied at bin level
-            (before rendering image/point cloud). The GT transform is
-            corrected by the applied rotation, and the angle is recorded
-            per-row in the results CSV.
+            fresh random azimuth angle ~ U[-window, +window] with window =
+            rand_rot_window rad, applied at bin level (before rendering
+            image/point cloud). The GT transform is corrected by the applied
+            rotation, and the angle is recorded per-row in the results CSV.
         rand_rot_seed: RNG seed for the random rotation (reproducibility).
             The effective seed is rand_rot_seed + sequence_number, so each
             sequence gets its own deterministic stream (parallel-safe).
+        rand_rot_window: Half-width of the uniform random-rotation window in
+            radians (np.pi = full 360 deg). Only used with apply_rand_rot.
 
     Returns:
         Tuple of (results_csv_path, summary_dict).
@@ -182,7 +185,7 @@ def run_benchmark(
     print(f"Sequence has {total_frames} radar scans (processing frames {start_frame} to {end_frame})")
     print(f"Matching every {matching_step}th frame -> {num_pairs} pairs")
     print(f"Method: {method_name}")
-    print(f"Random rotation: ON (U[0,360) deg per pair, seed {rand_rot_seed})" if apply_rand_rot
+    print(f"Random rotation: ON (U[+-{np.degrees(rand_rot_window):.1f}] deg window per pair, seed {rand_rot_seed})" if apply_rand_rot
           else "Random rotation: OFF")
     print()
 
@@ -209,9 +212,9 @@ def run_benchmark(
         applied_rot_deg = 0.0
         applied_rot_rad = 0.0
         try:
-            # Fresh random rotation for this pair (uniform in [0, 360) deg)
+            # Fresh random rotation for this pair (uniform on [-window, +window])
             if apply_rand_rot:
-                applied_rot_deg = rng.uniform(0.0, 360.0)
+                applied_rot_deg = np.degrees(rng.uniform(-rand_rot_window, rand_rot_window))
                 applied_rot_rad = np.radians(applied_rot_deg)
 
             # Load images (current scan rotated at bin level if requested)
@@ -561,11 +564,16 @@ def main():
                         help="Save blended images for each pair.")
     parser.add_argument("--apply-rand-rot", action="store_true",
                         help="Rotate the current scan of every pair by a fresh random "
-                             "azimuth angle ~ U[0, 360) deg (at bin level, before "
-                             "rendering). GT is corrected by the applied rotation.")
+                             "azimuth angle ~ U[-window, +window] deg (at bin level, "
+                             "before rendering), window = --rand-rot-window. GT is "
+                             "corrected by the applied rotation.")
     parser.add_argument("--rand-rot-seed", type=int, default=42,
                         help="RNG seed for the random rotation (reproducibility). "
                              "Only used with --apply-rand-rot. Default: 42")
+    parser.add_argument("--rand-rot-window", type=float, default=np.pi,
+                        help="Half-width of the uniform random-rotation window in RADIANS "
+                             "(np.pi = full 360 deg). Only used with --apply-rand-rot. "
+                             "Default: pi")
     parser.add_argument("data_dir", type=str,
                         help="Path to Boreas radar data directory.")
 
@@ -608,7 +616,7 @@ def main():
     print(f"Start frame: {args.start_frame}")
     print(f"Max frames: {args.max_frames}")
     print(f"Save blended: {args.save_blended}")
-    print(f"Random rotation: ON (U[0,360) deg per pair, seed {args.rand_rot_seed})" if args.apply_rand_rot
+    print(f"Random rotation: ON (U[+-{np.degrees(args.rand_rot_window):.1f}] deg window per pair, seed {args.rand_rot_seed})" if args.apply_rand_rot
           else "Random rotation: OFF")
     print(f"Output dir: {args.output_dir}")
     print(f"Data dir: {args.data_dir}")
@@ -645,6 +653,7 @@ def main():
             output_dir=args.output_dir,
             apply_rand_rot=args.apply_rand_rot,
             rand_rot_seed=args.rand_rot_seed,
+            rand_rot_window=args.rand_rot_window,
         )
     except Exception as e:
         print(f"ERROR: Benchmark failed: {e}")

@@ -12,7 +12,8 @@
 #
 # Edit config at top of file to change settings. To test the random azimuth
 # rotation feature, set APPLY_RAND_ROT=True (fixed RAND_ROT_DEG angle, or
-# RAND_ROT_RANDOM=True for a fresh U[0,360) deg angle per pair). The GT error
+# RAND_ROT_RANDOM=True for a fresh uniform angle drawn from
+# [-RAND_ROT_WINDOW_RAD, +RAND_ROT_WINDOW_RAD] per pair). The GT error
 # is computed against the rotation-corrected GT.
 ################################################################################
 
@@ -47,38 +48,40 @@ SEQUENCE_NUMBER = 0
 SEQUENCE_NAME = "boreas-2020-11-26-13-58" # Sequence name string, e.g. 'boreas-2020-11-26-13-58'
 REGISTRATION_METHOD = "fs2d"  # Options: fs2d, icp, ndt_p2d, fourier_mellin, sift, surf, kaze, akaze, loftr, eloftr, lightglue
 
-# difficult: (135, 285, 2115, 2135, 2465, 2490, 2725, 2730 ±1)
+# Goods fs2d example 285
 # FS2D-specific config
 N = 256         #256 128               # Image grid size (N x N)
 RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N computed automatically) docker=140.0
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 2480                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 285                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
 NUM_ANGLES = 4096              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
 LEVEL_POTENTIAL_ROTATION = 0.0  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
-R_MIN = 40.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
-R_MAX = 90.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MIN = 13.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MAX = 120.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 NORMALIZATION = 0  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
-CLAHE = False  # If True, apply CLAHE contrast enhancement
+CLAHE = True  # If True, apply CLAHE contrast enhancement
 USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere resampling
-
+USE_WEIGHTED_PEAK_SCORE = True
 
 # Random azimuth rotation of the CURRENT scan (bin level, before rendering).
 # With APPLY_RAND_ROT=True and RAND_ROT_RANDOM=True each pair gets a fresh
-# uniform [0,360) deg rotation (seeded); otherwise a fixed RAND_ROT_DEG is
-# applied. The GT transform is corrected by the applied rotation (same math
-# as boreasBenchmark.py --apply-rand-rot). 0.0 = original behaviour.
-APPLY_RAND_ROT = False        # Rotate the current scan before registration
-RAND_ROT_DEG = 90.0           # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
-RAND_ROT_RANDOM = False       # True: fresh uniform [0,360) deg per pair; False: fixed angle
+# uniform rotation drawn from [-RAND_ROT_WINDOW_RAD, +RAND_ROT_WINDOW_RAD]
+# (seeded); otherwise a fixed RAND_ROT_DEG is applied. The GT transform is
+# corrected by the applied rotation (same math as boreasBenchmark.py
+# --apply-rand-rot). 0.0 = original behaviour.
+APPLY_RAND_ROT = True         # Rotate the current scan before registration
+RAND_ROT_DEG = 0.0            # Fixed rotation in degrees (when RAND_ROT_RANDOM=False)
+RAND_ROT_RANDOM = False       # True: fresh uniform on [-WINDOW, +WINDOW]; False: fixed angle
 RAND_ROT_SEED = 42            # RNG seed for the random rotation (reproducibility)
+RAND_ROT_WINDOW_RAD = np.pi   # Random-rotation window: uniform in [-WINDOW, +WINDOW] rad (np.pi = full 360 deg)
 
 # Raw point cloud config (used by ICP, NDT etc.)
 USE_RAW_POINTCLOUD = True        # True = raw polar data (best), False = cartesian image
@@ -173,7 +176,7 @@ def get_config_from_file():
     """Reload config from this file in case it was edited."""
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, RADIUS, SIZE_OF_PIXEL
     global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX, USE_HAMMING
-    global APPLY_RAND_ROT, RAND_ROT_DEG, RAND_ROT_RANDOM, RAND_ROT_SEED
+    global APPLY_RAND_ROT, RAND_ROT_DEG, RAND_ROT_RANDOM, RAND_ROT_SEED, RAND_ROT_WINDOW_RAD
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
     global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT, NDT_Z_SCALE, NDT_DOWNSAMPLE_VOXEL
@@ -223,6 +226,11 @@ def get_config_from_file():
                 return value_str.strip('"').strip("'")
             if value_str in ("True", "False"):
                 return value_str == "True"
+            # Fallback: simple Python expression in the module namespace (e.g. np.pi/2)
+            try:
+                return eval(value_str, {"np": np})
+            except Exception:
+                pass
         return default
 
     DATA_DIR = extract_var("DATA_DIR", DATA_DIR)
@@ -247,6 +255,7 @@ def get_config_from_file():
     RAND_ROT_DEG = extract_var("RAND_ROT_DEG", RAND_ROT_DEG)
     RAND_ROT_RANDOM = extract_var("RAND_ROT_RANDOM", RAND_ROT_RANDOM)
     RAND_ROT_SEED = extract_var("RAND_ROT_SEED", RAND_ROT_SEED)
+    RAND_ROT_WINDOW_RAD = extract_var("RAND_ROT_WINDOW_RAD", RAND_ROT_WINDOW_RAD)
     REGISTRATION_METHOD = extract_var("REGISTRATION_METHOD", REGISTRATION_METHOD)
     USE_RAW_POINTCLOUD = extract_var("USE_RAW_POINTCLOUD", USE_RAW_POINTCLOUD)
     RAW_INTENSITY_THRESHOLD = extract_var("RAW_INTENSITY_THRESHOLD", RAW_INTENSITY_THRESHOLD)
@@ -403,7 +412,7 @@ def main():
     print(f"  OUTPUT_DIR: {OUTPUT_DIR}")
     print(f"  ROUND: {ROUND}")
     print(f"  USE_HAMMING: {USE_HAMMING}")
-    print(f"  APPLY_RAND_ROT: {APPLY_RAND_ROT} (fixed {RAND_ROT_DEG} deg / random {RAND_ROT_RANDOM}, seed {RAND_ROT_SEED})")
+    print(f"  APPLY_RAND_ROT: {APPLY_RAND_ROT} (fixed {RAND_ROT_DEG} deg / random U[+-{np.degrees(RAND_ROT_WINDOW_RAD):.1f}] deg, seed {RAND_ROT_SEED})")
     print()
 
     # Load sequence
@@ -433,7 +442,7 @@ def main():
         "r_max": R_MAX,
         "level_potential_rotation": LEVEL_POTENTIAL_ROTATION,
         "normalization": NORMALIZATION,
-        "use_weighted_peak_score": True,
+        "use_weighted_peak_score": USE_WEIGHTED_PEAK_SCORE,
         "use_phase_correlation": USE_PHASE_CORRELATION,
         "debug": DEBUG_MODE,
         # ---- ICP params ----
@@ -539,7 +548,10 @@ def main():
 
         # Rotation of the current scan for this pair (bin level, before rendering)
         if APPLY_RAND_ROT:
-            applied_rot_deg = rng.uniform(0.0, 360.0) if RAND_ROT_RANDOM else RAND_ROT_DEG
+            # Uniform on the centered window [-RAND_ROT_WINDOW_RAD, +RAND_ROT_WINDOW_RAD]
+            # (np.pi = full 360 deg rotation)
+            applied_rot_deg = (np.degrees(rng.uniform(-RAND_ROT_WINDOW_RAD, RAND_ROT_WINDOW_RAD))
+                               if RAND_ROT_RANDOM else RAND_ROT_DEG)
         else:
             applied_rot_deg = 0.0
 
