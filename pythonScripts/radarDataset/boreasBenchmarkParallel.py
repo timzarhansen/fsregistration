@@ -22,6 +22,9 @@ Usage:
     python boreasBenchmarkParallel.py --method fs2d --sequences 0-4 \\
         --N 64 --max_frames 10 --matching_step 1 --num-workers 2 \\
         --output-dir test_results <data_dir>
+
+Sequences without ground truth poses (missing applanix/radar_poses.csv) are
+skipped with a warning; pass --require-gt to fail instead.
 """
 
 import argparse
@@ -143,6 +146,9 @@ def main():
                         help="Registration method to benchmark.")
     parser.add_argument("--sequences", type=str, default="all",
                         help="Sequence spec: 'all', '0-15', '0,1,2', or '0'.")
+    parser.add_argument("--require-gt", action="store_true",
+                        help="Fail if any selected sequence lacks GT poses "
+                             "(applanix/radar_poses.csv) instead of skipping it.")
     parser.add_argument("--N", type=int, default=128,
                         help="Image grid size (N x N). Default: 128")
     parser.add_argument("--radius", type=float, default=32.0,
@@ -205,6 +211,32 @@ def main():
         print(f"ERROR: Sequence indices not found: {missing} (dataset has {all_sequences} sequences)")
         sys.exit(1)
     del bd  # free memory, done with it
+
+    # Pre-flight GT check: every registered pair needs the GT transform, which
+    # pyboreas loads from applanix/radar_poses.csv. Sequences without that file
+    # would fail ALL of their pairs inside the benchmark (wasted compute), so
+    # skip them up front (or fail with --require-gt).
+    no_gt = [
+        i for i in sequence_numbers
+        if not os.path.isfile(os.path.join(
+            args.data_dir, seq_names[i], "applanix", "radar_poses.csv"))
+    ]
+    if no_gt:
+        if args.require_gt:
+            print(f"ERROR: {len(no_gt)} selected sequence(s) have no GT poses "
+                  f"(missing applanix/radar_poses.csv):")
+            for i in no_gt:
+                print(f"  {i:2d}  {seq_names[i]}")
+            print("Fix the data or drop these indices from --sequences.")
+            sys.exit(1)
+        print(f"WARNING: skipping {len(no_gt)} sequence(s) without GT poses "
+              f"(missing applanix/radar_poses.csv):")
+        for i in no_gt:
+            print(f"  {i:2d}  {seq_names[i]}")
+        sequence_numbers = [i for i in sequence_numbers if i not in no_gt]
+        if not sequence_numbers:
+            print("ERROR: no selected sequence has GT poses — nothing to benchmark.")
+            sys.exit(1)
 
     print(f"Sequences to process: {len(sequence_numbers)} — {sequence_numbers}")
     print(f"Method: {args.method}")
