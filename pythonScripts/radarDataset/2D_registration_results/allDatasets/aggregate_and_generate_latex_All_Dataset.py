@@ -38,7 +38,10 @@ import numpy as np
 # allDatasets/3stepNonRotation/boreas2d).
 BOREAS_DIR = Path(
     "/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/"
-    "2D_registration_results/allDatasets/3stepNonRotation/boreas2d"
+    # "2D_registration_results/allDatasets/3stepNonRotation/boreas2d"
+    "2D_registration_results/allDatasets/seq4_22_41_rot0_20"
+    # "2D_registration_results/allDatasets/seq4_22_41_rot20_40"
+    # "2D_registration_results/allDatasets/seq4_22_41_rot40_60"
 )
 
 DATASETS = {
@@ -558,11 +561,11 @@ def latex_escape(text: str) -> str:
 def format_value(val, decimals: int) -> str:
     """Format a numeric value for LaTeX, handling NaN, inf, and None."""
     if val is None or val == "":
-        return r"\multicolumn{1}{c}{---}"
+        return r"---"
     if isinstance(val, str):
         low = val.strip().lower()
         if low in ("nan", ""):
-            return r"\multicolumn{1}{c}{---}"
+            return r"---"
         if low in ("inf", "+inf", "-inf", "infinity"):
             return r"\multicolumn{1}{c}{$\infty$}"
         try:
@@ -571,7 +574,7 @@ def format_value(val, decimals: int) -> str:
             return latex_escape(val.strip())
     if isinstance(val, float):
         if math.isnan(val):
-            return r"\multicolumn{1}{c}{---}"
+            return r"---"
         if math.isinf(val):
             return r"\multicolumn{1}{c}{$\infty$}"
     return f"{float(val):.{decimals}f}"
@@ -815,7 +818,7 @@ def generate_angle_group_tables(prefix: str, group_counts: dict,
         cells = [latex_escape(row["method"])]
         for _, _, _, label in groups:
             pct = row.get(f"pct_{label}", "")
-            cells.append(f"{pct}\\%" if pct != "" else r"\multicolumn{1}{c}{---}")
+            cells.append(f"{pct}\\%" if pct != "" else r"---")
         lines.append(" & ".join(cells) + " \\\\")
     lines.append("\\bottomrule")
     lines.append("\\end{tabular}")
