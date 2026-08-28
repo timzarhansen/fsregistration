@@ -24,6 +24,10 @@ Usage:
 
 import argparse
 import os
+# Forked workers inherit the parent's OpenMP runtime state, which can
+# deadlock in OpenMP-parallel libraries (Open3D, torch, OpenCV) after
+# multiprocessing fork. Pin OpenMP to a single thread per worker.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 import sys
 import time
 import traceback

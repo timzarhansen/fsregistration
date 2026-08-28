@@ -29,6 +29,11 @@ skipped with a warning; pass --require-gt to fail instead.
 
 import argparse
 import os
+# Forked workers inherit the parent's OpenMP runtime state, which can
+# deadlock in OpenMP-parallel libraries (Open3D voxel_down_sample/
+# registration_icp, torch, OpenCV) after multiprocessing fork. Pin OpenMP
+# to a single thread so forked children never share a thread pool.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 import sys
 import time
 import traceback
