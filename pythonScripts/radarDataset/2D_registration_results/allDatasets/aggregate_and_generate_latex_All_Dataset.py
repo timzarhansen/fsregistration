@@ -39,9 +39,9 @@ import numpy as np
 BOREAS_DIR = Path(
     "/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/"
     # "2D_registration_results/allDatasets/3stepNonRotation/boreas2d"
-    "2D_registration_results/allDatasets/seq4_22_41_rot0_20"
+    # "2D_registration_results/allDatasets/seq4_22_41_rot0_20"
     # "2D_registration_results/allDatasets/seq4_22_41_rot20_40"
-    # "2D_registration_results/allDatasets/seq4_22_41_rot40_60"
+    "2D_registration_results/allDatasets/seq4_22_41_rot40_60"
 )
 
 DATASETS = {

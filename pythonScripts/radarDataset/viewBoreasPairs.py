@@ -55,7 +55,7 @@ RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 2070                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 2465                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
