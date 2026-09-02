@@ -27,8 +27,8 @@ Examples:
     python create_latex_table.py BackupToBeSave
 
 Notes:
-    * For methods with a single estimate per scan (predator, regtr, fpfh, icp,
-      ...) best == highest, so both threshold columns show the same value.
+    * Methods with a single estimate per scan (predator, regtr, fpfh, icp,
+      ...) have no separate best match, so the Threshold Best column shows --.
     * For FS3D (soft) the statistics columns use the best match (like before);
       the two threshold columns are reported separately.
     * gauss / salt&pepper noise-type variants are skipped by default to match
@@ -225,8 +225,8 @@ def build_table(rows, threshold_trans, threshold_rot, label, caption):
     lines.append('    \\centering')
     lines.append('    \\begin{tabular}{|c|c|c||c|c|c|c|c|c|}')
     lines.append('       \\hline')
-    lines.append('        Method & Noise level & Dataset & Mean Translation(m) & Mean Rotation(deg) & ' +
-                 'Median Translation(m) & Median Rotation(deg) & Threshold Best(\\%) & Threshold High(\\%) \\\\')
+    lines.append('        Method & Noise & Dataset & Mean Trans. (m) & Mean Rot. (deg) & ' +
+                 'Median Trans. (m) & Median Rot. (deg) & Thresh. Best(\\%) & Thresh. High(\\%) \\\\')
     lines.append('        \\hline')
     lines.append('        \\hline')
     for row in rows:
@@ -287,19 +287,21 @@ def main():
             medT, medR = r[10], r[11]
             thr_best, thr_high = r[14], r[15]
         else:
-            # single estimate: best == highest
+            # single estimate: no separate best match
             mT, mR, sT, sR = r[0], r[1], r[4], r[5]
             medT, medR = r[8], r[9]
-            thr_best = thr_high = r[15]
+            thr_best = None
+            thr_high = r[15]
 
+        thr_best_str = '--' if thr_best is None else '%.2f' % thr_best
         rows.append({
             'label': label,
             'noise': noise,
             'ntype': ntype,
             'split': split,
-            'tex': '%s & %s & %s & %.4f$\\pm$%.4f & %.4f$\\pm$%.4f & %.4f & %.4f & %.4f & %.4f' % (
+            'tex': '%s & %s & %s & %.2f$\\pm$%.2f & %.2f$\\pm$%.2f & %.2f & %.2f & %s & %.2f' % (
                 label, noise_display(noise, ntype), SPLIT_LABELS[split],
-                mT, sT, mR, sR, medT, medR, thr_best, thr_high),
+                mT, sT, mR, sR, medT, medR, thr_best_str, thr_high),
         })
     rows.sort(key=row_sort_key)
 
@@ -310,8 +312,8 @@ def main():
         caption = ('These are results of the registration of Predator and FS3D. '
                    '\\textcolor{red}{Threshold is %.1f degree and %.1f meter translation error. '
                    'For FS3D the best results are used for the statistics; the success rate is '
-                   'reported for both the best and the highest match. For methods returning a '
-                   'single estimate, both thresholds coincide.}' % (args.threshold_rot, args.threshold_trans))
+                   'reported for both the best and the highest match. Methods with only a single '
+                   'estimate have no separate best match (marked --).}' % (args.threshold_rot, args.threshold_trans))
     else:
         caption = args.caption
 
