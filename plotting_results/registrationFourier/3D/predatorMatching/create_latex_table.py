@@ -31,8 +31,8 @@ Notes:
       ...) have no separate best match, so the Threshold Best column shows --.
     * For FS3D (soft) the statistics columns use the best match (like before);
       the two threshold columns are reported separately.
-    * gauss / salt&pepper noise-type variants are skipped by default to match
-      the paper table layout; add --include-noise-types to include them.
+    * gauss / salt&pepper noise-type rows are included by default; use
+      --skip-noise-types to only emit the plain None/high/low rows.
 """
 
 import argparse
@@ -247,8 +247,8 @@ def main():
                          '(default: paperTests; use BackupToBeSave for the paper table incl. predator)')
     ap.add_argument('--threshold-trans', type=float, default=0.4, help='translation threshold in meter')
     ap.add_argument('--threshold-rot', type=float, default=10.0, help='rotation threshold in degree')
-    ap.add_argument('--include-noise-types', action='store_true',
-                    help='also emit gauss / salt & pepper noise-type rows')
+    ap.add_argument('--skip-noise-types', action='store_true',
+                    help='only emit plain noise rows (None/high/low), skip gauss / salt & pepper')
     ap.add_argument('--out', default='results_table.tex', help='LaTeX output file')
     ap.add_argument('--label', default='tab:results', help='LaTeX label of the table')
     ap.add_argument('--caption', default=None,
@@ -268,7 +268,7 @@ def main():
         if parsed is None:
             continue
         method, noise, ntype, split = parsed
-        if ntype is not None and not args.include_noise_types:
+        if ntype is not None and args.skip_noise_types:
             n_skipped_types += 1
             continue
         label = method_label(method)
