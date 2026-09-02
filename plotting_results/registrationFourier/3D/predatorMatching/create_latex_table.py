@@ -233,7 +233,7 @@ def build_table(rows, threshold_trans, threshold_rot, label, caption, scale=0.8)
     for row in rows:
         lines.append('        ' + row['tex'] + ' \\\\')
     lines.append('        \\hline')
-    lines.append('    \\end{tabular}}')
+    lines.append('    \\end{tabular}}}')
     lines.append('\\label{' + label + '}')
     lines.append('\\end{table*}')
     return '\n'.join(lines) + '\n'
