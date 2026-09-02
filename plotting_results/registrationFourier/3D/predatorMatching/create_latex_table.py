@@ -214,15 +214,16 @@ def noise_display(noise, ntype):
     if ntype == 'gauss':
         label += ' gauss'
     elif ntype == 'salt_pepper':
-        label += ' salt \\& pepper'
+        label += ' s\\&p'
     return label
 
 
-def build_table(rows, threshold_trans, threshold_rot, label, caption):
+def build_table(rows, threshold_trans, threshold_rot, label, caption, scale=0.8):
     lines = []
     lines.append('\\begin{table*}[!ht]')
     lines.append('    \\caption{' + caption + '}')
     lines.append('    \\centering')
+    lines.append('    \\fbox{\\scalebox{%.1f}{%%' % scale)
     lines.append('    \\begin{tabular}{|c|c|c||c|c|c|c|c|c|}')
     lines.append('       \\hline')
     lines.append('        Method & Noise & Dataset & Mean Trans. (m) & Mean Rot. (deg) & ' +
@@ -232,7 +233,7 @@ def build_table(rows, threshold_trans, threshold_rot, label, caption):
     for row in rows:
         lines.append('        ' + row['tex'] + ' \\\\')
     lines.append('        \\hline')
-    lines.append('    \\end{tabular}')
+    lines.append('    \\end{tabular}}')
     lines.append('\\label{' + label + '}')
     lines.append('\\end{table*}')
     return '\n'.join(lines) + '\n'
@@ -249,6 +250,8 @@ def main():
     ap.add_argument('--threshold-rot', type=float, default=10.0, help='rotation threshold in degree')
     ap.add_argument('--skip-noise-types', action='store_true',
                     help='only emit plain noise rows (None/high/low), skip gauss / salt & pepper')
+    ap.add_argument('--scale', type=float, default=0.8,
+                    help='scale factor for the \\fbox{\\scalebox{...}} wrapper (default: 0.8 = 80%%)')
     ap.add_argument('--out', default='results_table.tex', help='LaTeX output file')
     ap.add_argument('--label', default='tab:results', help='LaTeX label of the table')
     ap.add_argument('--caption', default=None,
@@ -317,7 +320,7 @@ def main():
     else:
         caption = args.caption
 
-    tex = build_table(rows, args.threshold_trans, args.threshold_rot, args.label, caption)
+    tex = build_table(rows, args.threshold_trans, args.threshold_rot, args.label, caption, scale=args.scale)
     print(tex)
     with open(args.out, 'w') as f:
         f.write(tex)
