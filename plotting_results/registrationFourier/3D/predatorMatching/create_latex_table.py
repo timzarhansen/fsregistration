@@ -193,7 +193,7 @@ METHOD_ORDER = ['predator', 'regtr', 'geotransformer', 'pointreggpt',
                 'hybridpoint', 'fpfh', 'icp', 'FS3D 32', 'FS3D 64']
 NOISE_ORDER = ['None', 'high', 'low']
 NTYPE_ORDER = [None, 'gauss', 'salt_pepper']
-SPLIT_LABELS = {'train': 'training', 'val': 'validation'}
+SPLIT_LABELS = {'train': 'train', 'val': 'val'}
 
 
 def row_sort_key(row):
