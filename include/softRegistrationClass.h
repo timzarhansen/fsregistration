@@ -75,6 +75,20 @@ struct RotationCorrelationResult {
     std::vector<float> angleList;
 };
 
+struct HiddenComponentScanParams {
+    // Hidden-component scan of the folded [0, pi) rotation correlation curve.
+    // Defaults mirror the notebook analysis (rotation_curve_analysis.ipynb).
+    double coarseRad = 0.01;        // hidden-component scan grid step (~0.57 deg)
+    double fineRad = 0.0004;        // local refinement step (~0.02 deg)
+    double minSepRad = 0.1;         // min separation between components (~5.7 deg)
+    double winHalfRad = 0.35;       // scan window half width around each anchor peak (~20 deg)
+    double minImprovRatio = 2.0;    // marginal residual improvement to accept a hidden component
+    double weakFloorRatio = 1.2;    // candidates below minImprovRatio but >= this are weak
+    double knownMarginRad = 0.26;   // persistence peaks within +/-this of a window are known components
+    int maxHidden = 2;              // max additional components tested per window
+    bool includeWeakCandidates = true; // include weak candidates in the output peak list
+};
+
 class softRegistrationClass {
 public:
     softRegistrationClass(int N, int bwOut, int bwIn, int degLim) : sofftCorrelationObject(N, bwOut, bwIn,
@@ -212,7 +226,8 @@ public:
                                                     bool useDirect = false, int numAngles = -1,
                                                     // Radial frequency band (FFT grid units / px).
                                                     // 0.0 = auto: N-dependent defaults (current behavior).
-                                                    double r_min = 0.0, double r_max = 0.0);
+                                                    double r_min = 0.0, double r_max = 0.0,
+                                                    bool useHiddenComponentScan = false);
 
 //    Eigen::Vector2d sofftRegistrationVoxel2DTranslation(double voxelData1Input[],
 //                                                        double voxelData2Input[],
@@ -250,7 +265,8 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
                                                                                       int numAngles = -1,
                                                                                       // Radial frequency band (FFT grid units / px).
                                                                                       // 0.0 = auto: N-dependent defaults (current behavior).
-                                                                                      double r_min = 0.0, double r_max = 0.0);
+                                                                                      double r_min = 0.0, double r_max = 0.0,
+                                                                                      bool useHiddenComponentScan = false);
 
   double getSpectrumFromVoxelData2DCorrelation(double voxelData[], fftw_complex *complexOut,
                                                   bool gaussianBlur, double normalizationFactor);
@@ -300,6 +316,9 @@ std::vector<transformationPeakfs2D> registrationOfTwoVoxelsSOFFTAllSoluations(do
 
     int getSizeOfRegistration();
 
+    // Hidden-component scan configuration (only used when useHiddenComponentScan=true,
+    // which requires useDirect=true).
+    HiddenComponentScanParams hiddenScanParams;
 
 private://here everything is created. malloc is done in the constructor
 
@@ -365,13 +384,18 @@ private://here everything is created. malloc is done in the constructor
                                                             int numAngles = -1,
                                                             // Radial frequency band (FFT grid units / px).
                                                             // 0.0 = auto: N-dependent defaults (current behavior).
-                                                            double r_min = 0.0, double r_max = 0.0);
+                                                            double r_min = 0.0, double r_max = 0.0,
+                                                            bool useHiddenComponentScan = false);
 
     rotationPeakfs2D findClosestRotationAngle(const std::vector<rotationPeakfs2D>& allAnglesList, double goodGuessAlpha);
 
     std::vector<rotationPeakfs2D> runRotationPeakDetection(const RotationCorrelationResult& result,
                                                            BenchmarkTimings2D* timings,
                                                            double level_potential_rotation = 0.1);
+
+    std::vector<rotationPeakfs2D> hiddenComponentScan(const RotationCorrelationResult& result,
+                                                      const std::vector<rotationPeakfs2D>& persistencePeaks,
+                                                      bool debug = false);
 
 };
 

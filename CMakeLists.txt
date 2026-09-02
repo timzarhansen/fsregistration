@@ -206,6 +206,24 @@ target_link_libraries(test_full_registration_comparison2D
 )
 target_include_directories(test_full_registration_comparison2D PUBLIC ${OpenCV_INCLUDE_DIRS})
 
+# Throwaway validation test: hidden component scan vs notebook algorithm
+add_executable(test_hidden_component_scan
+    src/test_hidden_component_scan.cpp
+    src/softRegistrationClass.cpp
+    src/softCorrelationClass.cpp
+    src/PeakFinder.cpp
+    include/PeakFinder.h
+)
+target_link_libraries(test_hidden_component_scan
+    fftw3
+    generalhelpfullib
+    soft20::soft20
+    findpeaks
+    ${OpenCV_LIBS}
+    OpenMP::OpenMP_CXX
+)
+target_include_directories(test_hidden_component_scan PUBLIC ${OpenCV_INCLUDE_DIRS})
+
 # Full 3D registration comparison test executable
 add_executable(test_full_registration_comparison3D
     src/test_full_registration_comparison3D.cpp

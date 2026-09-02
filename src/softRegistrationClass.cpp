@@ -5,6 +5,8 @@
 #include "softRegistrationClass.h"
 #include <chrono>
 #include <filesystem>
+#include <iomanip>
+#include <tuple>
 
 #define DEBUG_RESULTS_2D "/home/tim-external/ros_ws/src/fsregistration/plotting_results/2d/data/"
 
@@ -304,12 +306,411 @@ std::vector<rotationPeakfs2D> softRegistrationClass::runRotationPeakDetection(
     return returnVector;
 }
 
+std::vector<rotationPeakfs2D>
+softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& result,
+    const std::vector<rotationPeakfs2D>& persistencePeaks,
+    bool debug) {
+
+    const HiddenComponentScanParams& P = this->hiddenScanParams;
+    const double PI = M_PI;
+    const double TWO_PI = 2.0 * M_PI;
+    const double INF = std::numeric_limits<double>::infinity();
+
+    // ---- guards ---------------------------------------------------------
+    int nRaw = (int)result.correlationAveraged.size();
+    if (nRaw < 8 || (int)result.angleList.size() != nRaw || persistencePeaks.empty()) {
+        return persistencePeaks;
+    }
+
+    // ---- fold curve to [0, pi): F(t) = (C(t) + C(t+pi)) / 2 --------------
+    int nEven = nRaw - (nRaw % 2);
+    int half = nEven / 2;
+    double spacing = TWO_PI / (double)nEven;
+    std::vector<double> th(half), F(half);
+    for (int i = 0; i < half; i++) {
+        th[i] = result.angleList[i];
+        F[i] = 0.5 * ((double)result.correlationAveraged[i] + (double)result.correlationAveraged[i + half]);
+    }
+
+    // ---- true kernel K(t) = sum_{m!=0} (sum_l |b_lm|^2) cos(m t) --------
+    // from the reference-descriptor SH coefficients (patCoef, valid because
+    // this scan only runs on the useDirect path).
+    std::vector<double> Q(2 * this->bwIn, 0.0);
+    int bigL = this->bwIn - 1;
+    for (int l = 0; l < this->bwIn; l++) {
+        for (int m = -l; m <= l; m++) {
+            int almIdx;
+            if (m >= 0) {
+                almIdx = m * (bigL + 1) - (m * (m - 1) / 2) + (l - m);
+            }
+            else {
+                almIdx = (bigL * (bigL + 3) / 2) + 1 + ((bigL + m) * (bigL + m + 1) / 2) + (l - std::abs(m));
+            }
+            double cr = this->sofftCorrelationObject.patCoefR[almIdx];
+            double ci = this->sofftCorrelationObject.patCoefI[almIdx];
+            Q[m + this->bwIn] += cr * cr + ci * ci;
+        }
+    }
+    std::vector<double> K(nEven, 0.0);
+    for (int k = 0; k < nEven; k++) {
+        double ang = result.angleList[k];
+        double v = 0.0;
+        for (int m = 1; m < this->bwIn; m++) {
+            v += Q[m + this->bwIn] * std::cos(m * ang);
+        }
+        K[k] = 2.0 * v;
+    }
+    double kMin = *std::min_element(K.begin(), K.end());
+    double kMax = *std::max_element(K.begin(), K.end());
+    if (!(kMax > kMin)) return persistencePeaks;
+    for (double& v : K) v = (v - kMin) / (kMax - kMin);
+
+    // ---- helpers ----------------------------------------------------------
+    auto circDistPi = [&](double a, double b) {
+        double d = std::fmod(std::fabs(a - b), PI);
+        return std::min(d, PI - d);
+    };
+    // kernel value at rotation distance d in [0, pi] (K is even on [0, 2pi))
+    auto kval = [&](double d) {
+        double pos = d / spacing;
+        int i0 = (int)pos;
+        double frac = pos - (double)i0;
+        int i1 = (i0 + 1) % nEven;
+        return K[i0] * (1.0 - frac) + K[i1] * frac;
+    };
+
+    struct FitOut { Eigen::VectorXd coef; double resid; std::vector<double> kept; };
+    // least squares with non-negative component amplitudes (affine baseline);
+    // negative-amplitude components are dropped iteratively
+    auto fitNonneg = [&](const std::vector<double>& thw, const Eigen::VectorXd& Fw,
+                         std::vector<double> angles) -> FitOut {
+        FitOut out;
+        std::vector<double> kept = angles;
+        while (true) {
+            int k = (int)kept.size();
+            int rows = (int)thw.size();
+            Eigen::MatrixXd A(rows, k + 1);
+            for (int r = 0; r < rows; r++) {
+                for (int j = 0; j < k; j++) {
+                    A(r, j) = kval(std::fabs(thw[r] - kept[j]));
+                }
+                A(r, k) = 1.0;
+            }
+            out.coef = A.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(Fw);
+            out.resid = (A * out.coef - Fw).squaredNorm();
+            int worst = -1;
+            double worstAmp = 0.0;
+            for (int j = 0; j < k; j++) {
+                if (out.coef(j) < 0.0 && (worst < 0 || out.coef(j) < worstAmp)) {
+                    worst = j;
+                    worstAmp = out.coef(j);
+                }
+            }
+            if (worst < 0) { out.kept = kept; break; }
+            kept.erase(kept.begin() + worst);
+        }
+        return out;
+    };
+
+    // ---- anchors: persistence peaks folded to [0, pi), deduplicated ------
+    std::vector<double> anchors;
+    for (const auto& p : persistencePeaks) {
+        double m = std::fmod(p.angle, PI);
+        if (m < 0.0) m += PI;
+        bool dup = false;
+        for (double a : anchors) {
+            if (circDistPi(a, m) < 2e-4) { dup = true; break; }
+        }
+        if (!dup) anchors.push_back(m);
+    }
+    std::sort(anchors.begin(), anchors.end());
+    if (anchors.empty()) return persistencePeaks;
+
+    struct WinRes {
+        bool valid = false;
+        double center = 0, mu = 0, amp = 0, ratio1 = 0, resid0 = 0, resid1 = 0;
+        double mu2 = 0, amp2 = 0, ratio2 = 0, resid2 = 0;
+        int nHidden = 0;
+    };
+    const int minWindowSamples = 10;
+
+    // ---- GT-free scan of one window around an anchor peak --------------
+    auto scanWindow = [&](double ctr) -> WinRes {
+        WinRes res;
+        res.center = ctr;
+        double lo = ctr - P.winHalfRad;
+        double hi = ctr + P.winHalfRad;
+
+        std::vector<double> thw, Fw;
+        for (int i = 0; i < half; i++) {
+            if (circDistPi(th[i], ctr) < P.winHalfRad) {
+                thw.push_back(th[i]);
+                Fw.push_back(F[i]);
+            }
+        }
+        if ((int)thw.size() < minWindowSamples) return res;
+        Eigen::Map<Eigen::VectorXd> FwV(Fw.data(), (Eigen::Index)Fw.size());
+
+        // known components: anchors within knownMarginRad of the window
+        std::vector<double> m0;
+        for (double a : anchors) {
+            double dMin = PI;
+            for (double t : thw) dMin = std::min(dMin, circDistPi(t, a));
+            if (dMin < P.knownMarginRad) {
+                bool dup = false;
+                for (double m : m0) {
+                    if (circDistPi(m, a) < 2e-4) { dup = true; break; }
+                }
+                if (!dup) m0.push_back(a);
+            }
+        }
+        FitOut fitK = fitNonneg(thw, FwV, m0);
+        double rK = fitK.resid;
+        std::vector<double> knowns = fitK.kept;
+
+        // candidate grid (may wrap the 0/pi seam)
+        std::vector<double> cand;
+        double segLo = std::max(lo, 0.0);
+        double segHi = std::min(hi, PI);
+        for (double mu = segLo + P.coarseRad; mu < segHi - P.coarseRad; mu += P.coarseRad) {
+            cand.push_back(mu);
+        }
+        if (hi > PI) {
+            for (double mu = 0.0; mu < hi - PI - P.coarseRad; mu += P.coarseRad) cand.push_back(mu);
+        }
+        if (lo < 0.0) {
+            for (double mu = PI + lo + P.coarseRad; mu < PI; mu += P.coarseRad) cand.push_back(mu);
+        }
+        if (cand.empty()) return res;
+
+        // residual of the fit angles+[mu] for every candidate mu (inf when the
+        // candidate is too close to an excluded component or gets dropped)
+        auto gridResids = [&](const std::vector<double>& angles, const std::vector<double>& excl) {
+            std::vector<double> resids(cand.size(), INF);
+            for (int c = 0; c < (int)cand.size(); c++) {
+                double mu = cand[c];
+                bool tooClose = false;
+                for (double e : excl) {
+                    if (circDistPi(mu, e) < P.minSepRad) { tooClose = true; break; }
+                }
+                if (tooClose) continue;
+                std::vector<double> trial = angles;
+                trial.push_back(mu);
+                FitOut f = fitNonneg(thw, FwV, trial);
+                if ((int)f.kept.size() == (int)trial.size() &&
+                    circDistPi(f.kept.back(), mu) < 1e-12) {
+                    resids[c] = f.resid;
+                }
+            }
+            return resids;
+        };
+
+        // alternating local refinement of every hidden position
+        auto refineAll = [&](std::vector<double> hiddens)
+            -> std::tuple<std::vector<double>, double, Eigen::VectorXd, std::vector<double>> {
+            std::vector<double> cur = hiddens;
+            std::vector<double> allAngles = knowns;
+            allAngles.insert(allAngles.end(), cur.begin(), cur.end());
+            FitOut f = fitNonneg(thw, FwV, allAngles);
+            double rCur = f.resid;
+            double cMin = cand.front();
+            double cMax = cand.back();
+            bool changed = true;
+            while (changed) {
+                changed = false;
+                for (int idx = 0; idx < (int)cur.size(); idx++) {
+                    double c0 = cur[idx];
+                    double a0 = std::max(c0 - 0.044, cMin);
+                    double a1 = std::min(c0 + 0.044, cMax);
+                    for (double a = a0; a <= a1 + 1e-12; a += P.fineRad) {
+                        bool tooClose = false;
+                        for (double o : knowns) {
+                            if (circDistPi(a, o) < P.minSepRad) { tooClose = true; break; }
+                        }
+                        for (int j = 0; j < (int)cur.size() && !tooClose; j++) {
+                            if (j != idx && circDistPi(a, cur[j]) < P.minSepRad) tooClose = true;
+                        }
+                        if (tooClose) continue;
+                        std::vector<double> trial = cur;
+                        trial[idx] = a;
+                        std::vector<double> trialAll = knowns;
+                        trialAll.insert(trialAll.end(), trial.begin(), trial.end());
+                        FitOut f2 = fitNonneg(thw, FwV, trialAll);
+                        if ((int)f2.kept.size() != (int)trialAll.size()) continue;
+                        // accept only real improvements: without the relative
+                        // tolerance the walk accepts 1-ulp FP-noise improvements
+                        // of the re-anchored grid forever (Zeno walk)
+                        double tol = 1e-12 * std::max(1.0, rCur);
+                        if (f2.resid < rCur - tol) {
+                            cur[idx] = a;
+                            rCur = f2.resid;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            std::vector<double> allAnglesF = knowns;
+            allAnglesF.insert(allAnglesF.end(), cur.begin(), cur.end());
+            FitOut ff = fitNonneg(thw, FwV, allAnglesF);
+            return { cur, ff.resid, ff.coef, ff.kept };
+        };
+
+        // level 1: best single hidden component in the window
+        std::vector<double> res1 = gridResids(knowns, knowns);
+        int best1 = -1;
+        double bestRes1 = INF;
+        for (int c = 0; c < (int)res1.size(); c++) {
+            if (res1[c] < bestRes1) { bestRes1 = res1[c]; best1 = c; }
+        }
+        if (best1 < 0) return res;
+
+        auto [hid1, rFin, coef1, kept1] = refineAll({ cand[best1] });
+        if ((int)hid1.size() != 1 || (int)kept1.size() != (int)knowns.size() + 1) return res;
+
+        res.mu = hid1[0];
+        res.amp = coef1((Eigen::Index)knowns.size());
+        res.resid0 = rK;
+        res.resid1 = rFin;
+        res.ratio1 = (rFin > 0.0) ? rK / rFin : INF;
+        res.valid = true;
+        if (res.ratio1 < P.minImprovRatio) return res;
+
+        // level 2: optional second hidden component (marginal improvement
+        // must also justify itself)
+        res.nHidden = 1;
+        if (P.maxHidden < 2) return res;
+        std::vector<double> res2 = gridResids(kept1, kept1);
+        int best2 = -1;
+        double bestRes2 = INF;
+        for (int c = 0; c < (int)res2.size(); c++) {
+            if (res2[c] < bestRes2) { bestRes2 = res2[c]; best2 = c; }
+        }
+        if (best2 < 0) return res;
+        auto [hid2, r2, coef2, kept2] = refineAll({ hid1[0], cand[best2] });
+        if ((int)hid2.size() != 2 || (int)kept2.size() != (int)knowns.size() + 2) return res;
+        double ratio2 = (r2 > 0.0) ? rFin / r2 : INF;
+        if (ratio2 < P.minImprovRatio) return res;
+        res.nHidden = 2;
+        res.mu2 = hid2[1];
+        res.amp2 = coef2((Eigen::Index)knowns.size() + 1);
+        res.ratio2 = ratio2;
+        res.resid2 = r2;
+        return res;
+    };
+
+    // ---- run the scan around every anchor --------------------------------
+    std::vector<WinRes> windowResults;
+    windowResults.reserve(anchors.size());
+    for (double a : anchors) windowResults.push_back(scanWindow(a));
+
+    // ---- build the updated peak list -------------------------------------
+    std::vector<rotationPeakfs2D> updated;
+    auto nearExisting = [&](double ang) {
+        for (const auto& p : updated) {
+            double d = std::fmod(std::fabs(p.angle - ang), TWO_PI);
+            if (d < 1e-3 || TWO_PI - d < 1e-3) return true;
+        }
+        return false;
+    };
+    // each physical rotation mu is emitted twice: mu and mu + pi (the rotation
+    // correlation can only resolve rotations modulo pi; the translation stage
+    // disambiguates the two copies)
+    auto addPair = [&](double mu, double corr, double levelPot) {
+        if (!nearExisting(mu)) {
+            rotationPeakfs2D p{ mu, corr, 0.05, levelPot };
+            updated.push_back(p);
+        }
+        double muPi = mu + PI;
+        if (muPi >= TWO_PI) muPi -= TWO_PI;
+        if (!nearExisting(muPi)) {
+            rotationPeakfs2D p{ muPi, corr, 0.05, levelPot };
+            updated.push_back(p);
+        }
+    };
+
+    // anchors first (keep their original correlation/potential values)
+    std::vector<std::pair<double, rotationPeakfs2D>> anchorPeaks;
+    for (const auto& p : persistencePeaks) {
+        double m = std::fmod(p.angle, PI);
+        if (m < 0.0) m += PI;
+        bool dup = false;
+        for (const auto& [am, _] : anchorPeaks) {
+            if (circDistPi(am, m) < 2e-4) { dup = true; break; }
+        }
+        if (!dup) anchorPeaks.push_back({ m, p });
+    }
+    for (const auto& [mu, orig] : anchorPeaks) {
+        addPair(mu, orig.peakCorrelation, orig.levelPotential);
+    }
+
+    // hidden candidates: strong (ratio >= minImprovRatio) always, weak
+    // (weakFloorRatio <= ratio < minImprovRatio) when includeWeakCandidates
+    for (const WinRes& w : windowResults) {
+        if (!w.valid) continue;
+        bool strong = w.ratio1 >= P.minImprovRatio;
+        bool weak = !strong && w.ratio1 >= P.weakFloorRatio;
+        if (strong || (weak && P.includeWeakCandidates)) {
+            addPair(w.mu, w.amp, w.ratio1);
+        }
+        if (w.nHidden > 1) {  // level-2 components are always strong (accepted)
+            addPair(w.mu2, w.amp2, w.ratio2);
+        }
+    }
+
+    std::sort(updated.begin(), updated.end(),
+        [](const rotationPeakfs2D& a, const rotationPeakfs2D& b) {
+            return a.peakCorrelation > b.peakCorrelation;
+        });
+
+    // ---- debug dumps ------------------------------------------------------
+    if (debug) {
+        generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
+        // pre-scan persistence peaks (rotationPeaks.csv holds the updated list)
+        std::ofstream pf;
+        pf.open(DEBUG_RESULTS_2D "rotationPeaks_persistence.csv");
+        pf << "angle\tpeakCorrelation\tcovariance\tlevelPotential\n";
+        for (const auto& p : persistencePeaks) {
+            pf << std::setprecision(17) << p.angle << "\t" << p.peakCorrelation << "\t"
+                << p.covariance << "\t" << p.levelPotential << "\n";
+        }
+        pf.close();
+
+        std::ofstream kf;
+        kf.open(DEBUG_RESULTS_2D "kernel1D.csv");
+        kf << "index\tangle\tkernel\n";
+        kf << std::setprecision(17);
+        for (int i = 0; i < nEven; i++) {
+            kf << i << "\t" << result.angleList[i] << "\t" << K[i] << "\n";
+        }
+        kf.close();
+
+        std::ofstream hf;
+        hf.open(DEBUG_RESULTS_2D "hiddenComponentScan.csv");
+        hf << "anchor\tmu\tamp\tratio\tresid0\tresid1\tstrong\tlevel\n";
+        hf << std::setprecision(17);
+        for (const WinRes& w : windowResults) {
+            if (!w.valid) continue;
+            hf << w.center << "\t" << w.mu << "\t" << w.amp << "\t" << w.ratio1 << "\t"
+                << w.resid0 << "\t" << w.resid1 << "\t"
+                << (w.ratio1 >= P.minImprovRatio ? 1 : 0) << "\t1\n";
+            if (w.nHidden > 1) {
+                hf << w.center << "\t" << w.mu2 << "\t" << w.amp2 << "\t" << w.ratio2 << "\t"
+                    << w.resid1 << "\t" << w.resid2 << "\t1\t2\n";
+            }
+        }
+        hf.close();
+    }
+
+    return updated;
+}
+
 RotationCorrelationResult
 softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], double voxelData2Input[],
      bool useDirect, bool multipleRadii, bool useClahe,
      bool useHamming, bool debug, BenchmarkTimings2D* timings,
      std::vector<rotationPeakfs2D>* outPeaks,
-     double level_potential_rotation, int numAngles, double r_min, double r_max) {
+     double level_potential_rotation, int numAngles, double r_min, double r_max,
+     bool useHiddenComponentScan) {
     auto spectrumStart = std::chrono::high_resolution_clock::now();
     double maximumScan1Magnitude = this->getSpectrumFromVoxelData2D(voxelData1Input, this->magnitude1,
         this->phase1, false);
@@ -674,12 +1075,19 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
 
     if (outPeaks) {
         *outPeaks = this->runRotationPeakDetection(result, timings, level_potential_rotation);
+        if (useDirect && useHiddenComponentScan) {
+            *outPeaks = this->hiddenComponentScan(result, *outPeaks, debug);
+        }
+        else if (useHiddenComponentScan) {
+            std::cout << "WARNING: hiddenComponentScan requires useDirect=true, skipping the scan." << std::endl;
+        }
         if (debug) {
             generalHelpfulTools::ensureDirectoryExists(DEBUG_RESULTS_2D);
 
         std::ofstream peakFile;
         peakFile.open(DEBUG_RESULTS_2D "rotationPeaks.csv");
         peakFile << "angle\tpeakCorrelation\tcovariance\tlevelPotential\tindex\n";
+        peakFile << std::setprecision(17);
         for (int i = 0; i < (int)outPeaks->size(); i++) {
             peakFile << (*outPeaks)[i].angle << "\t"
                 << (*outPeaks)[i].peakCorrelation << "\t"
@@ -692,6 +1100,7 @@ softRegistrationClass::computeRotationCorrelation1D(double voxelData1Input[], do
         std::ofstream corrCurveFile;
         corrCurveFile.open(DEBUG_RESULTS_2D "rotationCorrelation1D.csv");
         corrCurveFile << "index\tangle\tnormalizedCorrelation\n";
+        corrCurveFile << std::setprecision(9);  // float32 exact round-trip
         for (int i = 0; i < (int)result.correlationAveraged.size(); i++) {
             corrCurveFile << i << "\t"
                 << result.angleList[i] << "\t"
@@ -711,13 +1120,14 @@ softRegistrationClass::sofftRegistrationVoxel2DListOfPossibleRotations(double vo
      bool useHamming,
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
-     bool useDirect, int numAngles, double r_min, double r_max) {
+     bool useDirect, int numAngles, double r_min, double r_max,
+     bool useHiddenComponentScan) {
 
     std::vector<rotationPeakfs2D> peaks;
     // 0.0 r_min/r_max = auto N-dependent defaults (= old hardcoded band).
     auto result = computeRotationCorrelation1D(voxelData1Input, voxelData2Input,
         useDirect, multipleRadii, useClahe, useHamming, debug, timings, &peaks, level_potential_rotation, numAngles,
-        r_min, r_max);
+        r_min, r_max, useHiddenComponentScan);
 
     return peaks;
 }
@@ -1042,7 +1452,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
      BenchmarkTimings2D* timings,
      double level_potential_rotation,
      int normalization,
-     bool usePhaseCorrelation, int numAngles, double r_min, double r_max) {
+     bool usePhaseCorrelation, int numAngles, double r_min, double r_max,
+     bool useHiddenComponentScan) {
 
     std::vector<transformationPeakfs2D> listOfTransformations;
     std::vector<rotationPeakfs2D> estimatedAnglePeak;
@@ -1055,7 +1466,8 @@ softRegistrationClass::registrationOfTwoVoxelsSOFFTAllSoluations(double voxelDat
     // 0.0 r_min/r_max = auto N-dependent defaults (= old hardcoded band).
     estimatedAnglePeak = this->sofftRegistrationVoxel2DListOfPossibleRotations(voxelData1Input, voxelData2Input,
         debug, multipleRadii, useClahe,
-        useHamming, pTimings, level_potential_rotation, useDirect, numAngles, r_min, r_max);
+        useHamming, pTimings, level_potential_rotation, useDirect, numAngles, r_min, r_max,
+        useHiddenComponentScan);
 
     int numAnglePeaks = estimatedAnglePeak.size();
     listOfTransformations.reserve(numAnglePeaks);
