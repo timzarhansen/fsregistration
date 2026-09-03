@@ -174,6 +174,18 @@ class FS2DRegistration(BaseRegistrationMethod):
         self.normalization = config.get("normalization", 1)
         self.use_weighted_peak_score = config.get("use_weighted_peak_score", True)
         self.use_phase_correlation = config.get("use_phase_correlation", False)
+        self.use_hidden_component_scan = config.get("use_hidden_component_scan", False)
+        # Hidden-component scan parameters (notebook defaults). Only used
+        # when use_hidden_component_scan=True (requires use_direct=True).
+        self.hidden_scan_win_half_rad = config.get("hidden_scan_win_half_rad", 0.35)
+        self.hidden_scan_coarse_rad = config.get("hidden_scan_coarse_rad", 0.01)
+        self.hidden_scan_fine_rad = config.get("hidden_scan_fine_rad", 0.0004)
+        self.hidden_scan_min_sep_rad = config.get("hidden_scan_min_sep_rad", 0.1)
+        self.hidden_scan_min_improv_ratio = config.get("hidden_scan_min_improv_ratio", 2.0)
+        self.hidden_scan_weak_floor_ratio = config.get("hidden_scan_weak_floor_ratio", 1.2)
+        self.hidden_scan_known_margin_rad = config.get("hidden_scan_known_margin_rad", 0.26)
+        self.hidden_scan_max_hidden = config.get("hidden_scan_max_hidden", 2)
+        self.hidden_scan_include_weak = config.get("hidden_scan_include_weak", True)
 
         self.wrapper = SoftRegistrationWrapper2D(self.N)
 
@@ -200,7 +212,17 @@ class FS2DRegistration(BaseRegistrationMethod):
             usePhaseCorrelation=self.use_phase_correlation,
             # 0.0 = auto (N-dependent defaults). Only set if explicitly configured.
             r_min=self.r_min,
-            r_max=self.r_max
+            r_max=self.r_max,
+            useHiddenComponentScan=self.use_hidden_component_scan,
+            hiddenScanWinHalfRad=self.hidden_scan_win_half_rad,
+            hiddenScanCoarseRad=self.hidden_scan_coarse_rad,
+            hiddenScanFineRad=self.hidden_scan_fine_rad,
+            hiddenScanMinSepRad=self.hidden_scan_min_sep_rad,
+            hiddenScanMinImprovRatio=self.hidden_scan_min_improv_ratio,
+            hiddenScanWeakFloorRatio=self.hidden_scan_weak_floor_ratio,
+            hiddenScanKnownMarginRad=self.hidden_scan_known_margin_rad,
+            hiddenScanMaxHidden=self.hidden_scan_max_hidden,
+            hiddenScanIncludeWeakCandidates=self.hidden_scan_include_weak
         )
 
         best_score = 0.0

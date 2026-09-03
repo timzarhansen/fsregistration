@@ -55,21 +55,38 @@ RADIUS = 140.0                 # Scene radius in meters (pixel_size = 2*radius/N
 SIZE_OF_PIXEL = (2.0 * RADIUS) / N  # Computed from RADIUS and N
 DEBUG_MODE = True
 MATCHING_STEP = 5                # Match every Nth frame (docker default)
-START_FRAME = 2465                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
+START_FRAME = 470                  # First frame index; first pair = (START_FRAME, START_FRAME + MATCHING_STEP) (docker default)
 MAX_FRAMES = None                # None = full sequence, or cap it
 OUTPUT_DIR = "viewBoreasOutput"  # Blended images saved here
 USE_DIRECT = True               # Use direct registration (1-angle) vs SO3 (multiple angles)
 NUM_ANGLES = 4096              # Number of angles sampled for the direct 1D correlation curve; -1 = auto (N)
-LEVEL_POTENTIAL_ROTATION = 0.0  # Persistence threshold for rotation peak filtering
+LEVEL_POTENTIAL_ROTATION = 0.000001  # Persistence threshold for rotation peak filtering
 POTENTIAL_NECCESSARY_FOR_PEAK = 0.01  # 2D peak detection threshold (docker default)
-R_MIN = 20.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+R_MIN = 30.0                  # Min radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
 R_MAX = 120.0                  # Max radial frequency radius for FS2D (FFT grid units / px); 0.0 = auto (N-dependent default)
+# R_MIN = 0.0
+# R_MAX = 0.0 
 NORMALIZATION = 0  # 0=1, 1=1/sqrt(norm), 2=1/norm
 USE_PHASE_CORRELATION = False  # If True, use phase correlation instead of standard cross-correlation
 ROUND = False  # If True, apply circular mask (corners → 0)
 CLAHE = True  # If True, apply CLAHE contrast enhancement
 USE_HAMMING = True  # If True, apply polar (theta) Hamming taper in the sphere resampling
 USE_WEIGHTED_PEAK_SCORE = True
+
+# Hidden-component rotation scan (kernel-fit port of rotation_curve_analysis.ipynb).
+# Requires USE_DIRECT=True; adds plateau/shoulder candidates invisible to
+# persistence peak detection. Each candidate is tested twice (mu and mu+pi).
+USE_HIDDEN_COMPONENT_SCAN = True
+# Hidden-scan parameters (defaults mirror the notebook analysis)
+HIDDEN_SCAN_WIN_HALF_RAD = 0.35      # scan window half width around each anchor peak (~20 deg)
+HIDDEN_SCAN_COARSE_RAD = 0.01        # hidden-component scan grid step (~0.57 deg)
+HIDDEN_SCAN_FINE_RAD = 0.0004        # local refinement step (~0.02 deg)
+HIDDEN_SCAN_MIN_SEP_RAD = 0.1        # min separation between components (~5.7 deg)
+HIDDEN_SCAN_MIN_IMPROV_RATIO = 2.0   # marginal residual improvement to accept a hidden component
+HIDDEN_SCAN_WEAK_FLOOR_RATIO = 1.2   # candidates below min_improv_ratio but >= this are weak
+HIDDEN_SCAN_KNOWN_MARGIN_RAD = 0.26  # persistence peaks within +/-this of a window count as known components
+HIDDEN_SCAN_MAX_HIDDEN = 2           # max additional components tested per window
+HIDDEN_SCAN_INCLUDE_WEAK = True      # include weak candidates in the output peak list
 
 # Random azimuth rotation of the CURRENT scan (bin level, before rendering).
 # With APPLY_RAND_ROT=True and RAND_ROT_RANDOM=True each pair gets a fresh
@@ -177,6 +194,9 @@ def get_config_from_file():
     global DATA_DIR, SEQUENCE_NUMBER, SEQUENCE_NAME, N, RADIUS, SIZE_OF_PIXEL
     global MATCHING_STEP, START_FRAME, MAX_FRAMES, OUTPUT_DIR, USE_DIRECT, NUM_ANGLES, LEVEL_POTENTIAL_ROTATION, POTENTIAL_NECCESSARY_FOR_PEAK, ROUND, R_MIN, R_MAX, USE_HAMMING
     global APPLY_RAND_ROT, RAND_ROT_DEG, RAND_ROT_RANDOM, RAND_ROT_SEED, RAND_ROT_WINDOW_RAD
+    global USE_HIDDEN_COMPONENT_SCAN, HIDDEN_SCAN_WIN_HALF_RAD, HIDDEN_SCAN_COARSE_RAD, HIDDEN_SCAN_FINE_RAD
+    global HIDDEN_SCAN_MIN_SEP_RAD, HIDDEN_SCAN_MIN_IMPROV_RATIO, HIDDEN_SCAN_WEAK_FLOOR_RATIO
+    global HIDDEN_SCAN_KNOWN_MARGIN_RAD, HIDDEN_SCAN_MAX_HIDDEN, HIDDEN_SCAN_INCLUDE_WEAK
     global REGISTRATION_METHOD, USE_RAW_POINTCLOUD, RAW_INTENSITY_THRESHOLD
     global ICP_MAX_DISTANCE, ICP_MAX_ITERATION, ICP_SCALE, ICP_THRESHOLD_PCT, ICP_VOXEL_SIZE
     global NDT_VOXEL_SIZE, NDT_MAX_ITERATION, NDT_TRANSFORMATION_EPSILON, NDT_STEP_SIZE, NDT_SCALE, NDT_THRESHOLD_PCT, NDT_Z_SCALE, NDT_DOWNSAMPLE_VOXEL
@@ -256,6 +276,16 @@ def get_config_from_file():
     RAND_ROT_RANDOM = extract_var("RAND_ROT_RANDOM", RAND_ROT_RANDOM)
     RAND_ROT_SEED = extract_var("RAND_ROT_SEED", RAND_ROT_SEED)
     RAND_ROT_WINDOW_RAD = extract_var("RAND_ROT_WINDOW_RAD", RAND_ROT_WINDOW_RAD)
+    USE_HIDDEN_COMPONENT_SCAN = extract_var("USE_HIDDEN_COMPONENT_SCAN", USE_HIDDEN_COMPONENT_SCAN)
+    HIDDEN_SCAN_WIN_HALF_RAD = extract_var("HIDDEN_SCAN_WIN_HALF_RAD", HIDDEN_SCAN_WIN_HALF_RAD)
+    HIDDEN_SCAN_COARSE_RAD = extract_var("HIDDEN_SCAN_COARSE_RAD", HIDDEN_SCAN_COARSE_RAD)
+    HIDDEN_SCAN_FINE_RAD = extract_var("HIDDEN_SCAN_FINE_RAD", HIDDEN_SCAN_FINE_RAD)
+    HIDDEN_SCAN_MIN_SEP_RAD = extract_var("HIDDEN_SCAN_MIN_SEP_RAD", HIDDEN_SCAN_MIN_SEP_RAD)
+    HIDDEN_SCAN_MIN_IMPROV_RATIO = extract_var("HIDDEN_SCAN_MIN_IMPROV_RATIO", HIDDEN_SCAN_MIN_IMPROV_RATIO)
+    HIDDEN_SCAN_WEAK_FLOOR_RATIO = extract_var("HIDDEN_SCAN_WEAK_FLOOR_RATIO", HIDDEN_SCAN_WEAK_FLOOR_RATIO)
+    HIDDEN_SCAN_KNOWN_MARGIN_RAD = extract_var("HIDDEN_SCAN_KNOWN_MARGIN_RAD", HIDDEN_SCAN_KNOWN_MARGIN_RAD)
+    HIDDEN_SCAN_MAX_HIDDEN = extract_var("HIDDEN_SCAN_MAX_HIDDEN", HIDDEN_SCAN_MAX_HIDDEN)
+    HIDDEN_SCAN_INCLUDE_WEAK = extract_var("HIDDEN_SCAN_INCLUDE_WEAK", HIDDEN_SCAN_INCLUDE_WEAK)
     REGISTRATION_METHOD = extract_var("REGISTRATION_METHOD", REGISTRATION_METHOD)
     USE_RAW_POINTCLOUD = extract_var("USE_RAW_POINTCLOUD", USE_RAW_POINTCLOUD)
     RAW_INTENSITY_THRESHOLD = extract_var("RAW_INTENSITY_THRESHOLD", RAW_INTENSITY_THRESHOLD)
@@ -413,6 +443,7 @@ def main():
     print(f"  ROUND: {ROUND}")
     print(f"  USE_HAMMING: {USE_HAMMING}")
     print(f"  APPLY_RAND_ROT: {APPLY_RAND_ROT} (fixed {RAND_ROT_DEG} deg / random U[+-{np.degrees(RAND_ROT_WINDOW_RAD):.1f}] deg, seed {RAND_ROT_SEED})")
+    print(f"  USE_HIDDEN_COMPONENT_SCAN: {USE_HIDDEN_COMPONENT_SCAN} (win_half={HIDDEN_SCAN_WIN_HALF_RAD} rad, min_improv={HIDDEN_SCAN_MIN_IMPROV_RATIO}, weak_floor={HIDDEN_SCAN_WEAK_FLOOR_RATIO}, include_weak={HIDDEN_SCAN_INCLUDE_WEAK})")
     print()
 
     # Load sequence
@@ -445,6 +476,17 @@ def main():
         "use_weighted_peak_score": USE_WEIGHTED_PEAK_SCORE,
         "use_phase_correlation": USE_PHASE_CORRELATION,
         "debug": DEBUG_MODE,
+        # ---- hidden-component scan params ----
+        "use_hidden_component_scan": USE_HIDDEN_COMPONENT_SCAN,
+        "hidden_scan_win_half_rad": HIDDEN_SCAN_WIN_HALF_RAD,
+        "hidden_scan_coarse_rad": HIDDEN_SCAN_COARSE_RAD,
+        "hidden_scan_fine_rad": HIDDEN_SCAN_FINE_RAD,
+        "hidden_scan_min_sep_rad": HIDDEN_SCAN_MIN_SEP_RAD,
+        "hidden_scan_min_improv_ratio": HIDDEN_SCAN_MIN_IMPROV_RATIO,
+        "hidden_scan_weak_floor_ratio": HIDDEN_SCAN_WEAK_FLOOR_RATIO,
+        "hidden_scan_known_margin_rad": HIDDEN_SCAN_KNOWN_MARGIN_RAD,
+        "hidden_scan_max_hidden": HIDDEN_SCAN_MAX_HIDDEN,
+        "hidden_scan_include_weak": HIDDEN_SCAN_INCLUDE_WEAK,
         # ---- ICP params ----
         "icp_max_distance": ICP_MAX_DISTANCE,
         "icp_max_iteration": ICP_MAX_ITERATION,
@@ -620,6 +662,7 @@ def main():
         print(f"  -> Saved to {save_dir}/ (image1.png, image2.png, blended.png)")
         
         idx += MATCHING_STEP
+        
 
     print("\nDone.")
 

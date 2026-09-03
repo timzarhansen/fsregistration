@@ -127,15 +127,38 @@ public:
         // Radial frequency band in FFT grid units (pixels).
         // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
         double r_min = 0.0,
-        double r_max = 0.0
+        double r_max = 0.0,
+        bool useHiddenComponentScan = false,
+        // Hidden-component scan parameters (notebook defaults). Only used
+        // when useHiddenComponentScan=true, which requires useDirect=true.
+        double hiddenScanWinHalfRad = 0.35,
+        double hiddenScanCoarseRad = 0.01,
+        double hiddenScanFineRad = 0.0004,
+        double hiddenScanMinSepRad = 0.1,
+        double hiddenScanMinImprovRatio = 2.0,
+        double hiddenScanWeakFloorRatio = 1.2,
+        double hiddenScanKnownMarginRad = 0.26,
+        int hiddenScanMaxHidden = 2,
+        bool hiddenScanIncludeWeakCandidates = true
     ) {
         double* data1 = numpy_to_double_array(scan1, N_ * N_);
         double* data2 = numpy_to_double_array(scan2, N_ * N_);
 
+        reg->hiddenScanParams.winHalfRad = hiddenScanWinHalfRad;
+        reg->hiddenScanParams.coarseRad = hiddenScanCoarseRad;
+        reg->hiddenScanParams.fineRad = hiddenScanFineRad;
+        reg->hiddenScanParams.minSepRad = hiddenScanMinSepRad;
+        reg->hiddenScanParams.minImprovRatio = hiddenScanMinImprovRatio;
+        reg->hiddenScanParams.weakFloorRatio = hiddenScanWeakFloorRatio;
+        reg->hiddenScanParams.knownMarginRad = hiddenScanKnownMarginRad;
+        reg->hiddenScanParams.maxHidden = hiddenScanMaxHidden;
+        reg->hiddenScanParams.includeWeakCandidates = hiddenScanIncludeWeakCandidates;
+
         auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
             data1, data2,
             cellSize, useGauss, debug,
-            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization, usePhaseCorrelation, numAngles, r_min, r_max
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, false, nullptr, levelPotentialRotation, normalization, usePhaseCorrelation, numAngles, r_min, r_max,
+            useHiddenComponentScan
         );
 
         std::vector<TransformationPeak2D> out;
@@ -326,7 +349,17 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
                  // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
                  py::arg("numAngles") = -1,
                  py::arg("r_min") = 0.0,
-                 py::arg("r_max") = 0.0)
+                 py::arg("r_max") = 0.0,
+                 py::arg("useHiddenComponentScan") = false,
+                 py::arg("hiddenScanWinHalfRad") = 0.35,
+                 py::arg("hiddenScanCoarseRad") = 0.01,
+                 py::arg("hiddenScanFineRad") = 0.0004,
+                 py::arg("hiddenScanMinSepRad") = 0.1,
+                 py::arg("hiddenScanMinImprovRatio") = 2.0,
+                 py::arg("hiddenScanWeakFloorRatio") = 1.2,
+                 py::arg("hiddenScanKnownMarginRad") = 0.26,
+                 py::arg("hiddenScanMaxHidden") = 2,
+                 py::arg("hiddenScanIncludeWeakCandidates") = true)
          .def("register_fast", &SoftRegistrationWrapper2D::register_fast,
               py::arg("scan1"), py::arg("scan2"), py::arg("initialGuess"),
               py::arg("useInitialAngle") = true,
