@@ -81,6 +81,27 @@ USE_GAUSS = False
 # Weight translation peaks by the rotation correlation score.
 USE_WEIGHTED_PEAK_SCORE = True
 
+# ----------------------------------------------------------------------------
+# Hidden-component rotation scan (kernel-fit, port of rotation_curve_analysis.ipynb)
+# ----------------------------------------------------------------------------
+# Requires USE_DIRECT=True (skipped with a warning otherwise). Adds plateau /
+# shoulder rotation candidates that persistence peak detection cannot see;
+# each candidate is emitted twice (mu and mu + pi), the translation stage
+# disambiguates the copy. The scan runs a second feedback pass over the newly
+# found candidates. False = classic persistence-only rotation candidates.
+USE_HIDDEN_COMPONENT_SCAN = True
+
+# Hidden-scan parameters (defaults mirror the notebook analysis)
+HIDDEN_SCAN_WIN_HALF_RAD = 0.35      # scan window half width around each anchor peak (~20 deg)
+HIDDEN_SCAN_COARSE_RAD = 0.01        # hidden-component scan grid step (~0.57 deg)
+HIDDEN_SCAN_FINE_RAD = 0.0004        # local refinement step (~0.02 deg)
+HIDDEN_SCAN_MIN_SEP_RAD = 0.05       # min separation between components (~2.9 deg)
+HIDDEN_SCAN_MIN_IMPROV_RATIO = 2.0   # marginal residual improvement to accept a hidden component
+HIDDEN_SCAN_WEAK_FLOOR_RATIO = 1.2   # candidates below min_improv_ratio but >= this are weak
+HIDDEN_SCAN_KNOWN_MARGIN_RAD = 0.26  # persistence peaks within +/-this of a window count as known components
+HIDDEN_SCAN_MAX_HIDDEN = 2           # max additional components tested per window
+HIDDEN_SCAN_INCLUDE_WEAK = True      # include weak candidates in the output peak list
+
 # Wrapper-level debug output (verbose, only for troubleshooting).
 DEBUG_MODE = False
 

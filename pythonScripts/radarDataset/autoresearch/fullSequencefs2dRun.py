@@ -260,6 +260,17 @@ def main():
         "use_weighted_peak_score": cfg.USE_WEIGHTED_PEAK_SCORE,
         "use_phase_correlation": cfg.USE_PHASE_CORRELATION,
         "debug": cfg.DEBUG_MODE,
+        # ---- hidden-component rotation scan (requires USE_DIRECT=True) ----
+        "use_hidden_component_scan": cfg.USE_HIDDEN_COMPONENT_SCAN,
+        "hidden_scan_win_half_rad": cfg.HIDDEN_SCAN_WIN_HALF_RAD,
+        "hidden_scan_coarse_rad": cfg.HIDDEN_SCAN_COARSE_RAD,
+        "hidden_scan_fine_rad": cfg.HIDDEN_SCAN_FINE_RAD,
+        "hidden_scan_min_sep_rad": cfg.HIDDEN_SCAN_MIN_SEP_RAD,
+        "hidden_scan_min_improv_ratio": cfg.HIDDEN_SCAN_MIN_IMPROV_RATIO,
+        "hidden_scan_weak_floor_ratio": cfg.HIDDEN_SCAN_WEAK_FLOOR_RATIO,
+        "hidden_scan_known_margin_rad": cfg.HIDDEN_SCAN_KNOWN_MARGIN_RAD,
+        "hidden_scan_max_hidden": cfg.HIDDEN_SCAN_MAX_HIDDEN,
+        "hidden_scan_include_weak": cfg.HIDDEN_SCAN_INCLUDE_WEAK,
     }
 
     # Build the pair list (start frame is always 0).
@@ -287,6 +298,10 @@ def main():
     print(f"Matching : every {cfg.MATCHING_STEP}th frame -> {len(pairs)} pairs"
           + (f" (capped at MAX_FRAMES={cfg.MAX_FRAMES})" if cfg.MAX_FRAMES else ""))
     print(f"Grid     : N={cfg.N}, radius={cfg.RADIUS} m, pixel_size={size_of_pixel:.3f} m")
+    print(f"Hidden   : scan={cfg.USE_HIDDEN_COMPONENT_SCAN} "
+          f"(win_half={cfg.HIDDEN_SCAN_WIN_HALF_RAD}, min_sep={cfg.HIDDEN_SCAN_MIN_SEP_RAD}, "
+          f"min_improv={cfg.HIDDEN_SCAN_MIN_IMPROV_RATIO}, weak_floor={cfg.HIDDEN_SCAN_WEAK_FLOOR_RATIO}, "
+          f"include_weak={cfg.HIDDEN_SCAN_INCLUDE_WEAK})")
     print(f"Workers  : {cfg.NUM_WORKERS}")
     print(f"Output   : {out_path}")
     print()
