@@ -39,14 +39,21 @@ import numpy as np
 BOREAS_DIR = Path(
     "/home/tim-external/ros_ws/src/fsregistration/pythonScripts/radarDataset/"
     # "2D_registration_results/allDatasets/3stepNonRotation/boreas2d"
-    # "2D_registration_results/allDatasets/seq4_22_41_rot0_20"
+    "2D_registration_results/allDatasets/IcraPaperResults"
+    # "2D_registration_results/allDatasets/IcraPaperResults/boreas2d_rotNone"
+    # "2D_registration_results/allDatasets/IcraPaperResults/boreas2d_rot0-20"
+    # "2D_registration_results/allDatasets/IcraPaperResults/boreas2d_rot20-40"
+    # "2D_registration_results/allDatasets/IcraPaperResults/boreas2d_rot40-60"
     # "2D_registration_results/allDatasets/seq4_22_41_rot20_40"
-    "2D_registration_results/allDatasets/seq4_22_41_rot40_60"
+    # "2D_registration_results/allDatasets/seq4_22_41_rot40_60"
 )
 
-DATASETS = {
-    "boreas": BOREAS_DIR,
-}
+DATASETS = [
+    ("boreas", BOREAS_DIR / "boreas2d_rotNone"),
+    ("boreas", BOREAS_DIR / "boreas2d_rot0-20"),
+    ("boreas", BOREAS_DIR / "boreas2d_rot20-40"),
+    ("boreas", BOREAS_DIR / "boreas2d_rot40-60"),
+]
 
 # Outlier thresholds.
 # A rotation outlier is a pair with |rot_error| > OUTLIER_ROT_THRESH_DEG.
@@ -854,7 +861,7 @@ def generate_angle_group_tables(prefix: str, group_counts: dict,
 # ============================================================================
 
 def main():
-    for dataset_name, input_folder in DATASETS.items():
+    for dataset_name, input_folder in DATASETS:
         print(f"\n{'='*60}")
         print(f"Dataset: {dataset_name} ({input_folder})")
         print(f"{'='*60}")
