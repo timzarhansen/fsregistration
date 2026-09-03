@@ -435,7 +435,7 @@ softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& resu
     const int minWindowSamples = 10;
 
     // ---- GT-free scan of one window around an anchor peak --------------
-    auto scanWindow = [&](double ctr) -> WinRes {
+    auto scanWindow = [&](double ctr, const std::vector<double>& anchorSet) -> WinRes {
         WinRes res;
         res.center = ctr;
         double lo = ctr - P.winHalfRad;
@@ -453,7 +453,7 @@ softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& resu
 
         // known components: anchors within knownMarginRad of the window
         std::vector<double> m0;
-        for (double a : anchors) {
+        for (double a : anchorSet) {
             double dMin = PI;
             for (double t : thw) dMin = std::min(dMin, circDistPi(t, a));
             if (dMin < P.knownMarginRad) {
@@ -598,10 +598,15 @@ softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& resu
         return res;
     };
 
-    // ---- run the scan around every anchor --------------------------------
-    std::vector<WinRes> windowResults;
-    windowResults.reserve(anchors.size());
-    for (double a : anchors) windowResults.push_back(scanWindow(a));
+    // ---- run the scan over a set of anchor windows ------------------------
+    auto runScan = [&](const std::vector<double>& anchorSet) {
+        std::vector<WinRes> out;
+        out.reserve(anchorSet.size());
+        for (double a : anchorSet) out.push_back(scanWindow(a, anchorSet));
+        return out;
+    };
+    std::vector<WinRes> windowResults = runScan(anchors);
+    std::vector<WinRes> windowResults2;   // second (feedback) pass
 
     // ---- build the updated peak list -------------------------------------
     std::vector<rotationPeakfs2D> updated;
@@ -645,16 +650,41 @@ softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& resu
 
     // hidden candidates: strong (ratio >= minImprovRatio) always, weak
     // (weakFloorRatio <= ratio < minImprovRatio) when includeWeakCandidates
-    for (const WinRes& w : windowResults) {
-        if (!w.valid) continue;
-        bool strong = w.ratio1 >= P.minImprovRatio;
-        bool weak = !strong && w.ratio1 >= P.weakFloorRatio;
-        if (strong || (weak && P.includeWeakCandidates)) {
-            addPair(w.mu, w.amp, w.ratio1);
+    auto emitResults = [&](const std::vector<WinRes>& wins) {
+        for (const WinRes& w : wins) {
+            if (!w.valid) continue;
+            bool strong = w.ratio1 >= P.minImprovRatio;
+            bool weak = !strong && w.ratio1 >= P.weakFloorRatio;
+            if (strong || (weak && P.includeWeakCandidates)) {
+                addPair(w.mu, w.amp, w.ratio1);
+            }
+            if (w.nHidden > 1) {  // level-2 components are always strong (accepted)
+                addPair(w.mu2, w.amp2, w.ratio2);
+            }
         }
-        if (w.nHidden > 1) {  // level-2 components are always strong (accepted)
-            addPair(w.mu2, w.amp2, w.ratio2);
+    };
+    emitResults(windowResults);
+
+    // ---- second (feedback) pass -------------------------------------------
+    // The hidden candidates found above become anchors for a re-scan (like
+    // the notebook, which scans the post-scan peak list). Their presence in
+    // the known set changes the baseline fit of neighboring windows and can
+    // reveal further components (e.g. the true rotation next to a spurious
+    // persistence peak). Skipped when no new candidates were emitted.
+    std::vector<double> anchors2 = anchors;
+    for (const auto& p : updated) {
+        double m = std::fmod(p.angle, PI);
+        if (m < 0.0) m += PI;
+        bool dup = false;
+        for (double a : anchors2) {
+            if (circDistPi(a, m) < 2e-4) { dup = true; break; }
         }
+        if (!dup) anchors2.push_back(m);
+    }
+    if (anchors2.size() > anchors.size()) {
+        std::sort(anchors2.begin(), anchors2.end());
+        windowResults2 = runScan(anchors2);
+        emitResults(windowResults2);
     }
 
     std::sort(updated.begin(), updated.end(),
@@ -688,16 +718,20 @@ softRegistrationClass::hiddenComponentScan(const RotationCorrelationResult& resu
         hf.open(DEBUG_RESULTS_2D "hiddenComponentScan.csv");
         hf << "anchor\tmu\tamp\tratio\tresid0\tresid1\tstrong\tlevel\n";
         hf << std::setprecision(17);
-        for (const WinRes& w : windowResults) {
-            if (!w.valid) continue;
-            hf << w.center << "\t" << w.mu << "\t" << w.amp << "\t" << w.ratio1 << "\t"
-                << w.resid0 << "\t" << w.resid1 << "\t"
-                << (w.ratio1 >= P.minImprovRatio ? 1 : 0) << "\t1\n";
-            if (w.nHidden > 1) {
-                hf << w.center << "\t" << w.mu2 << "\t" << w.amp2 << "\t" << w.ratio2 << "\t"
-                    << w.resid1 << "\t" << w.resid2 << "\t1\t2\n";
+        auto dumpWins = [&](const std::vector<WinRes>& wins) {
+            for (const WinRes& w : wins) {
+                if (!w.valid) continue;
+                hf << w.center << "\t" << w.mu << "\t" << w.amp << "\t" << w.ratio1 << "\t"
+                    << w.resid0 << "\t" << w.resid1 << "\t"
+                    << (w.ratio1 >= P.minImprovRatio ? 1 : 0) << "\t1\n";
+                if (w.nHidden > 1) {
+                    hf << w.center << "\t" << w.mu2 << "\t" << w.amp2 << "\t" << w.ratio2 << "\t"
+                        << w.resid1 << "\t" << w.resid2 << "\t1\t2\n";
+                }
             }
-        }
+        };
+        dumpWins(windowResults);
+        if (!windowResults2.empty()) dumpWins(windowResults2);
         hf.close();
     }
 
