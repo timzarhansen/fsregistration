@@ -183,6 +183,67 @@ public:
         return out;
     }
 
+    // Like register_all_solutions, but runs with the C++ benchmark flag on and
+    // additionally returns a dict of per-step computation times (ms) from the
+    // BenchmarkTimings2D struct, so a caller can build a per-step timing report.
+    // Returns (peaks, timings). Keeps the exact benchmark code path
+    // (same level_potential_rotation, useDirect, hidden-scan params).
+    std::tuple<std::vector<TransformationPeak2D>, py::dict> register_all_solutions_timed(
+        py::array_t<double, py::array::c_style | py::array::forcecast> scan1,
+        py::array_t<double, py::array::c_style | py::array::forcecast> scan2,
+        double cellSize,
+        bool useGauss,
+        bool debug,
+        double potentialNecessaryForPeak,
+        bool multipleRadii,
+        bool useClahe,
+        bool useHamming,
+        bool useDirect,
+        double levelPotentialRotation = 0.1,
+        int normalization = 1,
+        bool usePhaseCorrelation = false,
+        int numAngles = -1,
+        // Radial frequency band in FFT grid units (pixels).
+        // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
+        double r_min = 0.0,
+        double r_max = 0.0,
+        bool useHiddenComponentScan = false,
+        // Hidden-component scan parameters (notebook defaults). Only used
+        // when useHiddenComponentScan=true, which requires useDirect=true.
+        double hiddenScanWinHalfRad = 0.35,
+        double hiddenScanCoarseRad = 0.01,
+        double hiddenScanFineRad = 0.0004,
+        double hiddenScanMinSepRad = 0.1,
+        double hiddenScanMinImprovRatio = 2.0,
+        double hiddenScanWeakFloorRatio = 1.2,
+        double hiddenScanKnownMarginRad = 0.26,
+        int hiddenScanMaxHidden = 2,
+        bool hiddenScanIncludeWeakCandidates = true
+    ) {
+        double* data1 = numpy_to_double_array(scan1, N_ * N_);
+        double* data2 = numpy_to_double_array(scan2, N_ * N_);
+
+        reg->hiddenScanParams.winHalfRad = hiddenScanWinHalfRad;
+        reg->hiddenScanParams.coarseRad = hiddenScanCoarseRad;
+        reg->hiddenScanParams.fineRad = hiddenScanFineRad;
+        reg->hiddenScanParams.minSepRad = hiddenScanMinSepRad;
+        reg->hiddenScanParams.minImprovRatio = hiddenScanMinImprovRatio;
+        reg->hiddenScanParams.weakFloorRatio = hiddenScanWeakFloorRatio;
+        reg->hiddenScanParams.knownMarginRad = hiddenScanKnownMarginRad;
+        reg->hiddenScanParams.maxHidden = hiddenScanMaxHidden;
+        reg->hiddenScanParams.includeWeakCandidates = hiddenScanIncludeWeakCandidates;
+
+        BenchmarkTimings2D timings;
+        auto results = reg->registrationOfTwoVoxelsSOFFTAllSoluations(
+            data1, data2,
+            cellSize, useGauss, debug,
+            potentialNecessaryForPeak, multipleRadii, useClahe, useHamming, useDirect, true, &timings, levelPotentialRotation, normalization, usePhaseCorrelation, numAngles, r_min, r_max,
+            useHiddenComponentScan
+        );
+
+        return std::make_tuple(convertResults(results), timingsToDict(timings));
+    }
+
     // registrationOfTwoVoxelsSOFFTFast
     std::tuple<py::array_t<double>, py::array_t<double>> register_fast(
         py::array_t<double, py::array::c_style | py::array::forcecast> scan1,
@@ -308,6 +369,56 @@ public:
     }
 
     int getN() const { return N_; }
+
+private:
+    static std::vector<TransformationPeak2D> convertResults(
+        const std::vector<transformationPeakfs2D>& results) {
+        std::vector<TransformationPeak2D> out;
+        out.reserve(results.size());
+        for (const auto& tp : results) {
+            TransformationPeak2D outTp;
+            for (const auto& t : tp.potentialTranslations) {
+                TranslationPeak2D outT;
+                outT.translationSI = eigen2d_to_numpy(t.translationSI);
+                outT.translationVoxel = eigen2i_to_numpy(t.translationVoxel);
+                outT.peakHeight = t.peakHeight;
+                outT.persistenceValue = t.persistenceValue;
+                outT.covariance = eigen2x2_to_numpy(t.covariance);
+                outTp.potentialTranslations.push_back(outT);
+            }
+            outTp.potentialRotation.angle = tp.potentialRotation.angle;
+            outTp.potentialRotation.peakCorrelation = tp.potentialRotation.peakCorrelation;
+            outTp.potentialRotation.covariance = tp.potentialRotation.covariance;
+            outTp.potentialRotation.levelPotential = tp.potentialRotation.levelPotential;
+            out.push_back(outTp);
+        }
+        return out;
+    }
+
+    static py::dict timingsToDict(const BenchmarkTimings2D& t) {
+        py::dict d;
+        d["spectrumTime"] = t.spectrumTime;
+        d["softDescriptorTime"] = t.softDescriptorTime;
+        d["rotationCorrelationTime"] = t.rotationCorrelationTime;
+        d["rotationExtractionTime"] = t.rotationExtractionTime;
+        d["rotationPeakDetectionTime"] = t.rotationPeakDetectionTime;
+        d["transPreprocessingTime"] = t.transPreprocessingTime;
+        d["transFft1Time"] = t.transFft1Time;
+        d["transFft2Time"] = t.transFft2Time;
+        d["transCorrelationTime"] = t.transCorrelationTime;
+        d["transIfftTime"] = t.transIfftTime;
+        d["transFftshiftTime"] = t.transFftshiftTime;
+        d["transPeakDetectionTime"] = t.transPeakDetectionTime;
+        d["freqRotationPhaseTime"] = t.freqRotationPhaseTime;
+        d["totalTranslationTime"] = t.totalTranslationTime;
+        d["totalTime"] = t.totalTime;
+        d["numAngles"] = t.numAngles;
+        d["totalTransPeaks"] = t.totalTransPeaks;
+        py::list perAngle;
+        for (double v : t.transPerAngleTimes) perAngle.append(v);
+        d["transPerAngleTimes"] = perAngle;
+        return d;
+    }
 };
 
 PYBIND11_MODULE(pybind_registration_2d, m) {
@@ -333,6 +444,34 @@ PYBIND11_MODULE(pybind_registration_2d, m) {
     py::class_<SoftRegistrationWrapper2D>(m, "SoftRegistrationWrapper2D")
         .def(py::init<int>())
 .def("register_all_solutions", &SoftRegistrationWrapper2D::register_all_solutions,
+              py::arg("scan1"), py::arg("scan2"),
+              py::arg("cellSize"),
+              py::arg("useGauss") = false,
+              py::arg("debug") = false,
+              py::arg("potentialNecessaryForPeak") = 0.1,
+              py::arg("multipleRadii") = false,
+              py::arg("useClahe") = true,
+               py::arg("useHamming") = true,
+                py::arg("useDirect") = false,
+                 py::arg("levelPotentialRotation") = 0.1,
+                 py::arg("normalization") = 1,
+                 py::arg("usePhaseCorrelation") = false,
+                 // Radial frequency band in FFT grid units (pixels).
+                 // 0.0 = auto: N-dependent defaults (current hardcoded behavior).
+                 py::arg("numAngles") = -1,
+                 py::arg("r_min") = 0.0,
+                 py::arg("r_max") = 0.0,
+                 py::arg("useHiddenComponentScan") = false,
+                 py::arg("hiddenScanWinHalfRad") = 0.35,
+                 py::arg("hiddenScanCoarseRad") = 0.01,
+                 py::arg("hiddenScanFineRad") = 0.0004,
+                 py::arg("hiddenScanMinSepRad") = 0.1,
+                 py::arg("hiddenScanMinImprovRatio") = 2.0,
+                 py::arg("hiddenScanWeakFloorRatio") = 1.2,
+                 py::arg("hiddenScanKnownMarginRad") = 0.26,
+                 py::arg("hiddenScanMaxHidden") = 2,
+                 py::arg("hiddenScanIncludeWeakCandidates") = true)
+         .def("register_all_solutions_timed", &SoftRegistrationWrapper2D::register_all_solutions_timed,
               py::arg("scan1"), py::arg("scan2"),
               py::arg("cellSize"),
               py::arg("useGauss") = false,
