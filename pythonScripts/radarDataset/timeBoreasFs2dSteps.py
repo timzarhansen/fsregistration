@@ -14,6 +14,8 @@
 #   per_pair_timings.csv          per-pair per-method wide timing table
 #   step_timing_aggregated.csv    mean/std/median ms per step per method
 #   step_timing_summary_paper.tex LaTeX table (rows = steps)
+#   step_timing_detail_summary_paper.tex  LaTeX table with per-angle values
+#   per_pair_detail.txt           C++-style detail dump (if WRITE_DETAIL_FILE)
 #   fs2d_direct/results.csv       total-time results.csv per method, compatible
 #   fs2d_so3/results.csv          with aggregate_and_generate_latex_timing.py
 #
@@ -25,6 +27,7 @@
 ################################################################################
 
 import csv
+import json
 import math
 import os
 import sys
@@ -89,6 +92,14 @@ R_MIN = 0.0               # 0.0 = auto N-dependent default
 R_MAX = 0.0               # 0.0 = auto N-dependent default
 USE_HIDDEN_COMPONENT_SCAN = False
 
+# Per-pair detailed summary (C++-style "2D All Solutions Summary" block, same
+# format as test_full_registration_comparison2D.cpp, incl. per-angle averages).
+# PRINT_DETAILED_PER_PAIR prints the block to the console for every pair;
+# WRITE_DETAIL_FILE additionally dumps all blocks to per_pair_detail.txt
+# (large for full runs - keep off unless you need the raw dump).
+PRINT_DETAILED_PER_PAIR = True
+WRITE_DETAIL_FILE = False
+
 # Report output (overwritten on every run)
 OUTPUT_DIR = os.path.join(
     _script_dir, "2D_registration_results", "allDatasets", "IcraPaperResults",
@@ -114,6 +125,60 @@ STEPS = [
     ("totalTranslationTime", "Translation total (all angles)"),
     ("totalTime", "Total (C++ registration)"),
 ]
+
+# Translation sub-steps that are summed over the rotation angles
+# (field, short label for CSV / console)
+TRANS_STEP_FIELDS = [
+    ("transPreprocessingTime", "Preprocessing (copy+rotate)"),
+    ("transFft1Time", "Translation FFT1"),
+    ("transFft2Time", "Translation FFT2"),
+    ("transCorrelationTime", "Complex correlation"),
+    ("transIfftTime", "IFFT"),
+    ("transFftshiftTime", "fftshift + magnitude"),
+    ("transPeakDetectionTime", "Translation peak detection"),
+]
+
+# C++-style labels, padded exactly like test_full_registration_comparison2D.cpp
+_DETAIL_TOP = [
+    ("spectrumTime", "    2D Spectrum (FFT):              "),
+    ("softDescriptorTime", "    SOFT descriptor projection:     "),
+    ("rotationCorrelationTime", "    SOFT correlation:               "),
+    ("rotationExtractionTime", "    1D curve extraction:            "),
+    ("rotationPeakDetectionTime", "    Rotation peak detection:        "),
+]
+_DETAIL_TRANS = [
+    ("transPreprocessingTime", "      Preprocessing (copy+rotate): "),
+    ("transFft1Time", "      Translation FFT1:           "),
+    ("transFft2Time", "      Translation FFT2:           "),
+    ("transCorrelationTime", "      Complex correlation:        "),
+    ("transIfftTime", "      IFFT:                       "),
+    ("transFftshiftTime", "      fftshift + magnitude:       "),
+    ("transPeakDetectionTime", "      Translation peak detection: "),
+]
+
+
+def _detailed_summary(method_name, prev_idx, idx, timings):
+    """Return the C++-style '2D All Solutions Summary' block lines (mirrors
+    test_full_registration_comparison2D.cpp formatting and precision)."""
+    num_sol = int(timings.get("numAngles", 0))
+    per_sol = (1.0 / num_sol) if num_sol > 0 else 0.0
+    lines = [f"--- 2D All Solutions Summary (method={method_name}, "
+             f"pair={prev_idx}->{idx}) ---"]
+    lines.append(f"    Rotation peaks found:           {num_sol}")
+    lines.append(f"    Translation peaks found:        {timings.get('totalTransPeaks', 0)}")
+    for field, label in _DETAIL_TOP:
+        lines.append(f"{label}{timings.get(field, float('nan')):.3f} ms")
+    lines.append(f"    --- Translation breakdown ({num_sol} angles) ---")
+    if num_sol > 0:
+        for field, label in _DETAIL_TRANS:
+            total = timings.get(field, float('nan'))
+            dec = 1 if field == "transPeakDetectionTime" else 3
+            lines.append(f"{label}{total:.{dec}f} ms ({total * per_sol:.4f} ms/angle)")
+    lines.append(f"    Total translation:             "
+                 f"{timings.get('totalTranslationTime', float('nan')):.1f} ms")
+    lines.append(f"    Total time:                    "
+                 f"{timings.get('totalTime', float('nan')):.1f} ms")
+    return lines
 
 
 def compute_stats(values):
@@ -173,6 +238,7 @@ def main():
 
     # per_pair_timings.csv rows
     pair_rows = []
+    detail_lines_all = []   # C++-style detail blocks (for per_pair_detail.txt)
 
     idx = START_FRAME + MATCHING_STEP
     pair_counter = 0
@@ -237,6 +303,25 @@ def main():
                 row[field] = timings.get(field, float("nan"))
 
             pair_rows.append(row)
+
+            # Per-angle values (derived like test_full_registration_comparison2D.cpp:
+            # step total / numAngles)
+            n_angles = row["num_angles"]
+            for field, _label in TRANS_STEP_FIELDS:
+                v = timings.get(field, float("nan"))
+                row[f"{field}_per_angle"] = (v / n_angles) if n_angles > 0 else float("nan")
+            tt = timings.get("totalTranslationTime", float("nan"))
+            row["per_angle_total"] = (tt / n_angles) if n_angles > 0 else float("nan")
+            row["transPerAngleTimes"] = json.dumps(
+                [float(x) for x in timings.get("transPerAngleTimes", [])])
+
+            detail = _detailed_summary(method_name, prev_idx, idx, timings)
+            if PRINT_DETAILED_PER_PAIR:
+                print("\n".join(detail))
+            if WRITE_DETAIL_FILE:
+                detail_lines_all.extend(detail)
+                detail_lines_all.append("")
+
             print(f"pair {pair_counter:4d} ({prev_idx}->{idx}) {method_name:6s}: "
                   f"total={timings.get('totalTime', float('nan')):8.1f} ms "
                   f"(wall {wall_ms:8.1f} ms), angles={row['num_angles']}, "
@@ -268,19 +353,27 @@ def main():
               "method", "use_direct", "wall_ms", "num_angles",
               "total_trans_peaks", "num_solutions"]
     header += [f for f, _ in STEPS]
+    header += [f"{f}_per_angle" for f, _ in TRANS_STEP_FIELDS]
+    header += ["per_angle_total", "transPerAngleTimes"]
     with open(out_dir / "per_pair_timings.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=header)
         w.writeheader()
         for row in pair_rows:
             w.writerow(row)
 
-    # 2) step_timing_aggregated.csv + LaTeX summary table
+    # 2) step_timing_aggregated.csv + LaTeX summary tables
     methods = sorted({r["method"] for r in pair_rows})
-    step_stats = {}   # (method, field) -> stats dict
+    step_stats = {}   # (method, field) -> stats of absolute step times
+    angle_stats = {}  # (method, field) -> stats of per-angle values
     for method in methods:
+        rows = [r for r in pair_rows if r["method"] == method]
         for field, _label in STEPS:
-            values = [r[field] for r in pair_rows if r["method"] == method]
-            step_stats[(method, field)] = compute_stats(values)
+            step_stats[(method, field)] = compute_stats([r[field] for r in rows])
+        for field, _label in TRANS_STEP_FIELDS:
+            angle_stats[(method, field)] = compute_stats([r[f"{field}_per_angle"] for r in rows])
+        angle_stats[(method, "per_angle_total")] = compute_stats([r["per_angle_total"] for r in rows])
+        angle_stats[(method, "numAngles")] = compute_stats([r["num_angles"] for r in rows])
+        angle_stats[(method, "totalTransPeaks")] = compute_stats([r["total_trans_peaks"] for r in rows])
 
     with open(out_dir / "step_timing_aggregated.csv", "w", newline="") as f:
         w = csv.writer(f)
@@ -290,8 +383,22 @@ def main():
                 s = step_stats[(method, field)]
                 w.writerow([method, field, s["n"], f"{s['mean']:.3f}",
                             f"{s['std']:.3f}", f"{s['median']:.3f}"])
+            for field, label in TRANS_STEP_FIELDS:
+                s = angle_stats[(method, field)]
+                w.writerow([method, f"{field}_per_angle", s["n"],
+                            f"{s['mean']:.4f}", f"{s['std']:.4f}", f"{s['median']:.4f}"])
+            for field in ("per_angle_total", "numAngles", "totalTransPeaks"):
+                s = angle_stats[(method, field)]
+                w.writerow([method, field, s["n"],
+                            f"{s['mean']:.4f}", f"{s['std']:.4f}", f"{s['median']:.4f}"])
 
     _write_latex(out_dir, methods, step_stats)
+    _write_latex_detail(out_dir, methods, step_stats, angle_stats)
+
+    # 2b) optional per-pair detail dump file
+    if WRITE_DETAIL_FILE:
+        with open(out_dir / "per_pair_detail.txt", "w") as f:
+            f.write("\n".join(detail_lines_all))
 
     # 3) results.csv per method (compatible with aggregate_and_generate_latex_timing.py)
     for method in methods:
@@ -339,6 +446,19 @@ def main():
 
     print()
     print("=" * 80)
+    print("Per-angle computation times (ms/angle), mean over pairs")
+    print("=" * 80)
+    for method in methods:
+        print(f"\n--- method: {method} (mean numAngles = "
+              f"{angle_stats[(method, 'numAngles')]['mean']:.1f}) ---")
+        print(f"{'step':<30} {'total_mean':>12} {'per_angle_mean':>14}")
+        for field, label in TRANS_STEP_FIELDS:
+            tot = step_stats[(method, field)]
+            ang = angle_stats[(method, field)]
+            print(f"{label:<30} {tot['mean']:12.3f} {ang['mean']:14.4f}")
+
+    print()
+    print("=" * 80)
     print("Overall totals (per method)")
     print("=" * 80)
     print(f"{'method':<8} {'n_pairs':>8} {'mean_ms':>10} {'std_ms':>10} {'median_ms':>10}")
@@ -349,7 +469,9 @@ def main():
     print()
     print(f"Written reports -> {out_dir}")
     print("  per_pair_timings.csv, step_timing_aggregated.csv, step_timing_summary_paper.tex")
-    print("  fs2d_direct/results.csv, fs2d_so3/results.csv")
+    print("  step_timing_detail_summary_paper.tex, fs2d_direct/results.csv, fs2d_so3/results.csv")
+    if WRITE_DETAIL_FILE:
+        print("  per_pair_detail.txt")
     print("Done.")
 
 
@@ -385,6 +507,58 @@ def _write_latex(out_dir: Path, methods, step_stats):
                 s = step_stats[(m, field)]
                 cells += f" & {s['mean']:.1f} & {s['std']:.1f} & {s['median']:.1f}"
             f.write(cells + " \\\\\n")
+        f.write("\\bottomrule\n")
+        f.write("\\end{tabular}\n")
+        f.write("\\end{table}\n")
+
+
+def _write_latex_detail(out_dir: Path, methods, step_stats, angle_stats):
+    """LaTeX tabular of per-angle values: rows = translation steps, cols =
+    per-method Total (ms) / Per-angle (ms), mean over pairs."""
+    with open(out_dir / "step_timing_detail_summary_paper.tex", "w") as f:
+        colspec = "l" + "cc" * len(methods)
+        f.write("\\begin{table}[t]\n")
+        f.write("\\centering\n")
+        f.write("\\caption{FS2D translation-step timing (ms) on Boreas "
+                f"sequence {SEQUENCE_NUMBER} (N = {N}). Mean per-pair total "
+                "and mean per-angle (total / number of rotation angles) "
+                "across pairs.}\n")
+        f.write(f"\\label{{tab:fs2d_step_timing_detail_seq{SEQUENCE_NUMBER}}}\n")
+        f.write("\\small\n")
+        f.write(f"\\begin{{tabular}}{{{colspec}}}\n")
+        f.write("\\toprule\n")
+        header_cells = "{Step}"
+        for m in methods:
+            header_cells += f" & \\multicolumn{{2}}{{c}}{{{m}}}"
+        f.write(header_cells + " \\\\\n")
+        sub_cells = " "
+        for m in methods:
+            sub_cells += " & Total (ms) & Per-angle (ms)"
+        f.write(sub_cells + " \\\\\n")
+        f.write("\\midrule\n")
+        for field, label in TRANS_STEP_FIELDS:
+            cells = f"{label}"
+            for m in methods:
+                tot = step_stats[(m, field)]
+                ang = angle_stats[(m, field)]
+                cells += f" & {tot['mean']:.1f} & {ang['mean']:.3f}"
+            f.write(cells + " \\\\\n")
+        cells = "Per-angle total (all steps)"
+        for m in methods:
+            tot = step_stats[(m, "totalTranslationTime")]
+            ang = angle_stats[(m, "per_angle_total")]
+            cells += f" & {tot['mean']:.1f} & {ang['mean']:.3f}"
+        f.write(cells + " \\\\\n")
+        cells = "Rotation peaks (numAngles)"
+        for m in methods:
+            s = angle_stats[(m, "numAngles")]
+            cells += f" & {s['mean']:.1f} & ---"
+        f.write(cells + " \\\\\n")
+        cells = "Translation peaks"
+        for m in methods:
+            s = angle_stats[(m, "totalTransPeaks")]
+            cells += f" & {s['mean']:.1f} & ---"
+        f.write(cells + " \\\\\n")
         f.write("\\bottomrule\n")
         f.write("\\end{tabular}\n")
         f.write("\\end{table}\n")
